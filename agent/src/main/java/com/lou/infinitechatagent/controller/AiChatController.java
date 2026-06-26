@@ -10,6 +10,8 @@ import com.lou.infinitechatagent.monitor.MonitorContextHolder;
 import com.lou.infinitechatagent.model.dto.ChatRequest;
 import com.lou.infinitechatagent.model.dto.ChatResponse;
 import com.lou.infinitechatagent.model.dto.StreamChatEvent;
+import com.lou.infinitechatagent.security.AuthPrincipal;
+import com.lou.infinitechatagent.security.CurrentUser;
 import jakarta.annotation.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -32,12 +34,15 @@ public class AiChatController {
     private ChatHistoryService chatHistoryService;
 
     @PostMapping("/chat")
-    public BaseResponse<ChatResponse> chat(@RequestBody ChatRequest chatRequest) {
-        MonitorContextHolder.setContext(MonitorContext.builder().userId(chatRequest.getUserId()).sessionId(chatRequest.getSessionId()).build());
+    public BaseResponse<ChatResponse> chat(@RequestBody ChatRequest chatRequest,
+                                           @CurrentUser AuthPrincipal principal) {
+        // 网关身份优先(B1);未入网关时回退请求体 userId(过渡)。
+        Long userId = principal.resolveUserId(chatRequest.getUserId());
+        MonitorContextHolder.setContext(MonitorContext.builder().userId(userId).sessionId(chatRequest.getSessionId()).build());
         try {
             String answer = aiChat.chat(chatRequest.getSessionId(), chatRequest.getPrompt());
             chatHistoryService.recordSuccess(
-                    chatRequest.getUserId(),
+                    userId,
                     chatRequest.getSessionId(),
                     "chat",
                     chatRequest.getPrompt(),
@@ -51,7 +56,7 @@ public class AiChatController {
                     .build());
         } catch (RuntimeException e) {
             chatHistoryService.recordError(
-                    chatRequest.getUserId(),
+                    userId,
                     chatRequest.getSessionId(),
                     "chat",
                     chatRequest.getPrompt(),
@@ -66,9 +71,11 @@ public class AiChatController {
     }
 
     @PostMapping(value = "/streamChat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<StreamChatEvent>> streamChat(@RequestBody ChatRequest chatRequest) {
+    public Flux<ServerSentEvent<StreamChatEvent>> streamChat(@RequestBody ChatRequest chatRequest,
+                                                             @CurrentUser AuthPrincipal principal) {
+        Long userId = principal.resolveUserId(chatRequest.getUserId());
         MonitorContext context = MonitorContext.builder()
-                .userId(chatRequest.getUserId())
+                .userId(userId)
                 .sessionId(chatRequest.getSessionId())
                 .build();
         String requestId = UUID.randomUUID().toString();
@@ -110,7 +117,7 @@ public class AiChatController {
                             .doOnNext(event -> {
                                 failed.set(true);
                                 chatHistoryService.recordError(
-                                        chatRequest.getUserId(),
+                                        userId,
                                         chatRequest.getSessionId(),
                                         "stream",
                                         chatRequest.getPrompt(),
@@ -122,7 +129,7 @@ public class AiChatController {
                     .doOnComplete(() -> {
                         if (!failed.get()) {
                             chatHistoryService.recordSuccess(
-                                    chatRequest.getUserId(),
+                                    userId,
                                     chatRequest.getSessionId(),
                                     "stream",
                                     chatRequest.getPrompt(),

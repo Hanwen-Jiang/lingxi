@@ -11,6 +11,8 @@ import com.lou.infinitechatagent.common.BaseResponse;
 import com.lou.infinitechatagent.common.ErrorCode;
 import com.lou.infinitechatagent.common.ResultUtils;
 import com.lou.infinitechatagent.exception.BusinessException;
+import com.lou.infinitechatagent.security.AuthPrincipal;
+import com.lou.infinitechatagent.security.CurrentUser;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -82,8 +84,9 @@ public class ChatHistoryController {
     @PostMapping("/model-config")
     public BaseResponse<ModelStatusResponse> updateModelConfig(
             @RequestBody ModelConfigRequest request,
+            @CurrentUser AuthPrincipal principal,
             @RequestHeader(value = "X-Admin-Token", required = false) String adminTokenHeader) {
-        requireAdmin(adminTokenHeader);
+        requireAdmin(principal, adminTokenHeader);
         if (request != null && request.getApiKey() != null) {
             log.warn("[model-config] 忽略请求体携带的 apiKey(出于安全不接受原始密钥)");
             request.setApiKey(null);
@@ -99,14 +102,20 @@ public class ChatHistoryController {
         return ResultUtils.success(chatHistoryService.listModels());
     }
 
-    private void requireAdmin(String providedToken) {
+    private void requireAdmin(AuthPrincipal principal, String providedToken) {
+        // P1:认可统一网关注入的 admin 角色声明(X-User-Roles 含 admin)。
+        if (principal != null && principal.isAdmin()) {
+            return;
+        }
+        // 过渡回退(网关身份上线前):X-Admin-Token;网关 enforce 后移除本回退。
+        if (StringUtils.hasText(adminToken) && constantTimeEquals(adminToken, providedToken)) {
+            return;
+        }
         if (!StringUtils.hasText(adminToken)) {
             throw new BusinessException(ErrorCode.FORBIDDEN_ERROR,
-                    "model-config 已禁用:未配置 AGENT_ADMIN_TOKEN(P1 改为基于网关身份的 admin 角色)");
+                    "需要 admin 角色;过渡令牌 AGENT_ADMIN_TOKEN 亦未配置(端点 fail-closed)");
         }
-        if (!constantTimeEquals(adminToken, providedToken)) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要管理员令牌(请求头 X-Admin-Token)");
-        }
+        throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要 admin 角色或管理员令牌(请求头 X-Admin-Token)");
     }
 
     private static boolean constantTimeEquals(String expected, String actual) {
