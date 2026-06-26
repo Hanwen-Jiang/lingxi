@@ -46,11 +46,11 @@ export function ChatHeader({
   onSelectSession: (sessionId: number) => void;
 }) {
   return (
-      <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-separator bg-background px-4 md:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <DesktopSidebarTrigger />
-          <MobileWorkspaceSheet health={health} view="chat" onNavigate={onNavigate} />
-          <MobileSessionSheet
+    <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-separator bg-background px-4 md:px-6">
+      <div className="flex min-w-0 items-center gap-3">
+        <DesktopSidebarTrigger />
+        <MobileWorkspaceSheet health={health} view="chat" onNavigate={onNavigate} />
+        <MobileSessionSheet
           activeSessionId={activeSessionId}
           query={query}
           sessions={sessions}
@@ -78,7 +78,14 @@ export function ChatHeader({
           <RefreshCw className="size-4" />
           <span className="hidden sm:inline">Refresh</span>
         </Button>
-        <Button isIconOnly aria-label="Open settings" className="icon-button" size="sm" variant="outline" onPress={onOpenSettings}>
+        <Button
+          isIconOnly
+          aria-label="Open settings"
+          className="icon-button"
+          size="sm"
+          variant="outline"
+          onPress={onOpenSettings}
+        >
           <Settings className="size-4" />
         </Button>
       </div>
@@ -124,9 +131,21 @@ function MobileSessionSheet({
   }, [isMobileNav, isOpen]);
 
   return (
-    <Sheet isDetached isOpen={isMobileNav && isOpen} placement="left" snapPoints={["min(88vw,320px)"]} onOpenChange={setIsOpen}>
+    <Sheet
+      isDetached
+      isOpen={isMobileNav && isOpen}
+      placement="left"
+      snapPoints={["min(88vw,320px)"]}
+      onOpenChange={setIsOpen}
+    >
       <Sheet.Trigger>
-        <Button isIconOnly aria-label="Open conversation history" className="sidebar-trigger sidebar-trigger--mobile" size="sm" variant="outline">
+        <Button
+          isIconOnly
+          aria-label="Open conversation history"
+          className="sidebar-trigger sidebar-trigger--mobile"
+          size="sm"
+          variant="outline"
+        >
           <MessageSquare className="size-4" />
         </Button>
       </Sheet.Trigger>

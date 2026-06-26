@@ -9,7 +9,13 @@ import {Separator} from "@heroui/react/separator";
 
 import {COMPOSER_BUTTON_STYLE, SLASH_COMMANDS} from "../../lib/constants";
 
-export function ComposerActionsPopover({isRunning, onCommand}: {isRunning: boolean; onCommand: (command: string) => void}) {
+export function ComposerActionsPopover({
+  isRunning,
+  onCommand,
+}: {
+  isRunning: boolean;
+  onCommand: (command: string) => void;
+}) {
   const [search, setSearch] = useState("");
   const normalizedSearch = search.trim().toLowerCase();
   const filteredCommands = SLASH_COMMANDS.filter((command) => command.toLowerCase().includes(normalizedSearch));
@@ -29,7 +35,10 @@ export function ComposerActionsPopover({isRunning, onCommand}: {isRunning: boole
           <Ellipsis className="size-4" />
         </Button>
       </Popover.Trigger>
-      <Popover.Content className="w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0" placement="top start">
+      <Popover.Content
+        className="w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0"
+        placement="top start"
+      >
         <Popover.Dialog className="p-0">
           <div className="p-2">
             <Input
@@ -45,7 +54,10 @@ export function ComposerActionsPopover({isRunning, onCommand}: {isRunning: boole
           </div>
           <Separator />
           {filteredCommands.length ? (
-            <ListBox aria-label="Routing commands" className="scrollbar max-h-[min(320px,calc(100vh-10rem))] overflow-y-auto p-2">
+            <ListBox
+              aria-label="Routing commands"
+              className="scrollbar max-h-[min(320px,calc(100vh-10rem))] overflow-y-auto p-2"
+            >
               {filteredCommands.map((command) => (
                 <ListBox.Item key={command} id={command} textValue={command} onAction={() => onCommand(command)}>
                   <span className="flex min-w-0 items-center gap-2 text-sm">

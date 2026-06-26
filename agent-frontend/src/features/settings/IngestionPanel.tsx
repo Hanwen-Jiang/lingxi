@@ -26,7 +26,12 @@ export function IngestionPanel({
   async function ingestText() {
     setStatus("Submitting text ingestion");
     try {
-      const job = await api.ingestText({title: textTitle, fileName: textFileName, content: textContent, sourceType: "manual_text"});
+      const job = await api.ingestText({
+        title: textTitle,
+        fileName: textFileName,
+        content: textContent,
+        sourceType: "manual_text",
+      });
       onJob(job);
       setStatus("Text ingestion job submitted");
       setTextContent("");
@@ -70,10 +75,18 @@ export function IngestionPanel({
           <input className="field-input" value={textTitle} onChange={(event) => setTextTitle(event.target.value)} />
         </Field>
         <Field label="File name">
-          <input className="field-input" value={textFileName} onChange={(event) => setTextFileName(event.target.value)} />
+          <input
+            className="field-input"
+            value={textFileName}
+            onChange={(event) => setTextFileName(event.target.value)}
+          />
         </Field>
         <Field label="Content">
-          <textarea className="field-input min-h-28 resize-y" value={textContent} onChange={(event) => setTextContent(event.target.value)} />
+          <textarea
+            className="field-input min-h-28 resize-y"
+            value={textContent}
+            onChange={(event) => setTextContent(event.target.value)}
+          />
         </Field>
         <Button className="settings-action-button" isDisabled={!textContent.trim()} onPress={() => void ingestText()}>
           Submit Text
@@ -98,7 +111,12 @@ export function IngestionPanel({
         <Field label="Server path">
           <input className="field-input" value={localPath} onChange={(event) => setLocalPath(event.target.value)} />
         </Field>
-        <Button className="settings-action-button" isDisabled={!localPath.trim()} variant="outline" onPress={() => void ingestLocalPath()}>
+        <Button
+          className="settings-action-button"
+          isDisabled={!localPath.trim()}
+          variant="outline"
+          onPress={() => void ingestLocalPath()}
+        >
           Submit Path
         </Button>
       </div>
@@ -106,7 +124,9 @@ export function IngestionPanel({
       <div className="space-y-3">
         <PanelTitle icon={<RefreshCw className="size-4" />} title="Ingestion Jobs" />
         {jobs.length === 0 ? (
-          <p className="rounded-2xl bg-surface p-3 text-sm text-muted shadow-surface">No ingestion jobs submitted from this workspace yet.</p>
+          <p className="rounded-2xl bg-surface p-3 text-sm text-muted shadow-surface">
+            No ingestion jobs submitted from this workspace yet.
+          </p>
         ) : (
           jobs.map((job) => (
             <div key={job.jobId} className="rounded-2xl bg-surface p-3 shadow-surface">
@@ -133,7 +153,13 @@ function JobStatus({status}: {status: string}) {
         success ? "bg-success/15 text-success" : failed ? "bg-danger/15 text-danger" : "bg-warning/15 text-warning"
       }`}
     >
-      {success ? <CheckCircle2 className="size-3" /> : failed ? <XCircle className="size-3" /> : <RefreshCw className="size-3" />}
+      {success ? (
+        <CheckCircle2 className="size-3" />
+      ) : failed ? (
+        <XCircle className="size-3" />
+      ) : (
+        <RefreshCw className="size-3" />
+      )}
       {status}
     </span>
   );

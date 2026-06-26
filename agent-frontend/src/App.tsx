@@ -11,6 +11,7 @@ import {useMemory} from "./hooks/useMemory";
 import {useModelConfig} from "./hooks/useModelConfig";
 import {useSessions} from "./hooks/useSessions";
 import {CHAT_MODES} from "./lib/constants";
+import {readStorage, STORAGE_KEYS, writeStorage} from "./lib/storage";
 import {ChatHeader} from "./features/chat/ChatHeader";
 import {ComposerDock} from "./features/chat/ComposerDock";
 import {MessageTimeline} from "./features/chat/MessageTimeline";
@@ -19,10 +20,26 @@ import {SessionList} from "./features/sessions/SessionList";
 import {SettingsWorkspace} from "./features/settings/SettingsWorkspace";
 import {GlobalSidebar} from "./features/sidebar/GlobalSidebar";
 
+// Resolve the starting session id. A valid finite number persisted in storage
+// is restored (and reported as `restored: true` so the init effect can reopen
+// that conversation); otherwise we mint a fresh id. Storage access is guarded
+// inside readStorage, so this never throws.
+function resolveInitialSession(): {id: number; restored: boolean} {
+  const stored = readStorage(STORAGE_KEYS.lastSessionId);
+  if (stored !== null) {
+    const parsed = Number(stored);
+    if (Number.isFinite(parsed)) return {id: parsed, restored: true};
+  }
+  return {id: Date.now(), restored: false};
+}
+
 export function App() {
-  const [apiBase, setApiBase] = useState(getDefaultApiBase());
-  const [userId, setUserId] = useState(1);
-  const [sessionId, setSessionId] = useState(() => Date.now());
+  const [apiBase] = useState(() => readStorage(STORAGE_KEYS.apiBase) ?? getDefaultApiBase());
+  const [userId] = useState(1);
+  // Computed once on mount; `restored` tells the init effect whether to reopen
+  // the persisted conversation.
+  const [initialSession] = useState(resolveInitialSession);
+  const [sessionId, setSessionId] = useState(initialSession.id);
   const [view, setView] = useState<"chat" | "settings">("chat");
   const api = useMemo(() => createApiClient(apiBase), [apiBase]);
   const activeMode = CHAT_MODES[0];
@@ -31,17 +48,49 @@ export function App() {
   const ingestion = useIngestion({api});
   const memory = useMemory({api, userId});
   const sessionsRef = useRef<ReturnType<typeof useSessions> | null>(null);
-  const chat = useChat({api, userId, sessionId, onSettled: (sentSessionId) => sessionsRef.current?.syncSession(sentSessionId)});
+  const chat = useChat({
+    api,
+    userId,
+    sessionId,
+    onSettled: (sentSessionId) => sessionsRef.current?.syncSession(sentSessionId),
+  });
   const sessions = useSessions({api, userId, sessionId, setSessionId, chat});
 
   useEffect(() => {
     sessionsRef.current = sessions;
   });
 
+  // Pull the stable (useCallback-memoized) actions out so the init effect can
+  // depend on plain identifiers rather than the freshly-rebuilt hook objects.
+  const {checkHealth} = model;
+  const {refreshSessions, loadSession} = sessions;
+
   useEffect(() => {
-    void model.checkHealth();
-    void sessions.refreshSessions();
-  }, [model.checkHealth, sessions.refreshSessions]);
+    void checkHealth();
+    void (async () => {
+      try {
+        await refreshSessions();
+        // Reopen the persisted conversation if it was restored from storage and
+        // still exists; loadSession throws for a missing/deleted session, which
+        // we swallow so the app stays on a fresh session instead of crashing.
+        if (initialSession.restored) {
+          await loadSession(initialSession.id);
+        }
+      } catch {
+        // Degrade gracefully: keep the fresh session already in state.
+      }
+    })();
+  }, [initialSession, checkHealth, refreshSessions, loadSession]);
+
+  // Persist apiBase and the active sessionId so a reload restores the same
+  // backend target and conversation. Writes are guarded inside writeStorage.
+  useEffect(() => {
+    writeStorage(STORAGE_KEYS.apiBase, apiBase);
+  }, [apiBase]);
+
+  useEffect(() => {
+    writeStorage(STORAGE_KEYS.lastSessionId, String(sessionId));
+  }, [sessionId]);
 
   return (
     <Sidebar.Provider collapsible="offcanvas" reduceMotion toggleShortcut={false}>
@@ -118,7 +167,11 @@ export function App() {
                       modelStatus={model.modelStatus}
                       session={sessions.selectedSession}
                       turns={sessions.turns}
-                      onSummarize={() => void api.summarizeSession(userId, sessionId).then((session) => sessions.setSelectedSession(session))}
+                      onSummarize={() =>
+                        void api
+                          .summarizeSession(userId, sessionId)
+                          .then((session) => sessions.setSelectedSession(session))
+                      }
                     />
                   </main>
                 </div>

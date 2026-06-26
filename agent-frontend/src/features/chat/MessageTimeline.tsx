@@ -52,7 +52,11 @@ function MessageTurn({message}: {message: WorkspaceMessage}) {
   }
 
   if (message.role === "system") {
-    return <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">{message.content}</div>;
+    return (
+      <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+        {message.content}
+      </div>
+    );
   }
 
   return (
@@ -74,7 +78,9 @@ function MessageTurn({message}: {message: WorkspaceMessage}) {
           )}
         </ChatMessage.Content>
         {message.citations?.length ? <CitationList citations={message.citations} /> : null}
-        {message.meta || message.requestId ? <ResponseDetails meta={message.meta} requestId={message.requestId} /> : null}
+        {message.meta || message.requestId ? (
+          <ResponseDetails meta={message.meta} requestId={message.requestId} />
+        ) : null}
         {message.content ? (
           <ChatMessageActions>
             <ChatMessageActions.Copy aria-label="Copy assistant response" />

@@ -10,9 +10,12 @@ export function formatFileSize(size: number) {
 
 export function formatTime(value?: string) {
   if (!value) return "No turns yet";
-  return new Intl.DateTimeFormat(undefined, {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"}).format(
-    new Date(value),
-  );
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 export function parseMetadataJson(value?: string) {
@@ -27,7 +30,9 @@ export function parseMetadataJson(value?: string) {
 }
 
 export function getObjectValue(value: unknown, key: string) {
-  return typeof value === "object" && value !== null && key in value ? (value as Record<string, unknown>)[key] : undefined;
+  return typeof value === "object" && value !== null && key in value
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
 }
 
 export function stringifyDetail(value: unknown) {

@@ -3,7 +3,12 @@ import {ArrowUp, Mic, Monitor, Plus, RefreshCw, Route, X} from "lucide-react";
 
 import {Button} from "@heroui/react/button";
 import {ProgressCircle} from "@heroui/react/progress-circle";
-import {ChatAttachment, ChatAttachmentGroup, ChatAttachmentInput, inferChatAttachmentMediaType} from "@heroui-pro/react/chat-attachment";
+import {
+  ChatAttachment,
+  ChatAttachmentGroup,
+  ChatAttachmentInput,
+  inferChatAttachmentMediaType,
+} from "@heroui-pro/react/chat-attachment";
 import {PromptInput} from "@heroui-pro/react/prompt-input";
 
 import type {ApiClient} from "../../api";
@@ -17,7 +22,14 @@ import {
   normalizeReasoningEffort,
   supportsOpenAiProtocol,
 } from "../../lib/model";
-import type {AutoChatResponse, ChatStatus, DocumentIngestJobResponse, ModelOption, ModelStatusResponse, ReasoningEffort} from "../../types";
+import type {
+  AutoChatResponse,
+  ChatStatus,
+  DocumentIngestJobResponse,
+  ModelOption,
+  ModelStatusResponse,
+  ReasoningEffort,
+} from "../../types";
 
 import {ComposerActionsPopover} from "./ComposerActionsPopover";
 import {ModelSelectControl} from "./ModelPicker";
@@ -66,7 +78,10 @@ export function ComposerDock({
   const [modelsStatus, setModelsStatus] = useState<string | null>(null);
   const [tuningStatus, setTuningStatus] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
-  const availableOptions = useMemo(() => modelOptionsWithCurrent(modelOptions, currentModel), [currentModel, modelOptions]);
+  const availableOptions = useMemo(
+    () => modelOptionsWithCurrent(modelOptions, currentModel),
+    [currentModel, modelOptions],
+  );
   const availableModels = useMemo(
     () => availableOptions.map((option) => composerModelFromOption(option, modelStatus, reasoningEffort)),
     [availableOptions, modelStatus, reasoningEffort],
@@ -77,7 +92,14 @@ export function ComposerDock({
   const route = lastRouteResult ? routeLabel(lastRouteResult.route) : "Auto";
   const routeMeta = lastRouteResult ? `${route}${lastRouteResult.forced ? " · forced" : ""}` : "Direct when simple";
   const progressValue = status === "streaming" ? 64 : status === "submitted" ? 32 : status === "error" ? 100 : 0;
-  const statusText = status === "streaming" ? "Streaming" : status === "submitted" ? "Submitted" : status === "error" ? "Error" : "Ready";
+  const statusText =
+    status === "streaming"
+      ? "Streaming"
+      : status === "submitted"
+        ? "Submitted"
+        : status === "error"
+          ? "Error"
+          : "Ready";
 
   const refreshModels = useCallback(async () => {
     if (!openAiProtocol) {
@@ -89,7 +111,10 @@ export function ComposerDock({
     try {
       const response = await api.listModels();
       setModelOptions(response.models ?? []);
-      setModelsStatus(response.message ?? (response.source === "upstream" ? "Loaded models from upstream." : "Using configured model."));
+      setModelsStatus(
+        response.message ??
+          (response.source === "upstream" ? "Loaded models from upstream." : "Using configured model."),
+      );
     } catch (error) {
       setModelsStatus(getErrorMessage(error));
     } finally {
@@ -130,7 +155,7 @@ export function ComposerDock({
           reasoningEffort: openAiProtocol ? nextReasoning : undefined,
         });
         onModelStatus(nextStatus);
-        setTuningStatus(nextStatus.configured ? "Model saved." : nextStatus.message ?? "Model saved.");
+        setTuningStatus(nextStatus.configured ? "Model saved." : (nextStatus.message ?? "Model saved."));
       } catch (error) {
         setTuningStatus(getErrorMessage(error));
       } finally {
@@ -160,7 +185,8 @@ export function ComposerDock({
     (files: File[]) => {
       files.forEach((file) => {
         const id = makeId("attachment");
-        const src = file.type.startsWith("image/") || file.type.startsWith("video/") ? URL.createObjectURL(file) : undefined;
+        const src =
+          file.type.startsWith("image/") || file.type.startsWith("video/") ? URL.createObjectURL(file) : undefined;
         setAttachments((current) => [
           ...current,
           {id, name: file.name, size: file.size, mimeType: file.type, src, status: "uploading", message: "Uploading"},
@@ -172,7 +198,12 @@ export function ComposerDock({
             setAttachments((current) =>
               current.map((attachment) =>
                 attachment.id === id
-                  ? {...attachment, status: "ready", message: job.message ?? "Queued for knowledge import", jobId: job.jobId}
+                  ? {
+                      ...attachment,
+                      status: "ready",
+                      message: job.message ?? "Queued for knowledge import",
+                      jobId: job.jobId,
+                    }
                   : attachment,
               ),
             );
@@ -213,7 +244,11 @@ export function ComposerDock({
           <ComposerActionsPopover isRunning={isRunning} onCommand={addCommand} />
         </div>
 
-        <ChatAttachmentInput accept=".md,.txt,.pdf,.doc,.docx,.json,.csv,image/*" multiple onFilesSelected={handleFilesSelected}>
+        <ChatAttachmentInput
+          accept=".md,.txt,.pdf,.doc,.docx,.json,.csv,image/*"
+          multiple
+          onFilesSelected={handleFilesSelected}
+        >
           <ChatAttachmentInput.Dropzone>
             <PromptInput
               className="group min-w-0 max-w-full overflow-hidden"
@@ -244,7 +279,10 @@ export function ComposerDock({
                               {attachment.status === "uploading" ? "uploading" : formatFileSize(attachment.size)}
                             </span>
                           </ChatAttachment.Name>
-                          <ChatAttachment.Remove aria-label={`Remove ${attachment.name}`} onPress={() => removeAttachment(attachment.id)}>
+                          <ChatAttachment.Remove
+                            aria-label={`Remove ${attachment.name}`}
+                            onPress={() => removeAttachment(attachment.id)}
+                          >
                             <X className="size-3" />
                           </ChatAttachment.Remove>
                         </ChatAttachment>
@@ -313,7 +351,11 @@ export function ComposerDock({
                         >
                           <Mic className="size-4" />
                         </PromptInput.Action>
-                        <PromptInput.Send aria-label="Send message" className="composer-send-button" isDisabled={!hasValue}>
+                        <PromptInput.Send
+                          aria-label="Send message"
+                          className="composer-send-button"
+                          isDisabled={!hasValue}
+                        >
                           <ArrowUp className="size-4" />
                         </PromptInput.Send>
                       </>
@@ -345,7 +387,12 @@ export function ComposerDock({
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <ProgressCircle aria-label="Chat run progress" color={status === "error" ? "danger" : "default"} size="sm" value={progressValue}>
+            <ProgressCircle
+              aria-label="Chat run progress"
+              color={status === "error" ? "danger" : "default"}
+              size="sm"
+              value={progressValue}
+            >
               <ProgressCircle.Track>
                 <ProgressCircle.TrackCircle />
                 <ProgressCircle.FillCircle />

@@ -77,9 +77,16 @@ export function modelDisplayName(modelId: string) {
     .join(" ");
 }
 
-export function composerModelFromOption(option: ModelOption, modelStatus: ModelStatusResponse | null, reasoning: ReasoningEffort): ComposerModel {
+export function composerModelFromOption(
+  option: ModelOption,
+  modelStatus: ModelStatusResponse | null,
+  reasoning: ReasoningEffort,
+): ComposerModel {
   const id = option.id.trim();
-  const provider = option.ownedBy === "configured" ? inferProviderLabel(modelStatus) : option.ownedBy || inferProviderLabel(modelStatus);
+  const provider =
+    option.ownedBy === "configured"
+      ? inferProviderLabel(modelStatus)
+      : option.ownedBy || inferProviderLabel(modelStatus);
   const meta = compactReasoningEffortLabel(reasoning);
   return {
     id,
@@ -87,7 +94,9 @@ export function composerModelFromOption(option: ModelOption, modelStatus: ModelS
     title: modelDisplayName(id),
     meta,
     provider,
-    contextWindow: modelStatus?.maxOutputTokens ? `${modelStatus.maxOutputTokens.toLocaleString()} max output tokens` : "Runtime configured context",
+    contextWindow: modelStatus?.maxOutputTokens
+      ? `${modelStatus.maxOutputTokens.toLocaleString()} max output tokens`
+      : "Runtime configured context",
     description: `${provider} model available through the current backend configuration.`,
     note: option.ownedBy === "configured" ? "Currently configured model." : "Loaded from the upstream model list.",
     version: `${reasoningEffortLabel(reasoning)} reasoning effort`,

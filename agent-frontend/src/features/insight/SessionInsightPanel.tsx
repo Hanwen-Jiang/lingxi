@@ -24,7 +24,9 @@ export function SessionInsightPanel({
       <div className="flex min-h-14 shrink-0 items-center justify-between border-b border-separator px-4">
         <div>
           <div className="text-sm font-semibold">Session Insight</div>
-          <div className="text-xs text-muted">{modelStatus?.configured ? "Model summaries available" : "Deterministic summaries"}</div>
+          <div className="text-xs text-muted">
+            {modelStatus?.configured ? "Model summaries available" : "Deterministic summaries"}
+          </div>
         </div>
         <Button className="control-button" size="sm" variant="outline" onPress={onSummarize}>
           <RefreshCw className="size-4" />
@@ -35,12 +37,16 @@ export function SessionInsightPanel({
         <div className="space-y-5">
           <section className="panel-section">
             <PanelTitle icon={<HeartPulse className="size-4" />} title="Session Summary" />
-            <p className="text-sm leading-6 text-muted">{session?.summary || "No summary yet. Send a message to create one."}</p>
+            <p className="text-sm leading-6 text-muted">
+              {session?.summary || "No summary yet. Send a message to create one."}
+            </p>
           </section>
           <section className="space-y-3">
             <PanelTitle icon={<MessageSquare className="size-4" />} title="Turn Summaries" />
             {turns.length === 0 ? (
-              <p className="rounded-2xl bg-surface p-3 text-sm text-muted shadow-surface">No turns recorded for this session yet.</p>
+              <p className="rounded-2xl bg-surface p-3 text-sm text-muted shadow-surface">
+                No turns recorded for this session yet.
+              </p>
             ) : (
               turns.map((turn, index) => (
                 <div key={turn.id} className="rounded-2xl bg-surface p-3 shadow-surface">

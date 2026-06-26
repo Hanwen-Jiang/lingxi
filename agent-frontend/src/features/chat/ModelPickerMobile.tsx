@@ -8,7 +8,12 @@ import {ListBox} from "@heroui/react/list-box";
 import {Sheet} from "@heroui-pro/react/sheet";
 
 import {MODEL_PICKER_REASONING_EFFORTS} from "../../lib/constants";
-import {type ComposerModel, modelPickerModelLabel, modelPickerReasoningLabel, normalizeReasoningEffort} from "../../lib/model";
+import {
+  type ComposerModel,
+  modelPickerModelLabel,
+  modelPickerReasoningLabel,
+  normalizeReasoningEffort,
+} from "../../lib/model";
 import type {ReasoningEffort} from "../../types";
 
 import {ReviewModelText} from "./ModelPicker";

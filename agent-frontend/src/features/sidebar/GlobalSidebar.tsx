@@ -82,9 +82,21 @@ export function MobileWorkspaceSheet({
   }, [isMobileNav, isOpen]);
 
   return (
-    <Sheet isDetached isOpen={isMobileNav && isOpen} placement="left" snapPoints={["min(88vw,320px)"]} onOpenChange={setIsOpen}>
+    <Sheet
+      isDetached
+      isOpen={isMobileNav && isOpen}
+      placement="left"
+      snapPoints={["min(88vw,320px)"]}
+      onOpenChange={setIsOpen}
+    >
       <Sheet.Trigger>
-        <Button isIconOnly aria-label="Open navigation" className="sidebar-trigger sidebar-trigger--mobile" size="sm" variant="outline">
+        <Button
+          isIconOnly
+          aria-label="Open navigation"
+          className="sidebar-trigger sidebar-trigger--mobile"
+          size="sm"
+          variant="outline"
+        >
           <PanelLeft className="size-4" />
         </Button>
       </Sheet.Trigger>
@@ -143,13 +155,23 @@ function GlobalSidebarContents({
         <Sidebar.Group>
           <Sidebar.GroupLabel>Workspace</Sidebar.GroupLabel>
           <Sidebar.Menu aria-label="Workspace navigation">
-            <Sidebar.MenuItem id={`${idPrefix}chat`} isCurrent={view === "chat"} textValue="Chat" onAction={() => onNavigate("chat")}>
+            <Sidebar.MenuItem
+              id={`${idPrefix}chat`}
+              isCurrent={view === "chat"}
+              textValue="Chat"
+              onAction={() => onNavigate("chat")}
+            >
               <Sidebar.MenuIcon>
                 <MessageSquare className="size-4" />
               </Sidebar.MenuIcon>
               <Sidebar.MenuLabel>Chat</Sidebar.MenuLabel>
             </Sidebar.MenuItem>
-            <Sidebar.MenuItem id={`${idPrefix}settings`} isCurrent={view === "settings"} textValue="Settings" onAction={() => onNavigate("settings")}>
+            <Sidebar.MenuItem
+              id={`${idPrefix}settings`}
+              isCurrent={view === "settings"}
+              textValue="Settings"
+              onAction={() => onNavigate("settings")}
+            >
               <Sidebar.MenuIcon>
                 <Settings className="size-4" />
               </Sidebar.MenuIcon>

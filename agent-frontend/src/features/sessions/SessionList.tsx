@@ -69,13 +69,29 @@ export function SessionListContent({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="truncate text-base font-semibold">Conversations</h1>
-            <p className="truncate text-sm text-muted">{totalSessions ? `${totalSessions} real sessions` : "No saved sessions yet"}</p>
+            <p className="truncate text-sm text-muted">
+              {totalSessions ? `${totalSessions} real sessions` : "No saved sessions yet"}
+            </p>
           </div>
           <div className="flex shrink-0 gap-2">
-            <Button isIconOnly aria-label="Refresh sessions" className="icon-button" size="sm" variant="outline" onPress={onRefresh}>
+            <Button
+              isIconOnly
+              aria-label="Refresh sessions"
+              className="icon-button"
+              size="sm"
+              variant="outline"
+              onPress={onRefresh}
+            >
               <RefreshCw className="size-4" />
             </Button>
-            <Button isIconOnly aria-label="New session" className="icon-button" size="sm" variant="outline" onPress={onNewSession}>
+            <Button
+              isIconOnly
+              aria-label="New session"
+              className="icon-button"
+              size="sm"
+              variant="outline"
+              onPress={onNewSession}
+            >
               <Plus className="size-4" />
             </Button>
           </div>

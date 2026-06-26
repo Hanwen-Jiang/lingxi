@@ -98,7 +98,13 @@ export function useChat({
             updateMessage(assistantId, {
               content: friendlyError(event.message ?? "Stream returned an error event."),
               status: "error",
-              meta: {code: event.code, requestId: event.requestId, detail: event.message, route: event.route, forced: event.forced},
+              meta: {
+                code: event.code,
+                requestId: event.requestId,
+                detail: event.message,
+                route: event.route,
+                forced: event.forced,
+              },
             });
             setLastRouteResult({
               route: routeModeId(event.route),
@@ -135,5 +141,15 @@ export function useChat({
     setChatStatus("ready");
   }
 
-  return {messages, setMessages, prompt, setPrompt, status, lastRouteResult, setLastRouteResult, sendPrompt, stopStream};
+  return {
+    messages,
+    setMessages,
+    prompt,
+    setPrompt,
+    status,
+    lastRouteResult,
+    setLastRouteResult,
+    sendPrompt,
+    stopStream,
+  };
 }

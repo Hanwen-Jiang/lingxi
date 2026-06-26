@@ -104,7 +104,7 @@ export function messageFromTurn(turn: ChatTurnSummary): WorkspaceMessage[] {
     {
       id: `turn-${turn.id}-assistant`,
       role: "assistant",
-      content: turn.status === "ERROR" ? friendlyError(turn.errorMessage ?? "Request failed") : turn.answer ?? "",
+      content: turn.status === "ERROR" ? friendlyError(turn.errorMessage ?? "Request failed") : (turn.answer ?? ""),
       status: turn.status === "ERROR" ? "error" : "complete",
       modeId: routeModeId(turn.mode),
       requestId: turn.requestId,

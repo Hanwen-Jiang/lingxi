@@ -26,7 +26,9 @@ export function ModelConfigPanel({
   const [apiKey, setApiKey] = useState("");
   const [temperature, setTemperature] = useState(String(modelStatus?.temperature ?? 0.7));
   const [maxOutputTokens, setMaxOutputTokens] = useState(String(modelStatus?.maxOutputTokens ?? 1024));
-  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(normalizeReasoningEffort(modelStatus?.reasoningEffort));
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(
+    normalizeReasoningEffort(modelStatus?.reasoningEffort),
+  );
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,7 +55,9 @@ export function ModelConfigPanel({
       });
       onModelStatus(nextStatus);
       setApiKey("");
-      setStatus(nextStatus.configured ? "Model configuration saved" : nextStatus.message ?? "Model configuration saved");
+      setStatus(
+        nextStatus.configured ? "Model configuration saved" : (nextStatus.message ?? "Model configuration saved"),
+      );
     } catch (error) {
       setStatus(getErrorMessage(error));
     }
@@ -63,11 +67,16 @@ export function ModelConfigPanel({
     <div className="panel-section">
       <PanelTitle icon={<Gauge className="size-4" />} title="Model Configuration" />
       <p className="text-sm leading-6 text-muted">
-        Runtime changes apply to new chat, agent, and RAG requests. API keys are accepted by the backend and never echoed back.
+        Runtime changes apply to new chat, agent, and RAG requests. API keys are accepted by the backend and never
+        echoed back.
       </p>
       <Field label="Provider">
         <NativeSelect fullWidth>
-          <NativeSelect.Trigger name="modelProvider" value={provider} onChange={(event) => setProvider(event.target.value)}>
+          <NativeSelect.Trigger
+            name="modelProvider"
+            value={provider}
+            onChange={(event) => setProvider(event.target.value)}
+          >
             <NativeSelect.Option value="openai-compatible">OpenAI compatible</NativeSelect.Option>
             <NativeSelect.Option value="dashscope">DashScope</NativeSelect.Option>
             <NativeSelect.Indicator />
@@ -109,7 +118,13 @@ export function ModelConfigPanel({
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Temperature">
-          <input className="field-input" step="0.1" type="number" value={temperature} onChange={(event) => setTemperature(event.target.value)} />
+          <input
+            className="field-input"
+            step="0.1"
+            type="number"
+            value={temperature}
+            onChange={(event) => setTemperature(event.target.value)}
+          />
         </Field>
         <Field label="Max tokens">
           <input
@@ -121,7 +136,11 @@ export function ModelConfigPanel({
           />
         </Field>
       </div>
-      <Button className="control-button settings-action-button" variant="outline" onPress={() => void saveModelConfig()}>
+      <Button
+        className="control-button settings-action-button"
+        variant="outline"
+        onPress={() => void saveModelConfig()}
+      >
         Save Model
       </Button>
       {status ? <p className="text-sm leading-6 text-muted">{status}</p> : null}

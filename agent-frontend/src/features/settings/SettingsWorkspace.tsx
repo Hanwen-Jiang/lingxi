@@ -60,7 +60,9 @@ export function SettingsWorkspace({
           </Button>
           <div>
             <h1 className="text-base font-semibold">Settings</h1>
-            <p className="settings-header__subtitle text-muted">Runtime context, knowledge import, and memory management.</p>
+            <p className="settings-header__subtitle text-muted">
+              Runtime context, knowledge import, and memory management.
+            </p>
           </div>
         </div>
         <Button

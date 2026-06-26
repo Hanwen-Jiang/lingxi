@@ -35,7 +35,15 @@ export function MemoryPanel({
     if (!content.trim()) return;
     setStatus("Writing memory");
     try {
-      await api.writeMemory({userId, sessionId, memoryType, content, summary, confidence: 0.9, source: "frontend_workspace"});
+      await api.writeMemory({
+        userId,
+        sessionId,
+        memoryType,
+        content,
+        summary,
+        confidence: 0.9,
+        source: "frontend_workspace",
+      });
       const freshItems = await api.listUserMemories(userId, 20);
       onItems(freshItems);
       setContent("");
@@ -52,7 +60,11 @@ export function MemoryPanel({
       <div className="panel-section">
         <NativeSelect fullWidth>
           <Label>Type</Label>
-          <NativeSelect.Trigger name="memoryType" value={memoryType} onChange={(event) => setMemoryType(event.target.value as MemoryType)}>
+          <NativeSelect.Trigger
+            name="memoryType"
+            value={memoryType}
+            onChange={(event) => setMemoryType(event.target.value as MemoryType)}
+          >
             {MEMORY_TYPES.map((type) => (
               <NativeSelect.Option key={type} value={type}>
                 {type}
@@ -62,7 +74,11 @@ export function MemoryPanel({
           </NativeSelect.Trigger>
         </NativeSelect>
         <Field label="Content">
-          <textarea className="field-input min-h-24 resize-y" value={content} onChange={(event) => setContent(event.target.value)} />
+          <textarea
+            className="field-input min-h-24 resize-y"
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+          />
         </Field>
         <Field label="Summary">
           <input className="field-input" value={summary} onChange={(event) => setSummary(event.target.value)} />
@@ -79,16 +95,22 @@ export function MemoryPanel({
       {status ? <div className="rounded-2xl bg-surface p-3 text-sm text-muted shadow-surface">{status}</div> : null}
       <div className="grid gap-3 md:grid-cols-2">
         {items.length === 0 ? (
-          <p className="rounded-2xl bg-surface p-3 text-sm text-muted shadow-surface">No memories loaded for this user. Use Refresh or write a memory.</p>
+          <p className="rounded-2xl bg-surface p-3 text-sm text-muted shadow-surface">
+            No memories loaded for this user. Use Refresh or write a memory.
+          </p>
         ) : (
           items.map((item) => (
             <div key={item.memoryId} className="rounded-2xl bg-surface p-3 shadow-surface">
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate text-sm font-medium">{item.memoryType ?? "Memory"}</span>
-                <span className="rounded-full bg-surface-secondary px-2 py-1 text-xs text-muted">{item.status ?? "ACTIVE"}</span>
+                <span className="rounded-full bg-surface-secondary px-2 py-1 text-xs text-muted">
+                  {item.status ?? "ACTIVE"}
+                </span>
               </div>
               <p className="mt-2 text-sm leading-6 text-foreground">{item.summary || item.content}</p>
-              {item.content && item.summary ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{item.content}</p> : null}
+              {item.content && item.summary ? (
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{item.content}</p>
+              ) : null}
             </div>
           ))
         )}

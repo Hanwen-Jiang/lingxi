@@ -16,7 +16,9 @@ import type {ReasoningEffort} from "../../types";
 
 export function ReviewModelText({compact = false, model}: {compact?: boolean; model: ComposerModel}) {
   return (
-    <span className={`composer-model-text ${compact ? "composer-model-text--compact" : ""} flex min-w-0 items-center gap-1`}>
+    <span
+      className={`composer-model-text ${compact ? "composer-model-text--compact" : ""} flex min-w-0 items-center gap-1`}
+    >
       <span className="truncate font-normal">{compact ? model.id : model.name}</span>
       {model.meta ? <span className="shrink-0 font-normal text-muted">· {model.meta}</span> : null}
     </span>
@@ -93,7 +95,11 @@ export function ModelPickerMenu({
         </button>
       </section>
 
-      <section aria-hidden={!isModelListExpanded} aria-label="Model" className="model-picker-panel model-picker-panel--models">
+      <section
+        aria-hidden={!isModelListExpanded}
+        aria-label="Model"
+        className="model-picker-panel model-picker-panel--models"
+      >
         <div className="model-picker-heading">模型</div>
         <div className="model-picker-list">
           {modelOptions.map((option) => {
@@ -115,7 +121,9 @@ export function ModelPickerMenu({
             );
           })}
         </div>
-        {modelsStatus || tuningStatus ? <div className="model-picker-status">{tuningStatus ?? modelsStatus}</div> : null}
+        {modelsStatus || tuningStatus ? (
+          <div className="model-picker-status">{tuningStatus ?? modelsStatus}</div>
+        ) : null}
       </section>
     </div>
   );
@@ -156,7 +164,13 @@ export function ModelSelectControl({
     <span className={className}>
       <Popover isOpen={isOpen} onOpenChange={setIsOpen}>
         <Popover.Trigger>
-          <Button aria-label="Choose model" className="model-select-trigger" isDisabled={disabled} size="sm" variant="ghost">
+          <Button
+            aria-label="Choose model"
+            className="model-select-trigger"
+            isDisabled={disabled}
+            size="sm"
+            variant="ghost"
+          >
             <ReviewModelText compact model={model} />
             <ChevronDown className="size-4 shrink-0 text-muted" />
           </Button>

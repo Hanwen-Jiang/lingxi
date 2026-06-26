@@ -11,7 +11,14 @@ export const CHAT_MODES: ChatMode[] = [
   {id: "draft", label: "Reply Draft", description: "Agent-assisted reply drafting.", tone: "agent"},
 ];
 
-export const SLASH_COMMANDS = ["/direct-chat", "/agent-chat", "/adaptive-rag", "/rag-chat", "/reply-draft", "/streaming-chat"];
+export const SLASH_COMMANDS = [
+  "/direct-chat",
+  "/agent-chat",
+  "/adaptive-rag",
+  "/rag-chat",
+  "/reply-draft",
+  "/streaming-chat",
+];
 
 export const MEMORY_TYPES: MemoryType[] = [
   "IMPORTANT_FACT",

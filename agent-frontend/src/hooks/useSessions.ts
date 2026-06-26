@@ -32,14 +32,18 @@ export function useSessions({
     const query = sessionQuery.trim().toLowerCase();
     if (!query) return sessions;
     return sessions.filter((session) =>
-      [session.title, session.summary, modeLabel(session.mode)].some((value) => (value ?? "").toLowerCase().includes(query)),
+      [session.title, session.summary, modeLabel(session.mode)].some((value) =>
+        (value ?? "").toLowerCase().includes(query),
+      ),
     );
   }, [sessionQuery, sessions]);
 
   const refreshSessions = useCallback(async () => {
     const items = await api.listSessions(userId, 60);
     setSessions(items);
-    setSelectedSession((current) => items.find((item) => item.sessionId === (current?.sessionId ?? sessionId)) ?? current);
+    setSelectedSession(
+      (current) => items.find((item) => item.sessionId === (current?.sessionId ?? sessionId)) ?? current,
+    );
   }, [api, sessionId, userId]);
 
   const loadSession = useCallback(
@@ -54,7 +58,7 @@ export function useSessions({
         lastTurn
           ? {
               route: routeModeId(lastTurn.mode),
-              forced: lastTurn.metadataJson?.includes("\"forced\":true") ?? false,
+              forced: lastTurn.metadataJson?.includes('"forced":true') ?? false,
               reason: lastTurn.metadataJson ? "Loaded from session history." : undefined,
               requestId: lastTurn.requestId,
               status: lastTurn.status,
