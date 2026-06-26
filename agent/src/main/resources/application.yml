@@ -146,6 +146,14 @@ memory:
     min-confidence: 0.55
 
 agent:
+  # 管理员令牌:保护 /chat/model-config(P0 过渡;留空=该端点 fail-closed 关闭)。P1 由网关 admin 角色取代。
+  admin:
+    token: ${AGENT_ADMIN_TOKEN:}
+  # CORS 白名单(F03/M1):精确 origin,禁用 "*";默认仅本地前端;生产用 env 注入真实域名。
+  cors:
+    allowed-origins: ${AGENT_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5180}
+    allowed-methods: ${AGENT_CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+    allow-credentials: ${AGENT_CORS_ALLOW_CREDENTIALS:false}
   model:
     provider: ${AGENT_MODEL_PROVIDER:auto}
     openai-compatible:

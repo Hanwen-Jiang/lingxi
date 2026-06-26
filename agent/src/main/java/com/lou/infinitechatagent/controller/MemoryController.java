@@ -104,15 +104,26 @@ public class MemoryController {
         return ResultUtils.success(longTermMemoryService.findActiveByUser(userId, memoryType, limit));
     }
 
+    // 过渡限权(P0 止损,B1/G10):/item 与 /disable 必须声明归属 userId,且与记忆所有者一致,
+    // 否则按"不存在"处理(不泄露存在性)。封堵"仅凭猜测 memoryId 即可越权读取/停用他人记忆"。
+    // P1 网关身份闭环后,userId 改由可信 X-User-Id 派生,此参数移除。
     @GetMapping("/item/{memoryId}")
-    public BaseResponse<MemoryItem> getMemory(@PathVariable String memoryId) {
-        return ResultUtils.success(longTermMemoryService.findByMemoryId(memoryId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND_ERROR, "记忆不存在：" + memoryId)));
+    public BaseResponse<MemoryItem> getMemory(@PathVariable String memoryId,
+                                              @RequestParam Long userId) {
+        return ResultUtils.success(requireOwnedMemory(memoryId, userId));
     }
 
     @PostMapping("/disable/{memoryId}")
-    public BaseResponse<Boolean> disableMemory(@PathVariable String memoryId) {
+    public BaseResponse<Boolean> disableMemory(@PathVariable String memoryId,
+                                               @RequestParam Long userId) {
+        requireOwnedMemory(memoryId, userId);
         return ResultUtils.success(longTermMemoryService.disable(memoryId));
+    }
+
+    private MemoryItem requireOwnedMemory(String memoryId, Long userId) {
+        return longTermMemoryService.findByMemoryId(memoryId)
+                .filter(memory -> userId != null && userId.equals(memory.getUserId()))
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND_ERROR, "记忆不存在：" + memoryId));
     }
 
     @PostMapping("/reflection")
