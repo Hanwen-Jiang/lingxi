@@ -8,6 +8,8 @@ import com.lou.infinitechatagent.monitor.MonitorContextHolder;
 import com.lou.infinitechatagent.rag.adaptive.AdaptiveRagOrchestrator;
 import com.lou.infinitechatagent.rag.adaptive.dto.AdaptiveRagRequest;
 import com.lou.infinitechatagent.rag.adaptive.dto.AdaptiveRagResponse;
+import com.lou.infinitechatagent.security.AuthPrincipal;
+import com.lou.infinitechatagent.security.CurrentUser;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,7 +27,10 @@ public class AdaptiveRagController {
     private ChatHistoryService chatHistoryService;
 
     @PostMapping("/chat")
-    public BaseResponse<AdaptiveRagResponse> chat(@RequestBody AdaptiveRagRequest request) {
+    public BaseResponse<AdaptiveRagResponse> chat(@RequestBody AdaptiveRagRequest request,
+                                                  @CurrentUser AuthPrincipal principal) {
+        // 网关身份优先(B1):覆盖请求体 userId,贯通到自适应 RAG 编排/记忆;过渡期回退 body。
+        request.setUserId(principal.resolveUserId(request.getUserId()));
         MonitorContextHolder.setContext(MonitorContext.builder()
                 .userId(request.getUserId())
                 .sessionId(request.getSessionId())

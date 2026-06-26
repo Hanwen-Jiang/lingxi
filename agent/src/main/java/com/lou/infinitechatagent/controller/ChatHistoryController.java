@@ -45,27 +45,33 @@ public class ChatHistoryController {
     @Value("${agent.admin.token:}")
     private String adminToken;
 
+    // 会话端点 userId 经 principal.resolveUserId 解析(网关身份优先、param/body 回退,B1)。
     @GetMapping("/sessions")
-    public BaseResponse<List<ChatSessionSummary>> sessions(@RequestParam Long userId,
+    public BaseResponse<List<ChatSessionSummary>> sessions(@CurrentUser AuthPrincipal principal,
+                                                           @RequestParam(required = false) Long userId,
                                                            @RequestParam(defaultValue = "40") int limit) {
-        return ResultUtils.success(chatHistoryService.listSessions(userId, limit));
+        return ResultUtils.success(chatHistoryService.listSessions(principal.resolveUserId(userId), limit));
     }
 
     @GetMapping("/sessions/{sessionId}")
-    public BaseResponse<ChatSessionDetail> session(@PathVariable Long sessionId,
-                                                   @RequestParam Long userId) {
-        return ResultUtils.success(chatHistoryService.getSession(userId, sessionId));
+    public BaseResponse<ChatSessionDetail> session(@CurrentUser AuthPrincipal principal,
+                                                   @PathVariable Long sessionId,
+                                                   @RequestParam(required = false) Long userId) {
+        return ResultUtils.success(chatHistoryService.getSession(principal.resolveUserId(userId), sessionId));
     }
 
     @PostMapping("/sessions")
-    public BaseResponse<ChatSessionSummary> createSession(@RequestBody ChatSessionCreateRequest request) {
+    public BaseResponse<ChatSessionSummary> createSession(@CurrentUser AuthPrincipal principal,
+                                                          @RequestBody ChatSessionCreateRequest request) {
+        request.setUserId(principal.resolveUserId(request.getUserId()));
         return ResultUtils.success(chatHistoryService.createSession(request));
     }
 
     @PostMapping("/sessions/{sessionId}/summarize")
-    public BaseResponse<ChatSessionSummary> summarize(@PathVariable Long sessionId,
-                                                      @RequestParam Long userId) {
-        return ResultUtils.success(chatHistoryService.summarize(userId, sessionId));
+    public BaseResponse<ChatSessionSummary> summarize(@CurrentUser AuthPrincipal principal,
+                                                      @PathVariable Long sessionId,
+                                                      @RequestParam(required = false) Long userId) {
+        return ResultUtils.success(chatHistoryService.summarize(principal.resolveUserId(userId), sessionId));
     }
 
     @GetMapping("/model-status")

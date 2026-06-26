@@ -8,6 +8,8 @@ import com.lou.infinitechatagent.common.ErrorCode;
 import com.lou.infinitechatagent.common.ResultUtils;
 import com.lou.infinitechatagent.model.dto.ChatRequest;
 import com.lou.infinitechatagent.model.dto.StreamChatEvent;
+import com.lou.infinitechatagent.security.AuthPrincipal;
+import com.lou.infinitechatagent.security.CurrentUser;
 import jakarta.annotation.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -29,12 +31,17 @@ public class AutoChatController {
     private AutoChatRouterService autoChatRouterService;
 
     @PostMapping
-    public BaseResponse<AutoChatResponse> chat(@RequestBody ChatRequest request) {
+    public BaseResponse<AutoChatResponse> chat(@RequestBody ChatRequest request,
+                                               @CurrentUser AuthPrincipal principal) {
+        // 网关身份优先(B1):覆盖请求体 userId,贯通到自动路由各子链;过渡期回退 body。
+        request.setUserId(principal.resolveUserId(request.getUserId()));
         return ResultUtils.success(autoChatRouterService.chat(request));
     }
 
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<StreamChatEvent>> stream(@RequestBody ChatRequest request) {
+    public Flux<ServerSentEvent<StreamChatEvent>> stream(@RequestBody ChatRequest request,
+                                                         @CurrentUser AuthPrincipal principal) {
+        request.setUserId(principal.resolveUserId(request.getUserId()));
         AutoRouteDecision decision = autoChatRouterService.decide(request);
         String requestId = UUID.randomUUID().toString();
         AtomicReference<StringBuilder> answer = new AtomicReference<>(new StringBuilder());

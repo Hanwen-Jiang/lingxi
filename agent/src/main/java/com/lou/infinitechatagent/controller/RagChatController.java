@@ -8,6 +8,8 @@ import com.lou.infinitechatagent.monitor.MonitorContextHolder;
 import com.lou.infinitechatagent.model.dto.ChatRequest;
 import com.lou.infinitechatagent.rag.RagQueryService;
 import com.lou.infinitechatagent.rag.dto.RagQueryResponse;
+import com.lou.infinitechatagent.security.AuthPrincipal;
+import com.lou.infinitechatagent.security.CurrentUser;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,15 +27,18 @@ public class RagChatController {
     private ChatHistoryService chatHistoryService;
 
     @PostMapping("/chat")
-    public BaseResponse<RagQueryResponse> chatWithCitations(@RequestBody ChatRequest chatRequest) {
+    public BaseResponse<RagQueryResponse> chatWithCitations(@RequestBody ChatRequest chatRequest,
+                                                            @CurrentUser AuthPrincipal principal) {
+        // 网关身份优先(B1):监控/历史记到主体名下;过渡期回退 body userId。
+        Long userId = principal.resolveUserId(chatRequest.getUserId());
         MonitorContextHolder.setContext(MonitorContext.builder()
-                .userId(chatRequest.getUserId())
+                .userId(userId)
                 .sessionId(chatRequest.getSessionId())
                 .build());
         try {
             RagQueryResponse response = ragQueryService.chatWithCitations(chatRequest.getSessionId(), chatRequest.getPrompt());
             chatHistoryService.recordSuccess(
-                    chatRequest.getUserId(),
+                    userId,
                     chatRequest.getSessionId(),
                     "rag",
                     chatRequest.getPrompt(),
@@ -44,7 +49,7 @@ public class RagChatController {
             return ResultUtils.success(response);
         } catch (RuntimeException e) {
             chatHistoryService.recordError(
-                    chatRequest.getUserId(),
+                    userId,
                     chatRequest.getSessionId(),
                     "rag",
                     chatRequest.getPrompt(),
