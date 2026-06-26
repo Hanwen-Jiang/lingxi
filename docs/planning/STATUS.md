@@ -20,6 +20,13 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-26 · 第一轮收口:用户拍板 4 决策 + P0 整合入 main + 进入 P1
+- 完成:用户拍板——①线上 jjwt 修复**现在同步并重启线上**;②**中枢收拢并合入 main**;③HeroUI Pro 用 **hpsetup + token**(已写回 `E:\HeroUI-Pro\HEROUI-PERSONAL-TOKEN.md`,勿删);④**Greenlight P1**。中枢已把四流 P0 全部整合入 `main`(539c9e5,零冲突,已 push):agent-backend(端口/止损/Flyway)+ agent-frontend(拆巨石/工具链)+ chat-frontend(设计系统/壳)+ chat-backend(jaxb-api jjwt 修复+E2E)。删除 stray 分支 `feat/agent-frontend-p0-foundation`。
+- 关键决策:认可 S3 的 **jaxb-api** 方案(优于升级 jjwt0.11);设计系统包 P1 **上提为根级共享包**供 S2 消费(S4 牵头)。
+- 阻塞:无。P0 四流全绿、已并入 main。
+- 交接:**下一轮从 main 起新分支**(每流独立分支,建议各自 git worktree 避免再缠);S3 为 P1 关键路径(网关纳入 agent + 统一 JWT + chat-common 解锁 S1;客户端 API 解锁 S4)。四流 P1 prompt 已下发。
+- 待中枢确认:线上 jjwt 部署结果由 S3 跑完贴回。
+
 ### 2026-06-26 · 中枢实跑 chat E2E 冒烟(交接 S3 修复)
 - 完成:用户已建隔离库(方式 A);但 S3 已把 `01-setup-infra.sh` 改为**自带 :3308 MariaDB**(无需 sudo/共享库授权,方式 A 现已无关)。中枢续跑 01→03→04:01 ✅(:3308,InfiniteChat_e2e 14 表;Nacos ns e2e;Kafka :9192)、02 已构建、03 起 7 服务、04 冒烟一次 **PASS=7 / FAIL=1**。
 - 关键发现(交接 S3,均属 chat-backend 域,中枢不代改其代码):
