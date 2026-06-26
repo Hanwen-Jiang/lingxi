@@ -1,16 +1,8 @@
 // The API seam contract. Mock and (future) real branches implement the SAME
 // signatures, so flipping VITE_API_BASE swaps data sources without touching UI
 // (40-plan §4). The real branch lands in P2 as S3 ships B6/B7/B8/M9/M10/M11.
-import type {
-  Conversation,
-  Friend,
-  FriendApply,
-  Id,
-  Message,
-  Page,
-  PushEvent,
-  User,
-} from "./types";
+import type {Conversation, Friend, FriendApply, Id, Message, Page, User} from "./types";
+import type {WsTransport} from "./ws/transport";
 
 export interface SendResult {
   message: Message;
@@ -35,7 +27,8 @@ export interface Api {
   sendMessage(sessionId: Id, content: string): Promise<SendResult>; // POST /chat/session
   markRead(sessionId: Id): Promise<void>; // M10
 
-  /** Subscribe to WS push (mock simulates the single-channel backend). Returns an
-   *  unsubscribe. The real client (ADR 0002) adds reconnect/backoff/heartbeat/ack. */
-  connectWs(onPush: (e: PushEvent) => void): () => void; // B8
+  /** Open a WS transport (mock: a simulated channel; real: a browser WebSocket via
+   *  the B8 handshake). The WsClient (ADR 0002) layers reconnect/backoff/heartbeat/
+   *  ack/dedup on top of this transport. */
+  openWs(): WsTransport; // B8
 }

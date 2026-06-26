@@ -4,6 +4,7 @@
 // only ever modeled "always success" (40-plan §1 risk note).
 import type {Api, SendResult} from "./contract";
 import type {Conversation, Friend, FriendApply, Message, Page, PushEvent, User} from "./types";
+import {decodeFrame, encodeFrame, OUT, PUSH, type WireFrame, type WsTransport} from "./ws/transport";
 
 const ME: User = {id: "u-me", name: "我", presence: "online", signature: "在线"};
 
@@ -96,10 +97,38 @@ const applies: FriendApply[] = [
   },
 ];
 
-// --- WS push simulation (single subscriber, like the single-channel backend) ---
-let pushHandler: ((e: PushEvent) => void) | null = null;
+// --- WS transport simulation (single channel, like the backend) ---
+// Emits backend-shaped wire frames into the active transport so the real WsClient
+// (reconnect/heartbeat/ack/dedup) is exercised end-to-end against the mock.
+let activeTransport: WsTransport | null = null;
+// at-least-once: msgUuids awaiting a client ACK. If still unacked after a short
+// delay we redeliver once (exercises the client's dedup + re-ACK path).
+const unacked = new Set<string>();
+
 function emit(e: PushEvent) {
-  pushHandler?.(e);
+  if (!activeTransport) return;
+  const frame = pushEventToFrame(e);
+  activeTransport.onmessage?.(encodeFrame(frame));
+  if (frame.msgUuid) {
+    const uuid = frame.msgUuid;
+    unacked.add(uuid);
+    setTimeout(() => {
+      if (unacked.has(uuid)) activeTransport?.onmessage?.(encodeFrame(frame));
+    }, 600);
+  }
+}
+
+function pushEventToFrame(e: PushEvent): WireFrame {
+  switch (e.type) {
+    case "message":
+      return {type: PUSH.MESSAGE, msgUuid: `2:${ME.id}:${e.message.id}`, data: e.message};
+    case "new-session":
+      return {type: PUSH.NEW_SESSION, msgUuid: `1:${ME.id}:${e.sessionId}`, data: {sessionId: e.sessionId}};
+    case "friend-application":
+      return {type: PUSH.FRIEND_APPLICATION, msgUuid: `4:${ME.id}:apply`};
+    default:
+      return {type: 0};
+  }
 }
 
 export const mockApi: Api = {
@@ -169,10 +198,22 @@ export const mockApi: Api = {
     if (c) c.unreadCount = 0;
   },
 
-  connectWs(onPush) {
-    pushHandler = onPush;
-    return () => {
-      if (pushHandler === onPush) pushHandler = null;
+  openWs(): WsTransport {
+    // A simulated single channel. The WsClient drives reconnect/heartbeat/ack on
+    // top of this; here we just open after a short delay and ignore inbound
+    // ACK/heartbeat frames the client sends.
+    const t: WsTransport = {
+      send(data) {
+        // Honor client ACK (stop redelivery); ignore HEART_BEAT.
+        const frame = decodeFrame(data);
+        if (frame?.type === OUT.ACK && frame.msgUuid) unacked.delete(frame.msgUuid);
+      },
+      close() {
+        if (activeTransport === t) activeTransport = null;
+      },
     };
+    activeTransport = t;
+    setTimeout(() => t.onopen?.(), 80);
+    return t;
   },
 };
