@@ -61,6 +61,7 @@
 | **D10 agent-frontend 定位** | **面向终端用户的产品**(2026-06-26 拍板) | 需完整消费级 IA(参 DESIGN.md)、按产品标准锁紧;`model-config` 等管理能力收为 **admin-only 屏**,普通用户不可见;不可把内部/实现术语暴露给 UI。 | S2 |
 | **D11 多设备** | **延后**(2026-06-26 拍板) | 首版单设备;已读指针用 **每用户游标**(`last_read_message_id` per (user,session)),不做每设备游标/跨设备同步;WS 仍单通道(新登录覆盖旧通道)。后续再扩。 | S3,S4 |
 | **D12 产品名** | **灵犀 / Lingxi**(2026-06-26 拍板) | 对外品牌=灵犀(中)/Lingxi(英),助手人格名"灵犀",Slogan"懂你的,不只是消息";旧名 InfiniteChat 降为内部代号。**用户可见层即刻采用,包名/artifactId/projecta 代号先不动**。细则见 `02-branding.md`。 | 全体 |
+| **D13 仓库形态** | **保持单一 monorepo**(2026-06-27 拍板) | 四子项目 + `packages/*`(共享设计系统)+ `docs/planning` 同处一个 git 仓库(`github.com/Hanwen-Jiang/lingxi`,private),**不拆分子仓**。npm 根 workspace 含 `packages/*` + 两个前端;Java 子项目独立 Maven 构建但同仓。跨子项目改动经 `STATUS.md` 协调 + 中枢集成检查点合 main。 | 全体 |
 
 > 仍开放、需用户拍板的项见 §9 与 `STATUS.md`「待用户拍板」。
 
@@ -143,6 +144,7 @@
 3. ✅ **agent-frontend = 终端用户产品**(D10):完整消费级 IA,model-config 收为 admin-only 屏。
 4. ✅ **E2E = 与线上并跑 + 深度场景脚本化 + 现在实跑**(D7 补充):S3 执行 `chat/e2e/` 01→04,并把深度链路场景脚本化;隔离设计保证与旧 jar 零冲突。
 5. ✅ **多设备 = 延后**(D11):每用户已读游标,单设备首版。
+6. ✅ **仓库形态 = 保持单一 monorepo**(D13):四子项目 + `packages/*` + docs 同仓,不拆子仓。
 
 ### 仍开放(非阻塞,可后续定)
 

@@ -20,6 +20,11 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-27 · D13 保持单一 monorepo(拍板)+ 复核:集成+契约已落地
+- **D13**:用户拍板**保持单一 monorepo**(不拆子仓),已写入 master-plan §5(D13)+§10。解决「仓库重建」条遗留的"是否拆分子仓"待确认项。
+- **复核确认 ②(本轮无需重做)**:上一轮已执行的 P1 集成检查点 + chat-common 契约规格**均已在 main**:`main = ce8adc4(= origin/main)`——S4 根 workspace+真实 Pro+WS、S2 设计系统+品牌、S1 身份 expand 全部并入;**C4 已解**(agent-frontend alias 改指根 `packages/design-system`,`tsc -b` exit 0);`docs/planning/03-contracts.md` 在库。故本轮只补 D13 + 重发 prompt,不再重复合并。
+- 阻塞:无。待中枢确认:无。
+
 ### 2026-06-27 · P1 集成检查点 + chat-common 契约规格 + 重心转 S3
 - **本轮 P1 数字**:S1 身份 expand 相 ✅ / S2 接设计系统+灵犀品牌 ✅ / S4 设计系统上提根级+真实 Pro+WS 客户端 ✅ / **S3 仅 ★1 复核、P1 代码零提交**(关键路径未交付,3 流在等它)。
 - **用户拍板(本轮 3 问)**:① 下轮**集中火力 S3 关键路径**;② **中枢现在做 P1 集成检查点**;③ **中枢出 chat-common 契约规格**。
