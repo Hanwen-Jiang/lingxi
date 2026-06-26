@@ -20,6 +20,14 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-26 · 仓库重建 + 首次提交 + push
+- 完成:根 `.git` 原为空/损坏,已 `git init` 重建;加根 `.gitignore`(排除 secrets/node_modules/target/dist/.artifacts 证书与日志);首提交 `099ad98`(727 文件,零密钥泄漏);创建私有仓库并推送(SSH 22 被 198.18 透明代理挡,改 HTTPS 成功)。
+- 产出物:`.gitignore`;远端 **github.com/Hanwen-Jiang/lingxi(PRIVATE, main)**。
+- 关键决策:默认 **私有**(可随时转公开);仓库名用新品牌 `lingxi`;`application-local.yml`/`.artifacts`/证书 JSON 一律不入库。
+- 阻塞:无(SSH:22 走 198.18 代理不通——后续 git 操作用 HTTPS 远端)。
+- 交接:各流 push 用 HTTPS 远端;遵循 master-plan §9 分支/提交约定。
+- 待中枢确认:是否要转公开 / 改名 / 后续是否拆分子仓(默认单 monorepo)。
+
 ### 2026-06-26 · 产品定名 灵犀 / Lingxi(D12)
 - 完成:产品名定为 **灵犀(Lingxi)**,取代 InfiniteChat(降为内部代号);建品牌命名表。
 - 产出物:`docs/planning/02-branding.md`;master-plan §1/§5(D12)与 README 已更新。
@@ -67,6 +75,14 @@
 ---
 
 ## S2 · agent 前端(owns agent-frontend/)
+
+### 2026-06-26 · P0-① 修 api base bug + Vite dev proxy
+- 完成:`src/api.ts` 的 `DEFAULT_API_BASE` 由硬编码 `http://localhost:10010/api`(实为 chat 网关口,bug)改为**同源相对 `/api`**;`vite.config.ts` 加 `/api` dev proxy(目标 env 可配 `VITE_API_PROXY_TARGET`,默认 agent D1 口 18080);新增 `.env.example` 文档化 `VITE_API_BASE_URL`/`VITE_API_PROXY_TARGET`。`npm run build` exit 0。
+- 产出物:`agent-frontend/src/api.ts`、`agent-frontend/vite.config.ts`、`agent-frontend/.env.example`。
+- 关键决策:默认走相对 `/api`(prod 经网关、dev 经 Vite proxy);`VITE_API_BASE_URL` 仍可整体覆盖指向非默认后端;dev proxy 默认指 18080(D1),agent 在旧口时设 `VITE_API_PROXY_TARGET`。
+- 阻塞:无(P0 与 S1 解耦)。
+- 交接:S1——agent 落地 D1(18080)后 dev proxy 默认即对齐;前端按 `/api/<chat|agent|rag|memory>/...` 调用,D3 网关路由前缀需与 agent context-path `/api` 拉齐。
+- 待中枢确认:无。
 
 ### 2026-06-26 · frontend → agent-frontend 更名完成
 - 完成:磁盘更名完成(含 node_modules 无损迁移),`tsc -b` exit 0;更新引用:`.claude/launch.json`(--prefix agent-frontend)、package.json/lock 的 name、.codex skills 路径。

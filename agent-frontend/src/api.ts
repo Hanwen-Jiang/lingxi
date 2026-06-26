@@ -19,7 +19,12 @@ import type {
   StreamChatEvent,
 } from "./types";
 
-const DEFAULT_API_BASE = "http://localhost:10010/api";
+// Same-origin relative base. In prod the gateway/edge serves the SPA and
+// forwards /api/** to the agent (D1/D3); in dev Vite proxies /api (see
+// vite.config.ts). Override the whole base with VITE_API_BASE_URL to target a
+// non-default backend. (Was hardcoded to http://localhost:10010/api, which is
+// the chat gateway port — a bug; the agent is reached via /api, not :10010.)
+const DEFAULT_API_BASE = "/api";
 
 export class ApiError extends Error {
   code?: number;
