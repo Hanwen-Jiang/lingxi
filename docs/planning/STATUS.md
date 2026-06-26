@@ -20,6 +20,16 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-27 · P1 集成检查点 + chat-common 契约规格 + 重心转 S3
+- **本轮 P1 数字**:S1 身份 expand 相 ✅ / S2 接设计系统+灵犀品牌 ✅ / S4 设计系统上提根级+真实 Pro+WS 客户端 ✅ / **S3 仅 ★1 复核、P1 代码零提交**(关键路径未交付,3 流在等它)。
+- **用户拍板(本轮 3 问)**:① 下轮**集中火力 S3 关键路径**;② **中枢现在做 P1 集成检查点**;③ **中枢出 chat-common 契约规格**。
+- **已执行**:
+  1. 写 `docs/planning/03-contracts.md`(跨栈契约单一事实来源:身份头/统一包络/错误码+HTTP 映射/游标分页/string id/网关 agent 路由/JWT/WS 握手/SSE)——S3 在 chat-common 实现并导出、S1 镜像对齐。
+  2. **P1 集成检查点 → `main` = `a4114f0`(已 push)**:S4(根 workspace + 真实 Pro + WS)+ S2(设计系统+品牌)+ S1(身份 expand+traceId)全部并入;**解决 C4**——agent-frontend 的设计系统 alias 由 `chat-frontend/packages/` 改指根 `packages/design-system`,`tsc -b` exit 0 已验。S3 分支无 P1 提交、无需合并。
+- **下一轮**:重心 = S3(chat-common→网关 agent 路由→数据丢失级→客户端 API)。S1/S2/S4 **从新 main(a4114f0)起分支/rebase**,只做契约安全活、等 S3 解锁件。四流 P2/续 prompt 已下发。
+- 阻塞:无。
+- 待中枢确认:无(线上部署仍按上条 defer 到 P1 整合就绪后)。
+
 ### 2026-06-26 · ★1 premise 纠正 + S1↔S3 契约仲裁 + greenlight chat-common
 - **★1 premise 作废(中枢致歉,S3 复核正确):** 线上 `projecta-current` 跑的是 **pre-P0 无鉴权旧分支**(`dc9c8e3`,无 AuthGlobalFilter/AuthContextInterceptor,网关对 no-token 与 garbage-token 均 200)。**不是 jjwt×JDK21 崩溃**——那条验签路径只在带鉴权的 main/E2E 才有。故"给线上 4 jar 加 jaxb 重建"是空操作。线上真实状态=**完全无鉴权**(原始 P0 安全洞,但它是 WSL 开发运行态,非公网生产)。**是否把 main 全量 P0 部署上线=行为变更,待用户拍板**(中枢正在 AskUserQuestion)。S3 未擅动线上、已开 P1 worktree——正确。
 - **S1↔S3 契约仲裁(两流照此对齐,避免各造一套):**
