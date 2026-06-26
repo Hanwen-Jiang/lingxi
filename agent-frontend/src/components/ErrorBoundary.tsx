@@ -1,15 +1,15 @@
 import {Component, type ErrorInfo, type ReactNode} from "react";
 
-import {Button} from "@heroui/react/button";
+import {ErrorState, LingxiGlyph} from "@infinitechat/design-system";
 
 type ErrorBoundaryProps = {children: ReactNode};
 
 type ErrorBoundaryState = {hasError: boolean};
 
 // Top-level safety net: if any part of the workspace throws while rendering,
-// we swap the broken subtree for a calm, on-brand recovery card instead of a
-// blank screen. The copy stays warm and product-facing (灵犀/Lingxi) — no
-// internal terms or stack traces leak into the UI.
+// we swap the broken subtree for the shared 灵犀 (Lingxi) error state instead
+// of a blank screen. ErrorState (from the design system) handles the calm,
+// product-facing copy — no stack traces or internal wording leaks.
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = {hasError: false};
 
@@ -27,15 +27,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
 
     return (
-      <div className="flex h-svh w-full items-center justify-center bg-background p-6 text-foreground">
-        <div className="w-full max-w-sm rounded-2xl border border-separator bg-surface p-7 text-center shadow-[var(--shadow-elevated)]">
-          <h1 className="text-lg font-semibold">灵犀 needs a moment</h1>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            Something slipped while loading your workspace. Your conversations are safe — let&rsquo;s try that again.
-          </p>
-          <Button className="mt-6 w-full justify-center" variant="primary" onPress={() => window.location.reload()}>
-            Reload
-          </Button>
+      <div className="flex h-svh w-full flex-col items-center justify-center bg-background p-6 text-foreground">
+        <LingxiGlyph className="size-10 text-accent" title="灵犀" />
+        <div className="mt-4 w-full max-w-sm">
+          <ErrorState
+            title="灵犀 暂时打了个盹"
+            description="刚才工作台没能加载出来,你的对话还在,刷新一下再试。"
+            onRetry={() => window.location.reload()}
+          />
         </div>
       </div>
     );

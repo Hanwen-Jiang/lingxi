@@ -3,8 +3,13 @@
   "configurations": [
     {
       "name": "agent-frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "agent-frontend", "run", "dev:auto"],
+      "runtimeExecutable": "D:\\nvm\\v22.23.1\\node.exe",
+      "runtimeArgs": [
+        "agent-frontend/node_modules/vite/bin/vite.js",
+        "agent-frontend",
+        "--host",
+        "127.0.0.1"
+      ],
       "autoPort": true,
       "port": 5173
     },

@@ -26,6 +26,27 @@
   color-scheme: dark;
 }
 
+/* ------------------------------------------------------------------ *
+ * @infinitechat/design-system shared brand tokens (D8).
+ * The ds package's `tokens.css` also defines a parallel HeroUI-named semantic
+ * layer (we use HeroUI's directly, above), but its branded components
+ * reference these `--lx-*` private tokens. Mirror only that subset here so ds
+ * components theme correctly without overwriting our HeroUI-calibrated
+ * semantic tokens. Source of truth:
+ * chat-frontend/packages/design-system/src/styles/tokens.css.
+ * ------------------------------------------------------------------ */
+:root {
+  --lx-accent: #006fee;
+  --lx-accent-strong: #005bc4;
+  --lx-radius-row: 14px;
+  --lx-radius-panel: 22px;
+  --lx-radius-panel-lg: 28px;
+  --lx-state-online: #17c964;
+  --lx-state-offline: #f5a524;
+  --lx-state-reconnecting: #f5a524;
+  --lx-state-error: #f31260;
+}
+
 :root {
   color-scheme: light;
   font-family:

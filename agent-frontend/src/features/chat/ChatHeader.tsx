@@ -64,23 +64,23 @@ export function ChatHeader({
           <div className="flex items-center gap-2">
             <h2 className="truncate text-sm font-semibold md:text-base">{session?.title || activeMode.label}</h2>
             <Chip size="sm" variant="soft" color={statusTone(health === "up" ? "complete" : "error")}>
-              {health === "up" ? "UP" : health === "checking" ? "CHECKING" : "DOWN"}
+              {health === "up" ? "在线" : health === "checking" ? "连接中" : "离线"}
             </Chip>
             <Chip size="sm" variant="soft" color={modelStatus?.configured ? "success" : "warning"}>
-              {modelStatus?.configured ? "Model ready" : "Model missing"}
+              {modelStatus?.configured ? "灵犀已就绪" : "灵犀还没接上模型"}
             </Chip>
           </div>
-          <p className="truncate text-xs text-muted">Auto routing chooses the backend capability for each turn.</p>
+          <p className="truncate text-xs text-muted">灵犀会根据你的问题自动挑选最合适的方式回答。</p>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <Button className="control-button header-action-button" size="sm" variant="outline" onPress={onCheckHealth}>
           <RefreshCw className="size-4" />
-          <span className="hidden sm:inline">Refresh</span>
+          <span className="hidden sm:inline">刷新</span>
         </Button>
         <Button
           isIconOnly
-          aria-label="Open settings"
+          aria-label="打开设置"
           className="icon-button"
           size="sm"
           variant="outline"

@@ -15,7 +15,17 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@infinitechat/design-system": ["../chat-frontend/packages/design-system/src/index.ts"],
+      "@infinitechat/design-system/styles/tokens.css": ["../chat-frontend/packages/design-system/src/styles/tokens.css"]
+    }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": [
+    "src",
+    "vite.config.ts",
+    "../chat-frontend/packages/design-system/src/**/*.ts",
+    "../chat-frontend/packages/design-system/src/**/*.tsx"
+  ]
 }

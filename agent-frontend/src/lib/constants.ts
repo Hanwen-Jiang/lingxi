@@ -3,12 +3,12 @@ import {type CSSProperties} from "react";
 import type {ChatMode, MemoryType, ReasoningEffort} from "../types";
 
 export const CHAT_MODES: ChatMode[] = [
-  {id: "auto", label: "Auto", description: "Backend routing chooses the best capability for each turn.", tone: "chat"},
-  {id: "direct", label: "Direct Chat", description: "Single assistant reply.", tone: "chat"},
-  {id: "agent", label: "Agent Chat", description: "Agent with tools and memory.", tone: "agent"},
-  {id: "adaptive-rag", label: "Adaptive RAG", description: "Planner-backed knowledge answer.", tone: "knowledge"},
-  {id: "rag", label: "RAG Chat", description: "Knowledge retrieval answer.", tone: "knowledge"},
-  {id: "draft", label: "Reply Draft", description: "Agent-assisted reply drafting.", tone: "agent"},
+  {id: "auto", label: "自动", description: "灵犀根据问题自动挑选合适的方式回答。", tone: "chat"},
+  {id: "direct", label: "直接对话", description: "纯粹的对话回复。", tone: "chat"},
+  {id: "agent", label: "智能助理", description: "调用工具、用上长期记忆。", tone: "agent"},
+  {id: "adaptive-rag", label: "智能查阅", description: "自动规划知识检索。", tone: "knowledge"},
+  {id: "rag", label: "知识问答", description: "从你的知识库里找答案。", tone: "knowledge"},
+  {id: "draft", label: "起草回复", description: "灵犀帮你起草一段回复。", tone: "agent"},
 ];
 
 export const SLASH_COMMANDS = [

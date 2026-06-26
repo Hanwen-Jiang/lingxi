@@ -25,7 +25,7 @@ export function ComposerActionsPopover({
       <Popover.Trigger>
         <Button
           isIconOnly
-          aria-label="More composer actions"
+          aria-label="更多操作"
           className="composer-icon-button"
           isDisabled={isRunning}
           size="sm"
@@ -44,9 +44,9 @@ export function ComposerActionsPopover({
             <Input
               autoFocus
               fullWidth
-              aria-label="Search routing commands"
+              aria-label="搜索命令"
               className="h-9 w-full border-0 bg-transparent px-2 text-sm shadow-none"
-              placeholder="Search commands"
+              placeholder="搜索命令"
               value={search}
               variant="secondary"
               onChange={(event) => setSearch(event.target.value)}
@@ -55,7 +55,7 @@ export function ComposerActionsPopover({
           <Separator />
           {filteredCommands.length ? (
             <ListBox
-              aria-label="Routing commands"
+              aria-label="命令列表"
               className="scrollbar max-h-[min(320px,calc(100vh-10rem))] overflow-y-auto p-2"
             >
               {filteredCommands.map((command) => (
@@ -68,7 +68,7 @@ export function ComposerActionsPopover({
               ))}
             </ListBox>
           ) : (
-            <div className="text-muted flex h-20 items-center px-5 text-sm">No commands found</div>
+            <div className="text-muted flex h-20 items-center px-5 text-sm">没有匹配的命令</div>
           )}
         </Popover.Dialog>
       </Popover.Content>

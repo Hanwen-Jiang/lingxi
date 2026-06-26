@@ -56,25 +56,23 @@ export function SettingsWorkspace({
           <MobileWorkspaceSheet health={health} view="settings" onNavigate={onNavigate} />
           <Button className="control-button header-action-button" size="sm" variant="outline" onPress={onBack}>
             <ArrowLeft className="size-4" />
-            Back
+            返回
           </Button>
           <div>
-            <h1 className="text-base font-semibold">Settings</h1>
-            <p className="settings-header__subtitle text-muted">
-              Runtime context, knowledge import, and memory management.
-            </p>
+            <h1 className="text-base font-semibold">设置</h1>
+            <p className="settings-header__subtitle text-muted">连接状态、知识入库与长期记忆。</p>
           </div>
         </div>
         <Button
-          aria-label="Refresh backend status"
+          aria-label="刷新连接状态"
           className="control-button header-action-button whitespace-nowrap"
           size="sm"
           variant="outline"
           onPress={onCheckHealth}
         >
           <RefreshCw className="size-4" />
-          <span className="sm:hidden">Refresh</span>
-          <span className="hidden sm:inline">Refresh status</span>
+          <span className="sm:hidden">刷新</span>
+          <span className="hidden sm:inline">刷新状态</span>
         </Button>
       </header>
       <ScrollShadow className="min-h-0 flex-1 overflow-y-auto" hideScrollBar>
@@ -125,8 +123,8 @@ function SettingsPanel({
 }) {
   return (
     <section className="space-y-5">
-      <PanelTitle icon={<Settings className="size-4" />} title="Runtime Context" />
-      <div className="panel-section runtime-context-panel" aria-label="Runtime context">
+      <PanelTitle icon={<Settings className="size-4" />} title="运行环境" />
+      <div className="panel-section runtime-context-panel" aria-label="运行环境">
         <ReadOnlyField label="API base" value={apiBase} />
         <div className="grid grid-cols-2 gap-3">
           <ReadOnlyField label="User ID" value={userId} />
@@ -134,18 +132,15 @@ function SettingsPanel({
         </div>
       </div>
       <div className="panel-section">
-        <PanelTitle icon={<HeartPulse className="size-4" />} title="Backend Status" />
+        <PanelTitle icon={<HeartPulse className="size-4" />} title="连接状态" />
         <div className="flex flex-wrap gap-2">
           <Chip color={health === "up" ? "success" : "danger"} variant="soft">
             {healthMessage}
           </Chip>
           <Chip color={modelStatus?.configured ? "success" : "warning"} variant="soft">
-            {modelStatus?.message ?? "Model status unknown"}
+            {modelStatus?.configured ? "灵犀已就绪" : "灵犀还没接上模型"}
           </Chip>
         </div>
-        <p className="text-sm leading-6 text-muted">
-          Provider: {modelStatus?.provider ?? "unknown"} · Model: {modelStatus?.model ?? "unknown"}
-        </p>
       </div>
       <ModelConfigPanel api={api} modelStatus={modelStatus} onModelStatus={onModelStatus} />
     </section>

@@ -1,5 +1,3 @@
-import {MessageSquare} from "lucide-react";
-
 import {Chip} from "@heroui/react/chip";
 import {ChainOfThought} from "@heroui-pro/react/chain-of-thought";
 import {ChatConversation} from "@heroui-pro/react/chat-conversation";
@@ -12,6 +10,8 @@ import {CodeBlock} from "@heroui-pro/react/code-block";
 import {Markdown} from "@heroui-pro/react/markdown";
 import {TextShimmer} from "@heroui-pro/react/text-shimmer";
 
+import {EmptyState, LingxiGlyph} from "@infinitechat/design-system";
+
 import {extractTraceSteps, statusTone} from "../../lib/chat";
 import {getObjectValue} from "../../lib/format";
 import type {Citation, WorkspaceMessage} from "../../types";
@@ -21,21 +21,19 @@ export function MessageTimeline({messages}: {messages: WorkspaceMessage[]}) {
     <ChatConversation className="min-h-0 flex-1 overflow-y-auto" resize="smooth">
       <ChatConversation.Content className="mx-auto flex w-full max-w-[820px] flex-col gap-6 px-4 py-6 md:px-6">
         {messages.length === 0 ? (
-          <div className="chat-empty-state mx-auto flex min-h-[42vh] w-full max-w-xl flex-col items-center justify-center text-center">
-            <div className="grid size-12 place-items-center rounded-2xl bg-surface-secondary text-muted">
-              <MessageSquare className="size-6" />
-            </div>
-            <h3 className="mt-4 text-base font-semibold">Start a real conversation</h3>
-            <p className="mt-2 max-w-md text-sm leading-6 text-muted">
-              Use the composer below. Conversations and turn summaries are saved after backend responses.
-            </p>
+          <div className="mx-auto flex min-h-[42vh] w-full max-w-xl items-center justify-center">
+            <EmptyState
+              icon={<LingxiGlyph className="size-6 text-accent" />}
+              title="和灵犀聊聊"
+              description="懂你的,不只是消息。在下方输入框开始一段对话,聊完会自动保存。"
+            />
           </div>
         ) : (
           messages.map((message) => <MessageTurn key={message.id} message={message} />)
         )}
         <ChatConversation.ScrollAnchor />
       </ChatConversation.Content>
-      <ChatConversation.ScrollButton tooltip="Jump to latest" />
+      <ChatConversation.ScrollButton tooltip="跳到最新" />
     </ChatConversation>
   );
 }
@@ -59,22 +57,29 @@ function MessageTurn({message}: {message: WorkspaceMessage}) {
     );
   }
 
+  // Only surface a status chip for the error case — "streaming" is already
+  // expressed by the shimmer/loader and "complete" is the default, so showing
+  // raw status strings would leak internal state to the UI (D10/D12).
+  const showErrorChip = message.status === "error";
+
   return (
     <ChatMessage.Assistant>
-      <ChatMessage.Avatar show alt="InfiniteChat" fallback="AI" />
+      <ChatMessage.Avatar show alt="灵犀" fallback="灵犀" />
       <ChatMessage.Body>
-        <div className="flex items-center gap-2">
-          <Chip size="sm" variant="soft" color={statusTone(message.status)}>
-            {message.status ?? "complete"}
-          </Chip>
-        </div>
+        {showErrorChip ? (
+          <div className="flex items-center gap-2">
+            <Chip size="sm" variant="soft" color={statusTone(message.status)}>
+              出错了
+            </Chip>
+          </div>
+        ) : null}
         <ChatMessage.Content>
           {message.content ? (
             <Markdown>{message.content}</Markdown>
           ) : message.status === "streaming" ? (
-            <TextShimmer>Thinking...</TextShimmer>
+            <TextShimmer>灵犀正在思考...</TextShimmer>
           ) : (
-            <ChatLoader.Dots label="Waiting for response" />
+            <ChatLoader.Dots label="正在生成回复" />
           )}
         </ChatMessage.Content>
         {message.citations?.length ? <CitationList citations={message.citations} /> : null}
@@ -83,9 +88,9 @@ function MessageTurn({message}: {message: WorkspaceMessage}) {
         ) : null}
         {message.content ? (
           <ChatMessageActions>
-            <ChatMessageActions.Copy aria-label="Copy assistant response" />
-            <ChatMessageActions.ThumbsUp aria-label="Mark helpful" />
-            <ChatMessageActions.ThumbsDown aria-label="Mark unhelpful" />
+            <ChatMessageActions.Copy aria-label="复制灵犀的回复" />
+            <ChatMessageActions.ThumbsUp aria-label="标记为有帮助" />
+            <ChatMessageActions.ThumbsDown aria-label="标记为没帮助" />
           </ChatMessageActions>
         ) : null}
       </ChatMessage.Body>
@@ -96,7 +101,7 @@ function MessageTurn({message}: {message: WorkspaceMessage}) {
 function CitationList({citations}: {citations: Citation[]}) {
   return (
     <ChatSources defaultExpanded={false}>
-      <ChatSources.Trigger>{citations.length} sources</ChatSources.Trigger>
+      <ChatSources.Trigger>{citations.length} 条来源</ChatSources.Trigger>
       <ChatSources.Content>
         <ChatSources.List>
           {citations.map((citation, index) => (
@@ -104,7 +109,7 @@ function CitationList({citations}: {citations: Citation[]}) {
               key={`${citation.chunkId ?? citation.docId ?? index}`}
               description={citation.snippet}
               sourceType="document"
-              title={citation.fileName ?? citation.docId ?? `Source ${index + 1}`}
+              title={citation.fileName ?? citation.docId ?? `来源 ${index + 1}`}
             />
           ))}
         </ChatSources.List>
@@ -122,7 +127,7 @@ function ResponseDetails({meta, requestId}: {meta?: Record<string, unknown>; req
     <div className="response-details">
       {steps.length ? (
         <ChainOfThought defaultExpanded={false}>
-          <ChainOfThought.Trigger>Routing trace</ChainOfThought.Trigger>
+          <ChainOfThought.Trigger>灵犀的思考过程</ChainOfThought.Trigger>
           <ChainOfThought.Content>
             <ChainOfThought.Steps>
               {steps.map((step) => (
@@ -141,16 +146,16 @@ function ResponseDetails({meta, requestId}: {meta?: Record<string, unknown>; req
             isExpandable
             output={getObjectValue(toolTrace, "trace") ?? toolTrace}
             state="output-available"
-            toolName={String(getObjectValue(toolTrace, "capability") ?? "backend-route")}
+            toolName={String(getObjectValue(toolTrace, "capability") ?? "灵犀")}
           />
         </ChatToolGroup>
       ) : null}
       <details className="response-details-code">
-        <summary>Details</summary>
+        <summary>更多细节</summary>
         <CodeBlock className="mt-2">
           <CodeBlock.Header>
-            <span>Raw response</span>
-            <CodeBlock.CopyButton aria-label="Copy response details" code={detailCode} />
+            <span>原始响应</span>
+            <CodeBlock.CopyButton aria-label="复制细节" code={detailCode} />
           </CodeBlock.Header>
           <CodeBlock.Code code={detailCode} language="json" />
         </CodeBlock>

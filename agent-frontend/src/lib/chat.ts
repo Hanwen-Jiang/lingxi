@@ -49,11 +49,11 @@ export function modeIcon(mode: ChatMode) {
 }
 
 export function modeLabel(modeId?: string) {
-  return CHAT_MODES.find((mode) => mode.id === modeId)?.label ?? "Chat";
+  return CHAT_MODES.find((mode) => mode.id === modeId)?.label ?? "聊天";
 }
 
 export function routeLabel(route?: AutoRouteId | string) {
-  if (!route) return "Auto";
+  if (!route) return "自动";
   return CHAT_MODES.find((mode) => mode.id === route)?.label ?? route;
 }
 

@@ -89,17 +89,17 @@ export function ComposerDock({
   const selectedModel = availableModels.find((model) => model.id === currentModel) ?? availableModels[0];
   const hasValue = prompt.trim().length > 0;
   const isRunning = status === "submitted" || status === "streaming";
-  const route = lastRouteResult ? routeLabel(lastRouteResult.route) : "Auto";
-  const routeMeta = lastRouteResult ? `${route}${lastRouteResult.forced ? " · forced" : ""}` : "Direct when simple";
+  const route = lastRouteResult ? routeLabel(lastRouteResult.route) : "自动";
+  const routeMeta = lastRouteResult ? `${route}${lastRouteResult.forced ? " · 强制" : ""}` : "灵犀自动选择";
   const progressValue = status === "streaming" ? 64 : status === "submitted" ? 32 : status === "error" ? 100 : 0;
   const statusText =
     status === "streaming"
-      ? "Streaming"
+      ? "回复中"
       : status === "submitted"
-        ? "Submitted"
+        ? "已发送"
         : status === "error"
-          ? "Error"
-          : "Ready";
+          ? "出错了"
+          : "可发送";
 
   const refreshModels = useCallback(async () => {
     if (!openAiProtocol) {
@@ -144,7 +144,7 @@ export function ComposerDock({
       const nextModel = model?.trim() || currentModel;
       const nextReasoning = normalizeReasoningEffort(reasoning ?? reasoningEffort);
       setIsSaving(true);
-      setTuningStatus("Saving model");
+      setTuningStatus("正在保存…");
       try {
         const nextStatus = await api.updateModelConfig({
           provider: modelStatus?.provider ?? "openai-compatible",
@@ -189,7 +189,7 @@ export function ComposerDock({
           file.type.startsWith("image/") || file.type.startsWith("video/") ? URL.createObjectURL(file) : undefined;
         setAttachments((current) => [
           ...current,
-          {id, name: file.name, size: file.size, mimeType: file.type, src, status: "uploading", message: "Uploading"},
+          {id, name: file.name, size: file.size, mimeType: file.type, src, status: "uploading", message: "上传中"},
         ]);
         void api
           .uploadDocument(file)
@@ -201,7 +201,7 @@ export function ComposerDock({
                   ? {
                       ...attachment,
                       status: "ready",
-                      message: job.message ?? "Queued for knowledge import",
+                      message: job.message ?? "已加入知识入库队列",
                       jobId: job.jobId,
                     }
                   : attachment,
@@ -226,7 +226,7 @@ export function ComposerDock({
         <div className="composer-workflow-row">
           <Button className="composer-workflow-button" size="sm" style={COMPOSER_BUTTON_STYLE} variant="outline">
             <Route className="size-4" />
-            <span>Auto</span>
+            <span>{route}</span>
             <span className="composer-workflow-meta">{routeMeta}</span>
           </Button>
           <Button
@@ -238,8 +238,8 @@ export function ComposerDock({
             onPress={() => void refreshModels()}
           >
             <RefreshCw className="size-4" />
-            <span>{isLoadingModels ? "Loading" : "Models"}</span>
-            <span className="composer-workflow-meta">{modelStatus?.configured ? "Upstream" : "Missing"}</span>
+            <span>{isLoadingModels ? "加载中" : "模型"}</span>
+            <span className="composer-workflow-meta">{modelStatus?.configured ? "已连接" : "未连接"}</span>
           </Button>
           <ComposerActionsPopover isRunning={isRunning} onCommand={addCommand} />
         </div>
@@ -276,11 +276,11 @@ export function ComposerDock({
                           <ChatAttachment.Name>
                             {attachment.name}
                             <span className="ml-1 text-muted">
-                              {attachment.status === "uploading" ? "uploading" : formatFileSize(attachment.size)}
+                              {attachment.status === "uploading" ? "上传中" : formatFileSize(attachment.size)}
                             </span>
                           </ChatAttachment.Name>
                           <ChatAttachment.Remove
-                            aria-label={`Remove ${attachment.name}`}
+                            aria-label={`移除 ${attachment.name}`}
                             onPress={() => removeAttachment(attachment.id)}
                           >
                             <X className="size-3" />
@@ -291,18 +291,18 @@ export function ComposerDock({
                   </PromptInput.Attachments>
                 ) : null}
                 <PromptInput.Content>
-                  <PromptInput.TextArea className="composer-textarea min-w-0" placeholder="Message Auto" />
+                  <PromptInput.TextArea className="composer-textarea min-w-0" placeholder="问问灵犀…" />
                 </PromptInput.Content>
                 <PromptInput.Toolbar className="group-data-[expanded=true]:justify-start group-data-[expanded=true]:gap-1.5 sm:group-data-[expanded=true]:justify-between">
                   <PromptInput.ToolbarStart>
                     <ChatAttachmentInput.Trigger
-                      aria-label="Add context"
+                      aria-label="添加附件"
                       render={(triggerProps) => (
                         <PromptInput.Action
                           {...triggerProps}
-                          aria-label="Add context"
+                          aria-label="添加附件"
                           className="bg-default text-muted hover:bg-default-hover"
-                          tooltip="Add context"
+                          tooltip="添加附件"
                         >
                           <Plus className="size-4" />
                         </PromptInput.Action>
@@ -345,14 +345,14 @@ export function ComposerDock({
                     {hasValue ? (
                       <>
                         <PromptInput.Action
-                          aria-label="Voice input"
+                          aria-label="语音输入"
                           className="bg-transparent text-muted hover:bg-default-hover"
-                          tooltip="Voice input"
+                          tooltip="语音输入"
                         >
                           <Mic className="size-4" />
                         </PromptInput.Action>
                         <PromptInput.Send
-                          aria-label="Send message"
+                          aria-label="发送"
                           className="composer-send-button"
                           isDisabled={!hasValue}
                         >
@@ -361,9 +361,9 @@ export function ComposerDock({
                       </>
                     ) : (
                       <PromptInput.Action
-                        aria-label="Voice input"
+                        aria-label="语音输入"
                         className="composer-send-button"
-                        tooltip="Voice input"
+                        tooltip="语音输入"
                       >
                         <Mic className="size-4" />
                       </PromptInput.Action>
@@ -388,7 +388,7 @@ export function ComposerDock({
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <ProgressCircle
-              aria-label="Chat run progress"
+              aria-label="聊天进度"
               color={status === "error" ? "danger" : "default"}
               size="sm"
               value={progressValue}
