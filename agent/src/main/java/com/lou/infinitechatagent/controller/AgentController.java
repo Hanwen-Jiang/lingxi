@@ -12,6 +12,8 @@ import com.lou.infinitechatagent.agent.dto.AgentTool;
 import com.lou.infinitechatagent.agent.governance.ToolGovernanceService;
 import com.lou.infinitechatagent.agent.governance.dto.ToolAuditRecord;
 import com.lou.infinitechatagent.agent.tool.ToolRegistry;
+import com.lou.infinitechatagent.security.AuthPrincipal;
+import com.lou.infinitechatagent.security.CurrentUser;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,14 +46,19 @@ public class AgentController {
     }
 
     @GetMapping("/tools/audit")
-    public BaseResponse<List<ToolAuditRecord>> toolAudit(@RequestParam(required = false) Long userId,
+    public BaseResponse<List<ToolAuditRecord>> toolAudit(@CurrentUser AuthPrincipal principal,
+                                                         @RequestParam(required = false) Long userId,
                                                          @RequestParam(required = false) Long sessionId,
                                                          @RequestParam(defaultValue = "20") int limit) {
-        return ResultUtils.success(toolGovernanceService.listAuditRecords(userId, sessionId, limit));
+        // 按主体限权(B1):网关身份在场则只查自己的审计,忽略传入 userId。
+        return ResultUtils.success(toolGovernanceService.listAuditRecords(principal.resolveUserId(userId), sessionId, limit));
     }
 
     @PostMapping("/chat")
-    public BaseResponse<AgentResponse> chat(@RequestBody AgentRequest request) {
+    public BaseResponse<AgentResponse> chat(@RequestBody AgentRequest request,
+                                            @CurrentUser AuthPrincipal principal) {
+        // 网关身份优先(B1):覆盖请求体 userId,使其贯通到 ReAct 编排/记忆/审计深层;过渡期回退 body。
+        request.setUserId(principal.resolveUserId(request.getUserId()));
         MonitorContextHolder.setContext(MonitorContext.builder()
                 .userId(request.getUserId())
                 .sessionId(request.getSessionId())

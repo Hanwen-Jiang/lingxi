@@ -22,6 +22,8 @@ import com.lou.infinitechatagent.memory.dto.ReflectionRequest;
 import com.lou.infinitechatagent.memory.dto.ReflectionResult;
 import com.lou.infinitechatagent.memory.dto.SessionSummary;
 import com.lou.infinitechatagent.memory.dto.SessionSummaryRequest;
+import com.lou.infinitechatagent.security.AuthPrincipal;
+import com.lou.infinitechatagent.security.CurrentUser;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,6 +35,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 记忆 API。expand/contract(B1/D3):userId 一律经 {@link AuthPrincipal#resolveUserId}
+ * 解析——网关注入身份在场则<b>以网关身份为准</b>(忽略 body/param 的 userId,IDOR 闭环),
+ * 否则回退请求体/参数里的 userId(网关上线前的过渡)。enforce 翻 true 且 S2 改走网关后,
+ * 移除 body/param userId 字段(contract 相)。
+ */
 @RestController
 @RequestMapping("/memory")
 public class MemoryController {
@@ -53,10 +61,13 @@ public class MemoryController {
     private MemoryAgent memoryAgent;
 
     @GetMapping("/session/summary")
-    public BaseResponse<SessionSummary> getSessionSummary(@RequestParam Long userId, @RequestParam Long sessionId) {
-        return ResultUtils.success(sessionSummaryService.findSummary(userId, sessionId)
+    public BaseResponse<SessionSummary> getSessionSummary(@CurrentUser AuthPrincipal principal,
+                                                          @RequestParam(required = false) Long userId,
+                                                          @RequestParam Long sessionId) {
+        Long uid = principal.resolveUserId(userId);
+        return ResultUtils.success(sessionSummaryService.findSummary(uid, sessionId)
                 .orElse(SessionSummary.builder()
-                        .userId(userId)
+                        .userId(uid)
                         .sessionId(sessionId)
                         .summary("")
                         .turnCount(0)
@@ -64,29 +75,38 @@ public class MemoryController {
     }
 
     @PostMapping("/session/summarize")
-    public BaseResponse<SessionSummary> summarize(@RequestBody SessionSummaryRequest request) {
-        return ResultUtils.success(sessionSummaryService.refreshNow(request.getUserId(), request.getSessionId()));
+    public BaseResponse<SessionSummary> summarize(@CurrentUser AuthPrincipal principal,
+                                                  @RequestBody SessionSummaryRequest request) {
+        Long uid = principal.resolveUserId(request.getUserId());
+        return ResultUtils.success(sessionSummaryService.refreshNow(uid, request.getSessionId()));
     }
 
     @GetMapping("/context")
-    public BaseResponse<MemoryContext> getMemoryContext(@RequestParam Long userId,
+    public BaseResponse<MemoryContext> getMemoryContext(@CurrentUser AuthPrincipal principal,
+                                                        @RequestParam(required = false) Long userId,
                                                         @RequestParam Long sessionId,
                                                         @RequestParam(required = false) String prompt) {
-        return ResultUtils.success(memoryContextBuilder.build(userId, sessionId, prompt));
+        return ResultUtils.success(memoryContextBuilder.build(principal.resolveUserId(userId), sessionId, prompt));
     }
 
     @PostMapping("/context")
-    public BaseResponse<MemoryContext> buildMemoryContext(@RequestBody MemoryContextRequest request) {
-        return ResultUtils.success(memoryContextBuilder.build(request.getUserId(), request.getSessionId(), request.getPrompt()));
+    public BaseResponse<MemoryContext> buildMemoryContext(@CurrentUser AuthPrincipal principal,
+                                                          @RequestBody MemoryContextRequest request) {
+        Long uid = principal.resolveUserId(request.getUserId());
+        return ResultUtils.success(memoryContextBuilder.build(uid, request.getSessionId(), request.getPrompt()));
     }
 
     @PostMapping("/write")
-    public BaseResponse<MemoryItem> writeMemory(@RequestBody MemoryWriteRequest request) {
+    public BaseResponse<MemoryItem> writeMemory(@CurrentUser AuthPrincipal principal,
+                                                @RequestBody MemoryWriteRequest request) {
+        request.setUserId(principal.resolveUserId(request.getUserId()));
         return ResultUtils.success(longTermMemoryService.write(request));
     }
 
     @PostMapping("/correct")
-    public BaseResponse<MemoryCorrectionResult> correctMemory(@RequestBody MemoryCorrectionRequest request) {
+    public BaseResponse<MemoryCorrectionResult> correctMemory(@CurrentUser AuthPrincipal principal,
+                                                              @RequestBody MemoryCorrectionRequest request) {
+        request.setUserId(principal.resolveUserId(request.getUserId()));
         MemoryType memoryType = request.getMemoryType() == null ? MemoryType.IMPORTANT_FACT : request.getMemoryType();
         List<String> disabledMemoryIds = longTermMemoryService.disableActiveByType(request.getUserId(), memoryType);
         MemoryItem correctedMemory = longTermMemoryService.correct(request);
@@ -98,25 +118,27 @@ public class MemoryController {
     }
 
     @GetMapping("/user/{userId}")
-    public BaseResponse<List<MemoryItem>> listUserMemories(@PathVariable Long userId,
+    public BaseResponse<List<MemoryItem>> listUserMemories(@CurrentUser AuthPrincipal principal,
+                                                           @PathVariable Long userId,
                                                            @RequestParam(required = false) MemoryType memoryType,
                                                            @RequestParam(defaultValue = "10") int limit) {
-        return ResultUtils.success(longTermMemoryService.findActiveByUser(userId, memoryType, limit));
+        return ResultUtils.success(longTermMemoryService.findActiveByUser(principal.resolveUserId(userId), memoryType, limit));
     }
 
-    // 过渡限权(P0 止损,B1/G10):/item 与 /disable 必须声明归属 userId,且与记忆所有者一致,
-    // 否则按"不存在"处理(不泄露存在性)。封堵"仅凭猜测 memoryId 即可越权读取/停用他人记忆"。
-    // P1 网关身份闭环后,userId 改由可信 X-User-Id 派生,此参数移除。
+    // /item 与 /disable:归属校验(B1/G10),非属主按"不存在"处理(不泄露存在性)。
+    // userId 经 principal.resolveUserId 解析(网关身份优先);enforce 后移除 param。
     @GetMapping("/item/{memoryId}")
-    public BaseResponse<MemoryItem> getMemory(@PathVariable String memoryId,
-                                              @RequestParam Long userId) {
-        return ResultUtils.success(requireOwnedMemory(memoryId, userId));
+    public BaseResponse<MemoryItem> getMemory(@CurrentUser AuthPrincipal principal,
+                                              @PathVariable String memoryId,
+                                              @RequestParam(required = false) Long userId) {
+        return ResultUtils.success(requireOwnedMemory(memoryId, principal.resolveUserId(userId)));
     }
 
     @PostMapping("/disable/{memoryId}")
-    public BaseResponse<Boolean> disableMemory(@PathVariable String memoryId,
-                                               @RequestParam Long userId) {
-        requireOwnedMemory(memoryId, userId);
+    public BaseResponse<Boolean> disableMemory(@CurrentUser AuthPrincipal principal,
+                                               @PathVariable String memoryId,
+                                               @RequestParam(required = false) Long userId) {
+        requireOwnedMemory(memoryId, principal.resolveUserId(userId));
         return ResultUtils.success(longTermMemoryService.disable(memoryId));
     }
 
@@ -128,11 +150,14 @@ public class MemoryController {
 
     @PostMapping("/reflection")
     public BaseResponse<ReflectionResult> writeReflection(@RequestBody ReflectionRequest request) {
+        // 反思写入主体随后续 sweep 接入 @CurrentUser(ReflectionRequest 的 userId 形状待核)。
         return ResultUtils.success(reflectiveMemoryService.reflect(request));
     }
 
     @PostMapping("/agent/context")
-    public BaseResponse<MemoryTrace> buildAgentMemoryContext(@RequestBody MemoryAgentRequest request) {
-        return ResultUtils.success(memoryAgent.readContext(request.getUserId(), request.getSessionId(), request.getPrompt()));
+    public BaseResponse<MemoryTrace> buildAgentMemoryContext(@CurrentUser AuthPrincipal principal,
+                                                             @RequestBody MemoryAgentRequest request) {
+        Long uid = principal.resolveUserId(request.getUserId());
+        return ResultUtils.success(memoryAgent.readContext(uid, request.getSessionId(), request.getPrompt()));
     }
 }
