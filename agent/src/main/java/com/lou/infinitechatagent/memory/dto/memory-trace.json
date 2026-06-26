@@ -1,0 +1,37 @@
+{
+  "decision": {
+    "needReadMemory": true,
+    "readTypes": ["type1", "type2", "type3"],
+    "needWriteSummary": true,
+    "needWriteReflection": true,
+    "reason": ""
+  },
+  "context": {
+    "summaryInjected": true,
+    "sessionSummary": "sum",
+    "longTermMemoryInjected": true,
+    "longTermMemories": [],
+    "usedMemoryCount": 0,
+    "estimatedMemoryTokens": 0
+  },
+  "summaryRefreshed": true,
+  "reflection": {
+    "written": true,
+    "reason": "",
+    "memory": {
+      "memoryId": "3453-2349-3248",
+      "userId": 1234567890,
+      "sessionId": 1234567890,
+      "memoryType": "<USER_PREFERENCE|PROJECT_CONTEXT|TECH_STACK|OUTPUT_STYLE|IMPORTANT_FACT|REFLECTION>",
+      "content": "content",
+      "summary": "sum",
+      "confidence": 0,
+      "source": "/",
+      "status": "<ACTIVE|DISABLED|EXPIRED>",
+      "expiresAt": 0,
+      "createdAt": 0,
+      "updatedAt": 0
+    }
+  },
+  "costMs": 2000
+}

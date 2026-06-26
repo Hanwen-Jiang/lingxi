@@ -1,0 +1,3 @@
+# Codex integration note
+
+InfiniteChat integration verification document. The workspace supports real ingestion jobs.

@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "agent-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "agent-frontend", "run", "dev:auto"],
+      "autoPort": true,
+      "port": 5173
+    },
+    {
+      "name": "chat-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "chat-frontend", "run", "dev"],
+      "autoPort": true,
+      "port": 5273
+    }
+  ]
+}

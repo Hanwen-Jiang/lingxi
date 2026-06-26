@@ -1,0 +1,114 @@
+package com.lou.infinitechatagent.rag;
+
+import com.lou.infinitechatagent.config.RagJdbcConfig;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+@Component
+@Slf4j
+public class RagSchemaInitializer {
+
+    @Resource
+    private JdbcTemplate ragJdbcTemplate;
+
+    @PostConstruct
+    public void initSchema() {
+        if (RagJdbcConfig.isH2(ragJdbcTemplate)) {
+            initH2Schema();
+            return;
+        }
+        ragJdbcTemplate.execute("""
+                create table if not exists rag_document (
+                    id bigint primary key auto_increment,
+                    doc_id varchar(64) not null unique,
+                    file_name varchar(255) not null,
+                    file_path varchar(512),
+                    source_type varchar(64),
+                    content_hash varchar(64),
+                    created_at timestamp default current_timestamp,
+                    updated_at timestamp default current_timestamp on update current_timestamp
+                ) engine=InnoDB default charset=utf8mb4
+                """);
+
+        ragJdbcTemplate.execute("""
+                create table if not exists rag_chunk (
+                    id bigint primary key auto_increment,
+                    chunk_id varchar(64) not null unique,
+                    doc_id varchar(64) not null,
+                    file_name varchar(255) not null,
+                    chunk_index int not null,
+                    section_title varchar(255),
+                    heading_path varchar(512),
+                    chunk_type varchar(64),
+                    page_number int,
+                    char_count int,
+                    token_estimate int,
+                    content text not null,
+                    embedding_id varchar(128),
+                    created_at timestamp default current_timestamp,
+                    key idx_rag_chunk_doc_id (doc_id),
+                    key idx_rag_chunk_embedding_id (embedding_id)
+                ) engine=InnoDB default charset=utf8mb4
+                """);
+
+        addIndexIfMissing("rag_chunk", "idx_rag_chunk_doc_id", "doc_id");
+        addIndexIfMissing("rag_chunk", "idx_rag_chunk_embedding_id", "embedding_id");
+        addColumnIfMissing("rag_chunk", "section_title", "varchar(255)");
+        addColumnIfMissing("rag_chunk", "heading_path", "varchar(512)");
+        addColumnIfMissing("rag_chunk", "chunk_type", "varchar(64)");
+        addColumnIfMissing("rag_chunk", "page_number", "int");
+        addColumnIfMissing("rag_chunk", "char_count", "int");
+        addColumnIfMissing("rag_chunk", "token_estimate", "int");
+    }
+
+    private void initH2Schema() {
+        ragJdbcTemplate.execute("""
+                create table if not exists rag_document (
+                    id bigint primary key auto_increment,
+                    doc_id varchar(64) not null unique,
+                    file_name varchar(255) not null,
+                    file_path varchar(512),
+                    source_type varchar(64),
+                    content_hash varchar(64),
+                    created_at timestamp default current_timestamp,
+                    updated_at timestamp default current_timestamp
+                )
+                """);
+
+        ragJdbcTemplate.execute("""
+                create table if not exists rag_chunk (
+                    id bigint primary key auto_increment,
+                    chunk_id varchar(64) not null unique,
+                    doc_id varchar(64) not null,
+                    file_name varchar(255) not null,
+                    chunk_index int not null,
+                    section_title varchar(255),
+                    heading_path varchar(512),
+                    chunk_type varchar(64),
+                    page_number int,
+                    char_count int,
+                    token_estimate int,
+                    content text not null,
+                    embedding_id varchar(128),
+                    created_at timestamp default current_timestamp
+                )
+                """);
+
+        addIndexIfMissing("rag_chunk", "idx_rag_chunk_doc_id", "doc_id");
+        addIndexIfMissing("rag_chunk", "idx_rag_chunk_embedding_id", "embedding_id");
+        log.info("RAG - H2 schema ready");
+    }
+
+    private void addIndexIfMissing(String tableName, String indexName, String columnName) {
+        RagJdbcConfig.createIndexIfMissing(ragJdbcTemplate, tableName, indexName, columnName);
+        log.info("RAG - 已创建索引 {}.{}", tableName, indexName);
+    }
+
+    private void addColumnIfMissing(String tableName, String columnName, String definition) {
+        RagJdbcConfig.addColumnIfMissing(ragJdbcTemplate, tableName, columnName, definition);
+        log.info("RAG - 已补充字段 {}.{}", tableName, columnName);
+    }
+}

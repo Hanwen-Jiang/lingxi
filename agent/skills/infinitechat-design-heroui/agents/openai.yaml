@@ -1,0 +1,4 @@
+interface:
+  display_name: "InfiniteChat Design HeroUI"
+  short_description: "HeroUI frontend redesign for InfiniteChat"
+  default_prompt: "Use $infinitechat-design-heroui to redesign InfiniteChat with HeroUI and a polished application workflow."

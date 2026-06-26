@@ -1,0 +1,60 @@
+package com.lou.infinitechatagent.controller;
+
+import com.lou.infinitechatagent.common.BaseResponse;
+import com.lou.infinitechatagent.common.ResultUtils;
+import com.lou.infinitechatagent.chat.ChatHistoryService;
+import com.lou.infinitechatagent.monitor.MonitorContext;
+import com.lou.infinitechatagent.monitor.MonitorContextHolder;
+import com.lou.infinitechatagent.model.dto.ChatRequest;
+import com.lou.infinitechatagent.rag.RagQueryService;
+import com.lou.infinitechatagent.rag.dto.RagQueryResponse;
+import jakarta.annotation.Resource;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/rag")
+public class RagChatController {
+
+    @Resource
+    private RagQueryService ragQueryService;
+
+    @Resource
+    private ChatHistoryService chatHistoryService;
+
+    @PostMapping("/chat")
+    public BaseResponse<RagQueryResponse> chatWithCitations(@RequestBody ChatRequest chatRequest) {
+        MonitorContextHolder.setContext(MonitorContext.builder()
+                .userId(chatRequest.getUserId())
+                .sessionId(chatRequest.getSessionId())
+                .build());
+        try {
+            RagQueryResponse response = ragQueryService.chatWithCitations(chatRequest.getSessionId(), chatRequest.getPrompt());
+            chatHistoryService.recordSuccess(
+                    chatRequest.getUserId(),
+                    chatRequest.getSessionId(),
+                    "rag",
+                    chatRequest.getPrompt(),
+                    response.getAnswer(),
+                    null,
+                    "{\"citations\":" + (response.getCitations() == null ? 0 : response.getCitations().size()) + "}"
+            );
+            return ResultUtils.success(response);
+        } catch (RuntimeException e) {
+            chatHistoryService.recordError(
+                    chatRequest.getUserId(),
+                    chatRequest.getSessionId(),
+                    "rag",
+                    chatRequest.getPrompt(),
+                    e.getMessage(),
+                    null,
+                    null
+            );
+            throw e;
+        } finally {
+            MonitorContextHolder.clearContext();
+        }
+    }
+}

@@ -1,0 +1,184 @@
+spring:
+  application:
+    name: InfiniteChat-Agent
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ttl: ${REDIS_TTL:3600}
+      timeout: ${REDIS_TIMEOUT:30000}
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+
+server:
+  port: ${SERVER_PORT:10010}
+  servlet:
+    context-path: /api
+
+
+logging:
+  level:
+    dev.langchain4j.mcp: ERROR
+
+pgvector:
+  database: ${PGVECTOR_DATABASE:dp}
+  host: ${PGVECTOR_HOST:localhost}
+  port : ${PGVECTOR_PORT:5432}
+  user: ${PGVECTOR_USER:postgres}
+  password: ${PGVECTOR_PASSWORD:}
+  table: ${PGVECTOR_TABLE:dp_embedding}
+
+langchain4j:
+  community:
+    dashscope:
+      chat-model:
+        model-name: ${DASHSCOPE_CHAT_MODEL:qwen-plus}
+        api-key: ${DASHSCOPE_API_KEY:}
+      embedding-model:
+        model-name: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v4}
+        api-key: ${DASHSCOPE_API_KEY:}
+      streaming-chat-model:
+        model-name: ${DASHSCOPE_STREAMING_MODEL:qwen-plus}
+        api-key: ${DASHSCOPE_API_KEY:}
+
+bigmodel:
+  api-key: ${BIGMODEL_API_KEY:}
+
+mcp:
+  enabled: ${MCP_ENABLED:false}
+  bigmodel-search:
+    enabled: ${MCP_BIGMODEL_SEARCH_ENABLED:false}
+  time:
+    enabled: ${MCP_TIME_ENABLED:false}
+
+web-search:
+  enabled: ${WEB_SEARCH_ENABLED:false}
+  endpoint: ${WEB_SEARCH_ENDPOINT:http://localhost:8081/search}
+  max-results: ${WEB_SEARCH_MAX_RESULTS:5}
+
+rag:
+  docs-path: ${RAG_DOCS_PATH:src/main/resources/docs}
+  ingest:
+    allow-external-paths: ${RAG_INGEST_ALLOW_EXTERNAL_PATHS:false}
+    upload-dir: ${RAG_INGEST_UPLOAD_DIR:./data/rag/uploads}
+    max-file-size-mb: ${RAG_INGEST_MAX_FILE_SIZE_MB:20}
+  chunk:
+    segment-size: ${RAG_CHUNK_SEGMENT_SIZE:500}
+    segment-overlap: ${RAG_CHUNK_SEGMENT_OVERLAP:80}
+    min-chars: ${RAG_CHUNK_MIN_CHARS:40}
+    chars-per-token: ${RAG_CHUNK_CHARS_PER_TOKEN:2.0}
+  retrieval:
+    vector-results: 20
+    keyword-results: 20
+    candidate-results: 20
+  rerank:
+    enabled: true
+    provider: ${RAG_RERANK_PROVIDER:bge}
+    endpoint: ${BGE_RERANK_ENDPOINT:http://localhost:8080/rerank}
+    model: ${RAG_RERANK_MODEL:BAAI/bge-reranker-v2-m3}
+    request-format: ${RAG_RERANK_REQUEST_FORMAT:tei}
+    api-key: ${BGE_RERANK_API_KEY:}
+    max-document-chars: ${RAG_RERANK_MAX_DOCUMENT_CHARS:3500}
+    failure-cooldown-ms: ${RAG_RERANK_FAILURE_COOLDOWN_MS:60000}
+    top-k: 5
+  citation:
+    min-score: 0.75
+    snippet-max-chars: 500
+    max-output-tokens: 500
+  token:
+    max-input-tokens: 1800
+    reserved-system-tokens: 300
+    min-chunk-chars: 180
+    chars-per-token: 2.0
+  adaptive:
+    enabled: true
+    knowledge-base: agent_docs
+    max-output-tokens: 500
+    memory-max-messages: 20
+    max-rounds: 2
+    planner:
+      mode: ${RAG_ADAPTIVE_PLANNER_MODE:RULE_BASED}
+      max-output-tokens: 300
+    retrieval:
+      vector-top-k: 20
+      keyword-top-k: 20
+      rerank-top-k: 5
+    evidence:
+      min-top-score: 0.45
+      min-coverage-score: 0.5
+      min-citations: 1
+    rewrite:
+      enabled: true
+
+memory:
+  enabled: true
+  summary:
+    enabled: true
+    trigger-turns: 6
+    window-messages: 30
+    max-output-tokens: 500
+  context:
+    max-summary-chars: 800
+    max-memory-items: 5
+    max-memory-chars: 1200
+    min-relevance-score: 0.08
+  long-term:
+    enabled: true
+    max-items: 5
+  reflection:
+    enabled: true
+    min-confidence: 0.55
+
+agent:
+  model:
+    provider: ${AGENT_MODEL_PROVIDER:auto}
+    openai-compatible:
+      base-url: ${OPENAI_BASE_URL:${OPENAI_COMPATIBLE_BASE_URL:https://api.openai.com}}
+      api-key: ${OPENAI_API_KEY:${OPENAI_COMPATIBLE_API_KEY:}}
+      chat-model: ${OPENAI_CHAT_MODEL:${OPENAI_MODEL:gpt-5.4-mini}}
+      temperature: ${OPENAI_TEMPERATURE:0.7}
+      max-output-tokens: ${OPENAI_MAX_OUTPUT_TOKENS:1024}
+  tool-governance:
+    enabled: true
+    confirmation-threshold: HIGH
+    prompt-injection-check:
+      enabled: true
+  react:
+    max-output-tokens: 500
+    memory-max-messages: 20
+    context:
+      max-history-chars: ${AGENT_REACT_CONTEXT_MAX_HISTORY_CHARS:2000}
+      max-input-tokens: ${AGENT_REACT_CONTEXT_MAX_INPUT_TOKENS:1800}
+      reserved-system-tokens: ${AGENT_REACT_CONTEXT_RESERVED_SYSTEM_TOKENS:400}
+      chars-per-token: ${AGENT_REACT_CONTEXT_CHARS_PER_TOKEN:2.0}
+    planner:
+      mode: ${AGENT_REACT_PLANNER_MODE:LLM}
+      max-output-tokens: 300
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+  health:
+    mail:
+      enabled: false

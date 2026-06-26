@@ -1,0 +1,25 @@
+{
+  "name": "infinitechat-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "serve:dist": "node scripts/serve-dist.mjs",
+    "verify:ui": "pnpm build && node scripts/verify-ui.mjs",
+    "delivery:hifi": "pnpm build && node scripts/figma-dry-run.mjs && node scripts/verify-ui.mjs && node scripts/build-hifi-delivery.mjs && node scripts/verify-hifi-delivery.mjs"
+  },
+  "dependencies": {
+    "@heroui/react": "^3.2.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "framer-motion": "^12.40.0",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "tailwindcss": "^4.3.1",
+    "typescript": "latest",
+    "vite": "5.4.11"
+  }
+}

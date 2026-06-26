@@ -1,0 +1,34 @@
+# ---- OS / editor junk ----
+.DS_Store
+# macOS AppleDouble resource forks (created on SMB / non-mac volumes)
+._*
+
+# ---- Build output ----
+target/
+**/target/
+
+# ---- IDE ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# ---- Maven wrapper local ----
+.mvn/wrapper/maven-wrapper.jar
+
+# ---- Local notes and interview materials kept next to the project ----
+/Agent-main/
+/*.pdf
+/*.xlsx
+/春招面试可能问题与参考答案.md
+/红包MySQL和Redis一致性优化方案.md
+
+# ---- Local runtime secrets ----
+.env
+.env.*
+!.env.example
+# E2E 本地配置(含可改的本地令牌)
+e2e/e2e.env
+**/src/main/resources/application-local.yml
+**/src/main/resources/application-local.yaml
