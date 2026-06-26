@@ -42,6 +42,9 @@ server:
 logging:
   level:
     dev.langchain4j.mcp: ERROR
+  # 结构化日志:每行带链路 id(TraceIdFilter 写入 MDC key traceId)。完整 OTel 分布式 span 为系统级后续。
+  pattern:
+    level: "%5p [traceId=%X{traceId:-}]"
 
 pgvector:
   database: ${PGVECTOR_DATABASE:dp}
@@ -165,6 +168,12 @@ agent:
     allowed-origins: ${AGENT_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5180}
     allowed-methods: ${AGENT_CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
     allow-credentials: ${AGENT_CORS_ALLOW_CREDENTIALS:false}
+  # LLM 计费端点按主体限流(L9/G08):固定窗口,键=网关 userId 否则 IP;超限 429 + 体内 code 42900(契约 §3)。
+  ratelimit:
+    llm:
+      enabled: ${AGENT_RATELIMIT_LLM_ENABLED:true}
+      capacity: ${AGENT_RATELIMIT_LLM_CAPACITY:30}
+      window-seconds: ${AGENT_RATELIMIT_LLM_WINDOW_SECONDS:60}
   model:
     provider: ${AGENT_MODEL_PROVIDER:auto}
     openai-compatible:
