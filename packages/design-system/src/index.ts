@@ -25,8 +25,14 @@ export {ErrorState} from "./primitives/ErrorState";
 export {ConnectionBanner, StatusDot, type ConnectionState} from "./primitives/connection";
 export {DeliveryTick, StatusPill, UnreadBadge, type DeliveryState} from "./primitives/delivery";
 
-// Brand components
+// Brand components (wrapping real HeroUI where it adds value; native where DESIGN.md
+// needs exact control). Button/Switch are backed by HeroUI OSS (react-aria).
 export {Button, type ButtonProps} from "./components/Button";
+export {Switch, type SwitchProps} from "./components/Switch";
 export {Panel, DividerRow, SectionLabel} from "./components/Panel";
 export {TextField, TextArea, type TextFieldProps, type TextAreaProps} from "./components/Field";
 export {Avatar} from "./components/Avatar";
+
+// Real HeroUI OSS scroll-shadow, re-exported so the design system is the single
+// import surface. Used for scrollable lists (DESIGN.md).
+export {ScrollShadow} from "@heroui/react/scroll-shadow";

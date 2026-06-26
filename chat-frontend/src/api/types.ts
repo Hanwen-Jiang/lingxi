@@ -59,10 +59,13 @@ export interface FriendApply {
   status: "pending" | "accepted" | "rejected";
 }
 
-/** Cursor-paginated history (B6: cursor + limit, descending by id/createdAt). */
+/** Cursor-paginated response (03-contracts §4: `{items, nextCursor, hasMore}`).
+ *  `hasMore` is present on server/mock responses; optimistic local cache writes
+ *  may omit it. */
 export interface Page<T> {
   items: T[];
   nextCursor?: string;
+  hasMore?: boolean;
 }
 
 /** WS push frame, normalized from PushTypeEnum (ADR 0002 / 30-plan §5.2). */

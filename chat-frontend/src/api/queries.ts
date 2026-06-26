@@ -23,6 +23,19 @@ export function useApplies() {
   return useQuery({queryKey: ["applies"], queryFn: () => api.listApplies()});
 }
 
+/** Accept/reject a friend application; refreshes the apply box and friend list. */
+export function useRespondApply() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({applyId, accept}: {applyId: string; accept: boolean}) =>
+      api.respondApply(applyId, accept),
+    onSuccess: () => {
+      qc.invalidateQueries({queryKey: ["applies"]});
+      qc.invalidateQueries({queryKey: ["friends"]});
+    },
+  });
+}
+
 let tempSeq = 0;
 const newTempId = () => `tmp-${Date.now()}-${tempSeq++}`;
 

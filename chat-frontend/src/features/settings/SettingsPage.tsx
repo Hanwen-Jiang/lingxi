@@ -6,10 +6,10 @@ import {useNavigate} from "react-router";
 import {
   Avatar,
   Button,
-  cn,
   DividerRow,
   Panel,
   SectionLabel,
+  Switch,
   useTheme,
 } from "@infinitechat/design-system";
 
@@ -39,16 +39,16 @@ export function SettingsPage() {
           <SectionLabel>通用</SectionLabel>
         </div>
         <SettingRow icon={<Moon className="size-4" />} label="深色模式" status={theme === "dark" ? "已开启" : "已关闭"}>
-          <Toggle checked={theme === "dark"} onChange={toggleTheme} label="深色模式" />
+          <Switch checked={theme === "dark"} onChange={toggleTheme} aria-label="深色模式" />
         </SettingRow>
         <SettingRow icon={<Bell className="size-4" />} label="消息通知" status={notify ? "已开启" : "已关闭"}>
-          <Toggle checked={notify} onChange={() => setNotify((v) => !v)} label="消息通知" />
+          <Switch checked={notify} onChange={setNotify} aria-label="消息通知" />
         </SettingRow>
         <SettingRow icon={<Volume2 className="size-4" />} label="提示音" status={sound ? "已开启" : "已关闭"}>
-          <Toggle checked={sound} onChange={() => setSound((v) => !v)} label="提示音" />
+          <Switch checked={sound} onChange={setSound} aria-label="提示音" />
         </SettingRow>
         <SettingRow icon={<Eye className="size-4" />} label="已读回执" status={receipts ? "已开启" : "已关闭"} last>
-          <Toggle checked={receipts} onChange={() => setReceipts((v) => !v)} label="已读回执" />
+          <Switch checked={receipts} onChange={setReceipts} aria-label="已读回执" />
         </SettingRow>
       </Panel>
     </Page>
@@ -79,45 +79,6 @@ function SettingRow({
       </div>
       {children}
     </DividerRow>
-  );
-}
-
-/** Compact toggle: a small primary track inside a larger touch target (DESIGN.md
- *  — not a full blue pill). */
-function Toggle({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className="grid h-10 w-12 shrink-0 place-items-center focus-visible:outline-none"
-    >
-      <span
-        className={cn(
-          "relative inline-flex h-5 w-9 items-center rounded-full p-0.5 transition-colors",
-          checked
-            ? "bg-[var(--lx-accent)]"
-            : "bg-[color-mix(in_oklch,var(--foreground)_18%,transparent)]",
-        )}
-      >
-        <span
-          className={cn(
-            "size-4 rounded-full bg-white shadow-sm transition-transform",
-            checked && "translate-x-4",
-          )}
-        />
-      </span>
-    </button>
   );
 }
 
