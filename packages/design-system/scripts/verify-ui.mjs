@@ -20,7 +20,9 @@ import {join, relative, extname} from "node:path";
 import {fileURLToPath} from "node:url";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
-const SCAN_DIRS = ["src", "packages/design-system/src"];
+// Repo-root-relative. The design system is a root workspace package consumed by
+// chat-frontend (and, when S2 opts in, agent-frontend — add it here then).
+const SCAN_DIRS = ["chat-frontend/src", "packages/design-system/src"];
 const EXT = new Set([".ts", ".tsx", ".css", ".html"]);
 
 // This scanner file legitimately contains the banned words; skip itself.

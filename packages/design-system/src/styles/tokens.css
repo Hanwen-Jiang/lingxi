@@ -1,0 +1,105 @@
+/* ------------------------------------------------------------------ *
+ * 灵犀 (Lingxi) design tokens — brand overlay on the real HeroUI token system.
+ *
+ * The app imports tailwindcss + @heroui/styles + @heroui-pro/react/css FIRST
+ * (the real licensed artifacts, installed via hpsetup), which own the full token
+ * system (--background/--surface/--surface-secondary/--foreground/--muted/
+ * --separator/--overlay/--accent) AND the Tailwind utilities (bg-surface,
+ * text-muted, …). This file is loaded LAST and overrides only the brand-critical
+ * tokens per DESIGN.md, so chat-frontend and agent-frontend (when it adopts this
+ * package) share one calibration.
+ *
+ * Hard constraints (DESIGN.md): #006FEE is the only vivid accent · pure-black
+ * dark mode · neutral (not blue-tinted) light surfaces · flat depth.
+ * ------------------------------------------------------------------ */
+
+:root,
+.light,
+[data-theme="light"],
+[data-theme="default"] {
+  --accent: #006fee; /* the only vivid accent; HeroUI derives --focus + --chart-1..5 from it */
+  --background: #fafafa; /* DESIGN.md neutral light app bg (not white, not blue-tinted) */
+}
+
+.dark,
+[data-theme="dark"] {
+  --accent: #006fee;
+  --background: #000000; /* DESIGN.md: pure-black dark, no ambient wash */
+  color-scheme: dark;
+}
+
+:root {
+  color-scheme: light;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  /* Alias so raw var(--surface-2) refs resolve to HeroUI's --surface-secondary. */
+  --surface-2: var(--surface-secondary);
+
+  /* Brand + real-IM-state tokens (namespaced --lx-*). */
+  --lx-accent: #006fee;
+  --lx-accent-strong: #005bc4; /* blue-600, strong action text (light) */
+
+  --lx-radius-row: 14px;
+  --lx-radius-panel: 22px; /* DESIGN.md: cards 18–32px */
+  --lx-radius-panel-lg: 28px;
+
+  /* Connection / delivery signals — quiet (a dot, never a large filled badge). */
+  --lx-state-online: #17c964;
+  --lx-state-offline: #f5a524;
+  --lx-state-reconnecting: #f5a524;
+  --lx-state-error: #f31260;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-width: 0;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  overflow-x: hidden; /* DESIGN.md §5: no horizontal overflow */
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+button,
+a,
+input,
+textarea,
+select {
+  min-width: 0;
+}
+
+/* DESIGN.md §Interaction: motion subtle, disabled under reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

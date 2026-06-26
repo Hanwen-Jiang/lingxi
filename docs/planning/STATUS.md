@@ -20,6 +20,19 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-26 · ★1 premise 纠正 + S1↔S3 契约仲裁 + greenlight chat-common
+- **★1 premise 作废(中枢致歉,S3 复核正确):** 线上 `projecta-current` 跑的是 **pre-P0 无鉴权旧分支**(`dc9c8e3`,无 AuthGlobalFilter/AuthContextInterceptor,网关对 no-token 与 garbage-token 均 200)。**不是 jjwt×JDK21 崩溃**——那条验签路径只在带鉴权的 main/E2E 才有。故"给线上 4 jar 加 jaxb 重建"是空操作。线上真实状态=**完全无鉴权**(原始 P0 安全洞,但它是 WSL 开发运行态,非公网生产)。**是否把 main 全量 P0 部署上线=行为变更,待用户拍板**(中枢正在 AskUserQuestion)。S3 未擅动线上、已开 P1 worktree——正确。
+- **S1↔S3 契约仲裁(两流照此对齐,避免各造一套):**
+  1. **角色头 = `X-User-Roles`**(csv,含 `admin`),由网关注入。S1 提案采纳;S3 网关按此注入。
+  2. **agent 定位 = 只消费网关注入头,不自验/不签发 JWT** → **agent 不需要 `JWT_SECRET_KEY`**;只有网关 + 各 chat 服务 + Auth 签发方持有同一密钥。确认 S1 P1-① 的定位。
+  3. **错误码归一 = chat-common 为准**:S3 在 chat-common 定义错误码枚举 + Result 形状,**S1 对齐编号**(别两套)。S1 暂勿定死自己的 ErrorCode 编号,等 chat-common。
+  4. **包络** `{code,message,data,traceId,timestamp}` 确认(S1 已加加法半);**真实 HTTP 状态(停 200)= 版本化一次性翻,S1/S3 同步翻、翻前在 STATUS 通知 S2**(防中途断)。
+  5. **enforce-identity 翻 true 时机**:待 S3 网关 `/api/agent|memory|rag` 路由 + 验签就绪后,S1 翻 `AGENT_GATEWAY_ENFORCE_IDENTITY=true` 并验拒直连。
+- **greenlight S3 chat-common(P1 unit 2)**:正确的 P1 首件,解锁 S1。包名/是否一并接 6 服务由 S3 定;把上述 1/3/4 的头名/错误码/包络作为 chat-common 的公开契约导出。
+- 产出物:本条(STATUS);契约要点将择机并入 master-plan §5(D2/D3/D4 澄清)。
+- 阻塞:无。
+- **用户已拍板(defer):线上暂不动**(保持 pre-P0 无鉴权开发基线);**P1 整合检查点**(统一鉴权落地 + 前端可登录后)由中枢协调一次性把 main 部署上线并重启。**★1 对 S3 撤销**(不动线上)——S3 继续 chat-common 及 P1 其余单元。线上"无鉴权"为已知且被接受的风险(WSL 开发态、非公网)。
+
 ### 2026-06-26 · 第一轮收口:用户拍板 4 决策 + P0 整合入 main + 进入 P1
 - 完成:用户拍板——①线上 jjwt 修复**现在同步并重启线上**;②**中枢收拢并合入 main**;③HeroUI Pro 用 **hpsetup + token**(已写回 `E:\HeroUI-Pro\HEROUI-PERSONAL-TOKEN.md`,勿删);④**Greenlight P1**。中枢已把四流 P0 全部整合入 `main`(539c9e5,零冲突,已 push):agent-backend(端口/止损/Flyway)+ agent-frontend(拆巨石/工具链)+ chat-frontend(设计系统/壳)+ chat-backend(jaxb-api jjwt 修复+E2E)。删除 stray 分支 `feat/agent-frontend-p0-foundation`。
 - 关键决策:认可 S3 的 **jaxb-api** 方案(优于升级 jjwt0.11);设计系统包 P1 **上提为根级共享包**供 S2 消费(S4 牵头)。
@@ -78,6 +91,28 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-26 · P1-① 入网关身份(expand 相)+ 包络 traceId 加法
+- 完成:P1 身份基础落地,**分支 `feat/agent-backend-p1-identity`(已 push origin,commit `9133ee5`,从 main ee8d4fb 起)**。
+  - **GatewayIdentityFilter**:信任统一网关注入的 `X-User-Id`(+ `X-User-Roles`),解析为 `AuthPrincipal` 挂请求属性;`@CurrentUser` + `CurrentUserArgumentResolver`(经新 `WebConfig` 注册)。
+  - **AiChat / Agent / Memory 控制器**:userId 一律经 `principal.resolveUserId(bodyUserId)`——**网关身份在场则忽略 body/param userId**(IDOR 闭环),否则回退 body(过渡)。`/memory/*`、`/agent/chat`、`/agent/tools/audit`、`/chat`、`/streamChat` 已接。
+  - **model-config**:改为认可网关注入的 **admin 角色**;P0 的 `X-Admin-Token` 降为过渡回退(网关上线后移除)。
+  - **包络加法(D4 非破坏半)**:`BaseResponse` 加 `traceId`+`timestamp`(构造时自动填充);新 `TraceIdFilter` 设 `X-Trace-Id`(进出)+ SLF4J MDC。
+  - 8 个单测绿(`AuthPrincipal` 解析 + `GatewayIdentityFilter` 五场景:permissive/enforce-401/合法/公开路径/非法 id);离线 `mvnw compile` 绿。
+- 产出物:新 `agent/.../security/{AuthPrincipal,CurrentUser,GatewayIdentityFilter,CurrentUserArgumentResolver}.java`、`common/TraceContext.java`、`monitor/TraceIdFilter.java`、`config/WebConfig.java`、test ×2;改 `common/BaseResponse.java`、`controller/{AiChat,Agent,Memory,ChatHistory}Controller.java`、`application.yml`、`.env.example`。
+- 关键决策(expand/contract,可回滚):`agent.gateway.enforce-identity` **默认 false**——网关尚未 front agent 前不破直连、保留 body userId 回退;**contract 相**(硬 401 拒直连 + 删 body userId + 真实 HTTP 状态停 200)等 S3 网关上线后翻 flag,**未定死**。`X-User-Roles` 头名与包络/错误码均为 S1 提案,待对齐。**未 sweep**:ChatHistory `/sessions`、Rag、Auto 的 body userId(下一单元)。
+- 阻塞:无(本单元自洽隔离;contract 相翻 flag 串行依赖 S3)。
+- **待 S3 拉齐(已按"可对接"建,确认后才翻 contract):**
+  1. **网关注入头契约**:`X-User-Id` 已证(T9/T11);请确认**角色头**——我提案 `X-User-Roles`(csv,含 `admin`)。若 S3 用别的(`X-User-Role`/JWT claim 透传),我一行改 `ROLES_HEADER`。
+  2. **`/api/agent|memory|rag` 网关路由 + 验签到位** → 我翻 `AGENT_GATEWAY_ENFORCE_IDENTITY=true` 并验拒直连(伪造 `X-User-Id` 被网关剥离,同 T11)。
+  3. **chat-common 错误码表**:我已实现 `{code,message,data,traceId,timestamp}` 形状,但错误码**暂沿用 agent 现有 `ErrorCode`(40xxx/50xxx…)**;给我 chat-common 错误码枚举,我对齐编号(别两套)。**真实 HTTP 状态映射(停 200)**等包络定稿后版本化一次性翻(避免 S2 中途断)。
+  4. **JWT**:agent **只消费网关注入头、不自验/不签发 JWT**,故 agent 侧暂不需要 `JWT_SECRET_KEY`。请确认此定位(若要 agent 旁路直验 JWT 再取 secret)。
+- **交接 → S2(解锁登录 UI 的鉴权契约):**
+  - **agent 不签发 token**。登录走 chat 的 Auth(S3)拿 JWT;调 agent 经统一网关,网关验签后注入可信 `X-User-Id`(+`X-User-Roles`)。**前端不要自己塞 `X-User-Id`**(网关会剥离伪造值)。
+  - **过渡期**(`enforce-identity=false`,网关未 front agent):前端可继续在 body 带 userId(现状不变),agent 回退用它;**翻 enforce 后 body userId 被忽略并最终移除**——前端尽早转向"靠网关注入身份、不传 userId"。
+  - **统一包络**:成功/失败响应均含 `code/message/data/traceId/timestamp`;`traceId` 同时在响应头 `X-Trace-Id`(可用于报错上报)。**真实 HTTP 状态(401/403…)尚未翻**(除网关身份 401),目前仍"200 + 体内 code"——前端先按 `body.code` 解析;切换前我再交接版本化节奏。
+  - **model-config**(D10 admin 屏):需 admin 角色(网关注入)或过渡 `X-Admin-Token`;不接受/不回显 `apiKey`。
+- 待中枢确认:① 何时翻 `enforce-identity=true`(待 S3 网关 front agent + 路由就绪)。② 错误码归一:agent `ErrorCode` vs chat-common 谁为准。③ 真实 HTTP 状态翻转的版本化节奏(防 S2 中途断)。
+
 ### 2026-06-26 · P0 落地:端口 18080 + 止损三件套 + Flyway 基线 DDL
 - 完成:P0 三单元全部落地并提交,**分支 `feat/agent-backend-p0-hardening`(已 push origin,3 commits)**。
   - ① 端口:`SERVER_PORT` 默认 `10010→18080`(application.yml + .env.example);docs/postman/README 内 `10010` 全刷 `18080`(仅 `RENAME-NOTICE.md` 保留为迁移记录)。commit `843dfc0`。
@@ -108,6 +143,14 @@
 ---
 
 ## S2 · agent 前端(owns agent-frontend/)
+
+### 2026-06-26 · P1 单元 1 · 接入 @infinitechat/design-system + 灵犀品牌通刷
+- 完成:从 main(ee8d4fb)起新分支 `feat/agent-frontend-p1-auth` 并 push origin(HTTPS)。① 通过 Vite alias + tsconfig path 接入 S4 设计系统包(在 `chat-frontend/packages/design-system`,不动包位置,与 S4 同方案),styles.css 只镜像 `--lx-*` 私有品牌 token(避免覆盖现有 HeroUI 语义层)。② 替换 P0 临时基元为 ds 原语:`ErrorBoundary` 用 `<ErrorState>`+`<LingxiGlyph>`(中文品牌降级卡)、空对话用 `<EmptyState>`(灵犀字符 + Slogan)、侧栏 logo 用 `LingxiGlyph`。③ 按 D12 全量品牌通刷可见层:`InfiniteChat`→`灵犀`,`<title>灵犀 · Lingxi</title>`,中文文案("和灵犀聊聊 / 懂你的,不只是消息" / "在线/连接中/离线" / "灵犀已就绪/灵犀还没接上模型" / "灵犀会根据你的问题..." 等),所有 aria-label/placeholder/tooltip 中文化。④ 收敛内部状态外泄:assistant 状态 chip 仅 error 时显示("出错了"),routeLabel/modeLabel fallback 中文化,useModelConfig 不再泄露后端原始错误串。⑤ 顺手:删除 `frontend/README.md` tombstone(watcher 已释放);修 `.claude/launch.json` 让 preview 用绝对 node 路径起 vite。**5 大门全绿**:tsc/lint/prettier/test(12)/build exit 0;**预览实测**:`englishLeak: []` 用户可见层零英文残留(技术字段如 API base / User ID 在 admin 区,P1 单元 3 处理)。提交 09a8108(已 push)。
+- 产出物:`agent-frontend/{vite.config.ts,tsconfig.json,index.html,styles.css}`、`src/{components/ErrorBoundary,features/chat/*,features/settings/SettingsWorkspace,features/sidebar/GlobalSidebar,hooks/useModelConfig,lib/{chat,constants}}.{ts,tsx}`;`.claude/launch.json`;删除 `frontend/README.md`。
+- 关键决策:**ds tokens.css 不整套导入,只镜像 `--lx-*`**——agent-frontend 走完整 HeroUI Pro 链(`@heroui/styles/css`+`@heroui-pro/react/css` 已经在用),整套导入会与 P0 校准好的 HeroUI 语义层冲突(双重 `--background`/`--surface` 等),且 ds light bg `#fafafa` 与 HeroUI 默认 `oklch(0.9702 0 0)` 不一致。改 styles.css 顶部追加 `--lx-*` 一段,源点跟 ds tokens.css 同步;真实 HeroUI Pro 工件到位后无需 token 改动。
+- 阻塞:无(单元 1 与 S1/S3 解耦)。
+- 交接:S4——agent-frontend 已是 ds 首批消费方,如 S4 后续要把 ds 上提为 root monorepo 包,我侧 alias 直接换 `peer dep import` 即可(零代码改动)。S1/S3——单元 2(登录 UI + token 管线 + Authorization 注入)与单元 3(model-config admin 门控)等 D2/D3 鉴权契约定稿后接通;未定稿前先搭壳。
+- 待中枢确认:**无**(单元 1 完全自洽);单元 2/3 等 S1 P1 鉴权契约。
 
 ### 2026-06-26 · UI 打磨:设置下拉改用 HeroUI Select
 - 完成:设置/模型配置面板的 Provider、Reasoning effort、Memory type 三个下拉由 HeroUI Pro `NativeSelect`(渲染原生 `<select>` → 浏览器原生弹层、无主题)改为 HeroUI `Select`(主题化弹层 + ListBox + 选中指示)。受控 `value`/`onChange`;标签用匹配的 field span + `aria-label`(避免把 Select 的 button trigger 包进 `<label>` 致弹层双触发)。tsc/lint/build exit 0,src 内已无 NativeSelect。提交 298dc2f。
@@ -157,6 +200,15 @@
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
 
+### 2026-06-26 · P1 启动 + ★1 复核:线上跑的是 pre-P0 旧分支(无鉴权),jjwt 崩溃前提不成立
+- 完成:从 main 开 `feat/chat-backend-p1` worktree(`E:/jhw/proj-chat-p1`)。执行★1前先复核线上运行态,**发现前提与实际不符**:
+  - 线上 `~/projecta-current/chat` 在分支 `dc9c8e3 "fix chat build config and auth"`(原始基线),**无 `AuthGlobalFilter`、无 `AuthContextInterceptor`**;网关 jar 为 2026-06-16 旧构建。
+  - 线上网关实测(经 10010):无 token → **200**、garbage token → **200**。即线上是**原始"网关不鉴权"态**——不校验 JWT,故**根本不触发 jjwt×JDK21 崩溃**(验签路径只在 P0 的 `AuthGlobalFilter` 里,仅 main/E2E 有)。
+- 关键结论:★1 字面动作(给线上 4 jar 加 jaxb 重建)对当前线上是**空操作**(无验签路径可修)。线上真问题是**仍无鉴权**(原始安全洞)。让线上变安全 = 把 main 整套 P0(AuthGlobalFilter+各服务拦截器+BCrypt+jaxb)部署到 `projecta-current` 并重启 → 这是**更大的部署 + 行为变更**(开始强制鉴权,未带有效 JWT 的客户端会被 401),且 `projecta-current` 当前在别的分支。
+- 阻塞:**★1 等中枢拍板**——是否授权把 main 的 P0 全量部署到线上(切/合 main→全量重建→重启 7 服务)?会让线上开始强制鉴权,可能打断仍在开发、未带 JWT 的前端联调。我**不擅自**切线上分支/改鉴权行为。
+- 交接:无。
+- 待中枢确认:① 确认线上=pre-P0 无鉴权旧分支(非 jjwt 崩溃);② 是否授权全量部署 P0 到线上(行为变更),还是线上留待正常合并流水线后再部署?**期间我在 worktree 内推进 P1 代码单元(从 chat-common 起,E2E 验证,不动线上)。**
+
 ### 2026-06-26 · E2E 01→04 实跑全绿(11/11)+ 发现并修复关键线上鉴权 bug(jjwt×JDK21)
 - 完成:E2E 隔离栈跑通,**冒烟 11 条断言全 PASS**:T1 网关挡无令牌→401 · T2 挡无效令牌→401 · T3 actuator 不被拦→200 · T4 直连业务服务无凭证→401 · T5 RTC 无内部令牌→401 · T6 带内部令牌→200 · T7 注册(BCrypt)→200 · T8 登录签发 JWT · T9 带 token 受保护接口→200(网关注入 X-User-Id+服务信任)· T10 越权(以他人 userId 发动态)→403 · T11 伪造 X-User-Id 被网关剥离覆盖→按 token 用户处理。**即:网关统一鉴权 / BCrypt / 操作人收敛 / 内部令牌 / actuator 放行 全部线上实测通过。**
 - 🔴 **发现并修复关键 bug(波及线上):jjwt 0.9.1 在 JDK 21 上验签全崩**。`javax.xml.bind.DatatypeConverter` 在 JDK 11+ 已从 JRE 移除 → jjwt 0.9.1 验签任意 token 抛 `ClassNotFoundException` → 网关/RTC 验签连接重置(curl 000)。E2E 实测:无 jaxb 的旧 jar 在 JDK21 上任意 token 即崩;**线上 `projecta-current` 是同样的旧 jar 跑在 JDK21,故线上网关鉴权存在同一 P0 缺陷**(任何带 token 请求都会崩)。修复:给 4 个用 jjwt 的服务(GateWay/Auth/RTC/Messaging)加 `javax.xml.bind:jaxb-api:2.3.1`(自带 DatatypeConverter 实现,**零代码改动**)。修复后 T2/T9/T10/T11 由 000 转绿。
@@ -194,6 +246,23 @@
 ---
 
 ## S4 · chat 前端(owns chat-frontend/)
+
+### 2026-06-27 · 设计系统上提根级 workspace ✅ + 装真实 HeroUI Pro 工件 ✅(P1-1/P1-2)
+- 完成:① **上提完成**——`@infinitechat/design-system` 现为仓库**根级** workspace 包(新增根 `package.json` `workspaces:["packages/*","chat-frontend"]`,包在 `packages/design-system`);chat-frontend 经 workspace 依赖 + Vite alias 消费,build/verify 绿;`agent-frontend` **未动**(S2 就绪再纳入)。② **真实 Pro 工件落地**——`hpsetup@4.7.0` + `HEROUI_PERSONAL_TOKEN`(hp_…,token 在 `E:\HeroUI-Pro\HEROUI-PERSONAL-TOKEN.md`,未入库)替换公共镜像 stub:真实 `@heroui-pro/react@1.0.0-beta.6`(含 `dist/css`/`exports`/组件子路径)装入**根** `node_modules`(monorepo 检测→hoisted,chat-frontend 与设计系统共享);并装 20 个 Pro peer(recharts/react-aria-components/tiptap/embla/shiki/streamdown/react-resizable-panels…)。③ **CSS 改回 HeroUI 自有 token 体系 + 品牌覆盖**:`tailwindcss → @heroui/styles/css → @heroui-pro/react/css → tokens.css(品牌覆盖,最后)`;tokens.css 瘦身为只覆盖品牌关键项(`--accent #006FEE`、亮 `--background #FAFAFA`、暗 `--background #000`、`--lx-*`),surface/muted/separator/foreground 用 HeroUI 真值——**与 agent-frontend 校准一致**(D8 单一设计系统两端同款)。**P0 关于「@heroui/styles 是 stub」的结论作废**:其 `dist/index.css` 用 `@import` 分层加载真实 token,是完整 OSS 体系。
+- 产出物:新增根 `package.json` + 根 `package-lock.json`;`git mv` `chat-frontend/packages/design-system`→`packages/design-system`;改 `chat-frontend/{package.json(+workspace dep +20 peers),vite.config.ts,tsconfig.json,src/styles.css}`、`packages/design-system/src/styles/tokens.css`、`.../scripts/verify-ui.mjs`(扫描路径 repo-root 相对)、`.claude/launch.json`(chat-frontend preview 改用 nvm node + 根 vite,旧 `npm` 入口在本机 nvm 下 ENOENT)。分支 `feat/chat-frontend-p1`。
+- 关键决策(自行做出):根 workspace 只纳入 `packages/*`+`chat-frontend`(agent-frontend 暂不入,零扰动 S2);token 改为「HeroUI 自有 + 品牌覆盖」(放弃 P0 自给 token,换取与 S2 一致 + 真实 Pro/OSS 组件 BEM 可用)。
+- 阻塞:无(已解 P0 的 stub 阻塞)。
+- 交接 → **S2**:设计系统在根 `packages/design-system`(`import "@infinitechat/design-system"`);接入步骤见下条边界声明;接入后两端共享同一 token 校准。
+- 待中枢确认:① agent-frontend 暂不入 workspace 可否(见边界声明);② **真实 `@heroui-pro/react` 工件不可由 `npm install` 复现**(licensed;公共 registry 仅 stub,root lock 指向 registry)——CI/他机须重跑 `hpsetup + HEROUI_PERSONAL_TOKEN`;建议在根 README/CI 文档化此前置(token 不入库)。
+- 验证:`npm run build -w chat-frontend` 绿(CSS 33KB→760KB=全量真实 Pro BEM;HeroUI beta CSS 一处 `:not(:is())` 良性 warning,非阻断);`verify:ui` 绿(39 文件);workspace 符号链接 `node_modules/@infinitechat/design-system→packages/design-system` ✓;真实 token 渲染实测(亮 bodyBg `#FAFAFA`、暗纯黑 `#000`、surface/muted/separator 取 HeroUI oklch 真值、主按钮 `#006FEE`、无横向溢出);主题切换/持久化 OK。
+
+### 2026-06-27 · 【边界声明·动手前】设计系统上提根级 workspace 包(跨目录)
+- 完成(即将动手,先声明边界):把 `@infinitechat/design-system` 从 `chat-frontend/packages/design-system` 提到**仓库根级** `packages/design-system`,并引入根 `package.json`(`workspaces: ["packages/*","chat-frontend"]`)。中枢已批(STATUS HUB 2026-06-26「第一轮收口」§关键决策)。
+- 影响面(将改动的路径):**新增** 根 `package.json` + 根 `package-lock.json` + 根 `node_modules`(hoisted,已被根 `.gitignore` 忽略);**移动** `chat-frontend/packages/design-system/` → `packages/design-system/`;**改** `chat-frontend/package.json`(加 workspace 依赖 `@infinitechat/design-system`、去 Vite alias)、`chat-frontend/{vite.config.ts,tsconfig.json,src/styles.css}`(路径)。
+- 关键决策(自行做出、影响他流):根 workspace **暂只纳入 `packages/*` + `chat-frontend`**;**`agent-frontend/` 暂不入 workspace**——避免扰动 S2 的 node_modules/lock 与在途工作。Java 子项目(`agent/`、`chat/`)与 npm workspace 无关、零影响。
+- 阻塞:无。
+- 交接 → **S2**:设计系统届时位于仓库根 `packages/design-system`(`import "@infinitechat/design-system"`)。S2 接入时把 `agent-frontend` 加进根 `workspaces` 数组 + 在 `agent-frontend/package.json` 加 `"@infinitechat/design-system": "*"` 后根 `npm install`;我(S4,owner)配合对齐 token/组件 API。在那之前 S2 目录零改动。
+- 待中枢确认:① 同意 `agent-frontend` 暂不入 workspace(S2 就绪再纳入)? ② 根 workspace 成员就用 `packages/* + chat-frontend`?
 
 ### 2026-06-26 · P0/P1 落地:设计系统 + IA 壳 + 7 静态页 + Mock 地基 + ADR(并行不阻塞)
 - 完成:①抽 `@infinitechat/design-system`(品牌 token 来自 DESIGN.md:#006FEE/纯黑暗色/无渐变/Inter + **IM 真实态原语**:Skeleton/EmptyState/ErrorState(可重试不泄后端串)/ConnectionBanner/StatusDot/DeliveryTick(乐观发送态)/UnreadBadge/StatusPill + 品牌组件 Button/Panel/DividerRow/Field/Avatar + 灵犀 logo/glyph/wordmark + `#ic-rail-*` 图标精灵 + `verify-ui` 禁用模式扫描器);②按 DESIGN.md IA 搭壳(react-router 七目的地 home/messages/contacts/discover/assistant/settings/auth)+ 响应式布局(桌面四栏 rail·会话·主聊·助手 / 平板两栏 / 手机底部 dock)+ 七个静态高保真页;③技术栈 ADR ×2(栈选型 + WS 客户端策略)。④Mock 数据层 `src/api`= 唯一集成缝(Mock/真实同签名,含延迟/乐观/未读/断线→在线/助手 WS 推送回复);react-query(乐观发送+messageId 协调)+ zustand 接好。

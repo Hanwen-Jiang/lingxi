@@ -10,11 +10,15 @@ const root = dirname(fileURLToPath(import.meta.url));
 // Real data goes through the chat Spring Cloud Gateway (D1: :10010, /api/v1).
 // VITE_API_BASE overrides; default empty = Mock mode. VITE_GATEWAY targets a
 // non-default gateway (e.g. the E2E segment :10110).
+//
+// @infinitechat/design-system is a root workspace package (../packages/...).
+// It's a real npm-managed workspace dep (so S2 can consume it the standard way);
+// the alias just pins Vite to its TS source for reliable monorepo resolution.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "@infinitechat/design-system": resolve(root, "packages/design-system/src/index.ts"),
+      "@infinitechat/design-system": resolve(root, "../packages/design-system/src/index.ts"),
       "@": resolve(root, "src"),
     },
   },

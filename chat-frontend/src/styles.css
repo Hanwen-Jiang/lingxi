@@ -1,29 +1,16 @@
+/* HeroUI Pro CSS layer order is load-bearing (AGENT-REFERENCE / heroui-react-pro):
+   tailwindcss → @heroui/styles → @heroui-pro/react/css. These are the REAL
+   licensed artifacts (installed via hpsetup). The brand overlay (tokens.css) is
+   imported LAST so its DESIGN.md overrides win. */
 @import "tailwindcss";
-@import "../packages/design-system/src/styles/tokens.css";
+@import "@heroui/styles/css";
+@import "@heroui-pro/react/css";
+@import "../../packages/design-system/src/styles/tokens.css";
 
-/* Toggle dark mode by `.dark` class (set on <html> by the theme pre-paint /
-   ThemeProvider), not prefers-color-scheme. */
+/* Dark mode is driven by the `.dark` class (set on <html> by the theme pre-paint
+   / ThemeProvider), not prefers-color-scheme. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Map the brand CSS variables (tokens.css) to Tailwind semantic color utilities
-   (bg-surface, text-foreground, text-muted, border-separator, …). `inline` so the
-   utilities reference the variables and stay theme-reactive. When the licensed
-   HeroUI Pro CSS is added (via the CN proxy), it shares these same token names. */
-@theme inline {
-  --color-background: var(--background);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-separator: var(--separator);
-  --color-overlay: var(--overlay);
-  --color-accent: var(--accent);
-
-  --font-sans:
-    Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC",
-    "Microsoft YaHei", sans-serif;
-}
-
-/* Tailwind v4 source scanning — cover the app and the design-system package. */
+/* Tailwind v4 source scanning — the app + the root design-system package. */
 @source "./**/*.{ts,tsx}";
-@source "../packages/design-system/src/**/*.{ts,tsx}";
+@source "../../packages/design-system/src/**/*.{ts,tsx}";

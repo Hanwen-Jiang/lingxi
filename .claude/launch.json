@@ -15,8 +15,13 @@
     },
     {
       "name": "chat-frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "chat-frontend", "run", "dev"],
+      "runtimeExecutable": "D:\\nvm\\v22.23.1\\node.exe",
+      "runtimeArgs": [
+        "node_modules/vite/bin/vite.js",
+        "chat-frontend",
+        "--host",
+        "127.0.0.1"
+      ],
       "autoPort": true,
       "port": 5273
     }

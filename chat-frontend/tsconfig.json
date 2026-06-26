@@ -20,9 +20,9 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@infinitechat/design-system": ["./packages/design-system/src/index.ts"],
+      "@infinitechat/design-system": ["../packages/design-system/src/index.ts"],
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "packages/design-system/src", "vite.config.ts"]
+  "include": ["src", "../packages/design-system/src", "vite.config.ts"]
 }

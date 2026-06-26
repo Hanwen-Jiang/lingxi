@@ -1,0 +1,15 @@
+{
+  "name": "lingxi",
+  "private": true,
+  "version": "0.1.0",
+  "description": "灵犀 (Lingxi) monorepo — npm workspaces for the shared design system + the chat web client. (agent-frontend stays standalone until S2 opts in; the Java backends are unaffected.)",
+  "workspaces": [
+    "packages/*",
+    "chat-frontend"
+  ],
+  "scripts": {
+    "dev:chat": "npm run dev -w chat-frontend",
+    "build:chat": "npm run build -w chat-frontend",
+    "verify:ui": "node packages/design-system/scripts/verify-ui.mjs"
+  }
+}
