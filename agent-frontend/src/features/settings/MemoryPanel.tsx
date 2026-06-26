@@ -2,8 +2,8 @@ import {useState} from "react";
 import {Brain} from "lucide-react";
 
 import {Button} from "@heroui/react/button";
-import {Label} from "@heroui/react/label";
-import {NativeSelect} from "@heroui-pro/react/native-select";
+import {ListBox} from "@heroui/react/list-box";
+import {Select} from "@heroui/react/select";
 
 import {PanelTitle, Field} from "../../components/ui/primitives";
 import type {ApiClient} from "../../api";
@@ -58,21 +58,32 @@ export function MemoryPanel({
     <section className="space-y-5 xl:col-span-2">
       <PanelTitle icon={<Brain className="size-4" />} title="Memory" />
       <div className="panel-section">
-        <NativeSelect fullWidth>
-          <Label>Type</Label>
-          <NativeSelect.Trigger
-            name="memoryType"
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted">Type</span>
+          <Select
+            aria-label="Memory type"
+            fullWidth
             value={memoryType}
-            onChange={(event) => setMemoryType(event.target.value as MemoryType)}
+            onChange={(value) => {
+              if (typeof value === "string") setMemoryType(value as MemoryType);
+            }}
           >
-            {MEMORY_TYPES.map((type) => (
-              <NativeSelect.Option key={type} value={type}>
-                {type}
-              </NativeSelect.Option>
-            ))}
-            <NativeSelect.Indicator />
-          </NativeSelect.Trigger>
-        </NativeSelect>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {MEMORY_TYPES.map((type) => (
+                  <ListBox.Item key={type} id={type} textValue={type}>
+                    {type}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
         <Field label="Content">
           <textarea
             className="field-input min-h-24 resize-y"

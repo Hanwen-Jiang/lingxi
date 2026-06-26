@@ -2,7 +2,8 @@ import {useEffect, useState} from "react";
 import {Gauge} from "lucide-react";
 
 import {Button} from "@heroui/react/button";
-import {NativeSelect} from "@heroui-pro/react/native-select";
+import {ListBox} from "@heroui/react/list-box";
+import {Select} from "@heroui/react/select";
 
 import {PanelTitle, Field} from "../../components/ui/primitives";
 import type {ApiClient} from "../../api";
@@ -70,19 +71,34 @@ export function ModelConfigPanel({
         Runtime changes apply to new chat, agent, and RAG requests. API keys are accepted by the backend and never
         echoed back.
       </p>
-      <Field label="Provider">
-        <NativeSelect fullWidth>
-          <NativeSelect.Trigger
-            name="modelProvider"
-            value={provider}
-            onChange={(event) => setProvider(event.target.value)}
-          >
-            <NativeSelect.Option value="openai-compatible">OpenAI compatible</NativeSelect.Option>
-            <NativeSelect.Option value="dashscope">DashScope</NativeSelect.Option>
-            <NativeSelect.Indicator />
-          </NativeSelect.Trigger>
-        </NativeSelect>
-      </Field>
+      <div className="space-y-1.5">
+        <span className="text-xs font-medium text-muted">Provider</span>
+        <Select
+          aria-label="Provider"
+          fullWidth
+          value={provider}
+          onChange={(value) => {
+            if (typeof value === "string") setProvider(value);
+          }}
+        >
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              <ListBox.Item id="openai-compatible" textValue="OpenAI compatible">
+                OpenAI compatible
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+              <ListBox.Item id="dashscope" textValue="DashScope">
+                DashScope
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            </ListBox>
+          </Select.Popover>
+        </Select>
+      </div>
       <Field label="Base URL">
         <input className="field-input" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
       </Field>
@@ -90,22 +106,32 @@ export function ModelConfigPanel({
         <input className="field-input" value={model} onChange={(event) => setModel(event.target.value)} />
       </Field>
       {provider === "openai-compatible" ? (
-        <Field label="Reasoning effort">
-          <NativeSelect fullWidth>
-            <NativeSelect.Trigger
-              name="modelReasoningEffort"
-              value={reasoningEffort}
-              onChange={(event) => setReasoningEffort(event.target.value as ReasoningEffort)}
-            >
-              {REASONING_EFFORTS.map((effort) => (
-                <NativeSelect.Option key={effort.value} value={effort.value}>
-                  {effort.label}
-                </NativeSelect.Option>
-              ))}
-              <NativeSelect.Indicator />
-            </NativeSelect.Trigger>
-          </NativeSelect>
-        </Field>
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted">Reasoning effort</span>
+          <Select
+            aria-label="Reasoning effort"
+            fullWidth
+            value={reasoningEffort}
+            onChange={(value) => {
+              if (typeof value === "string") setReasoningEffort(value as ReasoningEffort);
+            }}
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {REASONING_EFFORTS.map((effort) => (
+                  <ListBox.Item key={effort.value} id={effort.value} textValue={effort.label}>
+                    {effort.label}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
       ) : null}
       <Field label="API key">
         <input
