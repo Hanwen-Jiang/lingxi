@@ -49,6 +49,12 @@
             <artifactId>jjwt</artifactId>
             <version>0.9.1</version>
         </dependency>
+        <!-- jjwt 0.9.1 在 JDK 9+ 需 JAXB 提供 javax.xml.bind.DatatypeConverter(JDK11+ 已从 JRE 移除)。 -->
+        <dependency>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+            <version>2.3.1</version>
+        </dependency>
 
         <dependency>
             <groupId>com.mysql</groupId>

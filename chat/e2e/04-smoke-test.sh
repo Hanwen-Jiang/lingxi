@@ -23,6 +23,8 @@ status(){ curl -s -o /dev/null -w '%{http_code}' "$@"; }
 # 轻量 JSON 取值(无 python 依赖)：jstr 取字符串值，jnum 取数字值。
 jstr(){ grep -oE "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/'; }
 jnum(){ grep -oE "\"$1\"[[:space:]]*:[[:space:]]*-?[0-9]+" | head -1 | grep -oE -- '-?[0-9]+$'; }
+# 从 JWT 取 sub(登录响应里 userId 当前为 null,真实 id 在 token 的 sub 声明)。
+jwt_sub(){ local p m; p=$(printf '%s' "$1" | cut -d. -f2); m=$(( ${#p} % 4 )); [ "$m" = 2 ] && p="${p}=="; [ "$m" = 3 ] && p="${p}="; printf '%s' "$p" | tr '_-' '/+' | base64 -d 2>/dev/null | sed -E 's/.*"sub":"?([^",}]*)"?.*/\1/'; }
 
 echo "=== E2E 冒烟测试  (gateway=$GW) ==="
 if ! curl -s -o /dev/null --max-time 3 "$GW/actuator/health"; then
@@ -55,7 +57,7 @@ ck "T7 注册成功 code=200" 200 "$(printf '%s' "$reg" | jnum code)"
 login=$(curl -s -X POST -H 'Content-Type: application/json' \
   -d "{\"phone\":\"$PHONE\",\"password\":\"$PASSWD\"}" "$GW/api/v1/user/login")
 TOKEN=$(printf '%s' "$login" | jstr token)
-UID_=$(printf '%s' "$login" | jnum userId)
+UID_=$(jwt_sub "$TOKEN")
 [ -n "$TOKEN" ] && ok "T8 登录拿到 token (userId=$UID_)" || ng "T8 登录应返回 token" "non-empty" "empty: $login"
 
 if [ -n "$TOKEN" ] && [ -n "$UID_" ]; then
