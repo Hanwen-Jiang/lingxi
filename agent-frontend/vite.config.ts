@@ -6,13 +6,13 @@ import {defineConfig} from "vitest/config";
 declare const process: {env: Record<string, string | undefined>};
 declare const __dirname: string;
 
-// Resolve a sibling-package source path. The shared design system lives at
-// `chat-frontend/packages/design-system/` (owned by S4, D8); we consume it via
-// a Vite alias instead of npm workspaces to avoid the npm-cache EPERM/relink
-// race that bit S4. The matching TS path lives in tsconfig.json. Vite 5
-// resolves the config file's __dirname at load time, so we can use a plain
-// relative join without importing node:path.
-const designSystemRoot = `${__dirname.replace(/\\/g, "/")}/../chat-frontend/packages/design-system`;
+// Resolve a sibling-package source path. The shared design system lives at the
+// repo-root `packages/design-system/` (owned by S4, D8; promoted to a root
+// workspace package in P1). We consume it via a Vite alias instead of npm
+// workspaces to avoid the npm-cache EPERM/relink race that bit S4. The matching
+// TS path lives in tsconfig.json. Vite 5 resolves the config file's __dirname at
+// load time, so we can use a plain relative join without importing node:path.
+const designSystemRoot = `${__dirname.replace(/\\/g, "/")}/../packages/design-system`;
 
 // Dev-only target for the /api proxy. Defaults to the agent backend's D1 port
 // (18080). Override with VITE_API_PROXY_TARGET when the agent runs elsewhere

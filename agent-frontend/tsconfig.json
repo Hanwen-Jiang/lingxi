@@ -18,14 +18,14 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@infinitechat/design-system": ["../chat-frontend/packages/design-system/src/index.ts"],
-      "@infinitechat/design-system/styles/tokens.css": ["../chat-frontend/packages/design-system/src/styles/tokens.css"]
+      "@infinitechat/design-system": ["../packages/design-system/src/index.ts"],
+      "@infinitechat/design-system/styles/tokens.css": ["../packages/design-system/src/styles/tokens.css"]
     }
   },
   "include": [
     "src",
     "vite.config.ts",
-    "../chat-frontend/packages/design-system/src/**/*.ts",
-    "../chat-frontend/packages/design-system/src/**/*.tsx"
+    "../packages/design-system/src/**/*.ts",
+    "../packages/design-system/src/**/*.tsx"
   ]
 }
