@@ -95,6 +95,16 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Flyway:版本化 agent MySQL schema(默认关闭,见 db/README.md)。版本由 Spring Boot BOM 管理。 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-reactor</artifactId>
