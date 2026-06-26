@@ -289,12 +289,12 @@ RAG 失败专用入口 `reflectEvidenceFailure`(`:61`):根据轮数选触发类�
 
 ## 动手试一试(curl 示例)
 
-前提:服务已启动,端口 `10010`,context-path `/api`,基础地址 `http://localhost:10010/api`。
+前提:服务已启动,端口 `18080`,context-path `/api`,基础地址 `http://localhost:18080/api`。
 
 ### 1. 写入一条长期记忆
 
 ```bash
-curl -X POST http://localhost:10010/api/memory/write \
+curl -X POST http://localhost:18080/api/memory/write \
   -H "Content-Type: application/json" \
   -d '{
     "userId": 1001,
@@ -312,7 +312,7 @@ curl -X POST http://localhost:10010/api/memory/write \
 再发一遍内容几乎一样的 `TECH_STACK` 记忆,然后查询:
 
 ```bash
-curl "http://localhost:10010/api/memory/user/1001?memoryType=TECH_STACK&limit=10"
+curl "http://localhost:18080/api/memory/user/1001?memoryType=TECH_STACK&limit=10"
 ```
 
 如果 Jaccard ≥ 0.72,你会看到列表里仍然只有**一条**,且 `confidence` 取了两者较大值——这就是去重生效。
@@ -320,7 +320,7 @@ curl "http://localhost:10010/api/memory/user/1001?memoryType=TECH_STACK&limit=10
 ### 3. 用户纠错:禁用旧记忆 + 写新事实
 
 ```bash
-curl -X POST http://localhost:10010/api/memory/correct \
+curl -X POST http://localhost:18080/api/memory/correct \
   -H "Content-Type: application/json" \
   -d '{
     "userId": 1001,
@@ -338,7 +338,7 @@ curl -X POST http://localhost:10010/api/memory/correct \
 ### 4. 构建记忆上下文(看看会注入什么)
 
 ```bash
-curl -X POST http://localhost:10010/api/memory/context \
+curl -X POST http://localhost:18080/api/memory/context \
   -H "Content-Type: application/json" \
   -d '{
     "userId": 1001,

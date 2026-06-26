@@ -248,7 +248,7 @@ public class RagDataLoader implements CommandLineRunner {
 | `management.endpoints.web.exposure.include` | 通过 HTTP 暴露哪些 Actuator 端点(白名单) | `health,info,prometheus` |
 | `management.endpoint.health.show-details` | 健康检查是否展开各组件明细 | `always` |
 | `management.health.mail.enabled` | 是否启用邮件健康检查 | `false`(项目未必配 SMTP，关掉避免误报不健康) |
-| `server.port` | 服务端口 | `10010` |
+| `server.port` | 服务端口 | `18080` |
 | `server.servlet.context-path` | 全局路由前缀 | `/api` |
 | `rag.docs-path` | 启动加载器扫描的文档目录 | `src/main/resources/docs` |
 
@@ -274,7 +274,7 @@ public class RagDataLoader implements CommandLineRunner {
 ### 第一步:看健康状态(无需触发模型)
 
 ```bash
-curl http://localhost:10010/api/actuator/health
+curl http://localhost:18080/api/actuator/health
 # 期望看到 {"status":"UP", "components":{...}}，因为 show-details=always 会展开各组件
 ```
 
@@ -283,7 +283,7 @@ curl http://localhost:10010/api/actuator/health
 随便挑一个聊天/Agent 接口发一条请求(具体报文见各章或 `docs/postman/` 下对应集合，例如基础聊天集合见 [02-basic-chat-streaming.md](02-basic-chat-streaming.md))：
 
 ```bash
-curl -X POST http://localhost:10010/api/chat \
+curl -X POST http://localhost:18080/api/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1,"sessionId":1001,"prompt":"你好"}'
 ```
@@ -291,7 +291,7 @@ curl -X POST http://localhost:10010/api/chat \
 ### 第三步:抓取 Prometheus 指标,过滤出 AI 相关的
 
 ```bash
-curl -s http://localhost:10010/api/actuator/prometheus | grep ai_model
+curl -s http://localhost:18080/api/actuator/prometheus | grep ai_model
 ```
 
 你应该能看到类似下面这样的输出(标签里带着你刚才请求的 user/session/model)：
@@ -313,7 +313,7 @@ scrape_configs:
     metrics_path: '/api/actuator/prometheus'
     scrape_interval: 15s
     static_configs:
-      - targets: ['localhost:10010']
+      - targets: ['localhost:18080']
 ```
 
 Grafana 里几条常用 PromQL：

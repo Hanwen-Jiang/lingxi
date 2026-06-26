@@ -48,7 +48,7 @@ flowchart TD
     D -->|"PgVector 连不上"| F["降级 InMemory 向量库<br/>检索仍可用"]
     D -->|"Redis 连不上"| G["降级内存会话<br/>重启丢短期记忆"]
     D -->|"MySQL 连不上"| H["业务/审计/长期记忆写入受影响"]
-    D -->|"全部就绪"| I["服务监听 10010 端口"]
+    D -->|"全部就绪"| I["服务监听 18080 端口"]
     F --> I
     G --> I
     H --> I
@@ -63,10 +63,10 @@ flowchart TD
 
 服务监听端口和 `/api` 前缀都写死在配置里：
 
-- `agent/src/main/resources/application.yml:29` —— `server.port` 默认 `10010`（可被 `SERVER_PORT` 覆盖）。
+- `agent/src/main/resources/application.yml:29` —— `server.port` 默认 `18080`（可被 `SERVER_PORT` 覆盖）。
 - `agent/src/main/resources/application.yml:31` —— `servlet.context-path: /api`。
 
-所以**所有**后面表里的路径都要在前面加 `/api`。例如 ReAct 的 `/agent/chat` 真实地址是 `http://localhost:10010/api/agent/chat`。
+所以**所有**后面表里的路径都要在前面加 `/api`。例如 ReAct 的 `/agent/chat` 真实地址是 `http://localhost:18080/api/agent/chat`。
 
 ### 2. 大模型 Key 是硬依赖
 
@@ -100,7 +100,7 @@ Java 侧只持有一个 HTTP 端点配置 `application.yml:93` `endpoint: http:/
 
 | 配置键 | 含义 | 默认值 |
 | --- | --- | --- |
-| `server.port` | 服务监听端口 | `10010` |
+| `server.port` | 服务监听端口 | `18080` |
 | `server.servlet.context-path` | 所有路由统一前缀 | `/api` |
 | `spring.datasource.url` | MySQL 连接串（环境变量 `MYSQL_URL`） | 本地 3306/agent |
 | `spring.data.redis.host` / `.port` | Redis 地址（短期会话） | `localhost` / `6379` |
@@ -162,7 +162,7 @@ cd agent
 启动成功后健康检查应当返回 UP：
 
 ```bash
-curl http://localhost:10010/api/actuator/health
+curl http://localhost:18080/api/actuator/health
 ```
 
 ### 第 3 步（可选）：启动 BGE 重排服务
@@ -180,17 +180,17 @@ uvicorn scripts.bge_rerank_server:app --host 0.0.0.0 --port 8080
 
 ```bash
 # 1) 写入一条知识点
-curl -X POST http://localhost:10010/api/insert \
+curl -X POST http://localhost:18080/api/insert \
   -H "Content-Type: application/json" \
   -d '{"question":"千言是什么？","answer":"千言是一个企业级 AI Agent 智能助手。","sourceName":"intro.md"}'
 
 # 2) 带引用地问一句
-curl -X POST http://localhost:10010/api/rag/chat \
+curl -X POST http://localhost:18080/api/rag/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1001,"sessionId":93001,"prompt":"千言是什么？"}'
 
 # 3) 让 Adaptive RAG 自己决定要不要检索（debug 看决策链）
-curl -X POST http://localhost:10010/api/rag/adaptive/chat \
+curl -X POST http://localhost:18080/api/rag/adaptive/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1001,"sessionId":93001,"prompt":"介绍一下千言的能力","debug":true}'
 ```

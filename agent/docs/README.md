@@ -91,7 +91,7 @@ flowchart TD
 | 短期会话记忆 | Redis(不可用降级内存) |
 | 重排 | 外部 BGE 微服务(可选,失败降级规则重排) |
 | 监控 | Micrometer + Prometheus + Actuator |
-| 入口 | `http://localhost:10010/api`(端口 10010 + context-path `/api`) |
+| 入口 | `http://localhost:18080/api`(端口 18080 + context-path `/api`) |
 
 ---
 

@@ -271,13 +271,13 @@ String answer = ensureCitationSection(response.aiMessage().text(), citations);
 
 ## 动手试一试(curl 示例)
 
-> 前缀提醒:`server.port=10010`,`context-path=/api`,所以所有路由都带 `/api`。
+> 前缀提醒:`server.port=18080`,`context-path=/api`,所以所有路由都带 `/api`。
 
 ### 1. 入库一份文档(把 docs 目录里的文件灌进向量库)
 
 ```bash
 # 入库默认 docs 目录(同步返回 chunkCount)
-curl -X POST http://localhost:10010/api/rag/documents/ingest \
+curl -X POST http://localhost:18080/api/rag/documents/ingest \
   -H "Content-Type: application/json" \
   -d '{"path":"src/main/resources/docs"}'
 ```
@@ -285,7 +285,7 @@ curl -X POST http://localhost:10010/api/rag/documents/ingest \
 也可以异步上传单个文件(支持 md / txt / pdf / doc / docx,见 `RagDocumentController.java:86`):
 
 ```bash
-curl -X POST http://localhost:10010/api/rag/documents/upload \
+curl -X POST http://localhost:18080/api/rag/documents/upload \
   -F "file=@./manual.pdf"
 # 返回 jobId,再用 GET /api/rag/documents/jobs/{jobId} 查进度
 ```
@@ -293,7 +293,7 @@ curl -X POST http://localhost:10010/api/rag/documents/upload \
 ### 2. 带引用的问答(核心接口)
 
 ```bash
-curl -X POST http://localhost:10010/api/rag/chat \
+curl -X POST http://localhost:18080/api/rag/chat \
   -H "Content-Type: application/json" \
   -d '{
         "userId": 1,

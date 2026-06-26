@@ -6,6 +6,13 @@ spring:
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${MYSQL_USERNAME:root}
     password: ${MYSQL_PASSWORD:}
+  # Flyway 版本化迁移(D6/M16)。默认关闭以保留"本地无 MySQL 也能起(降级 H2)";
+  # 仅在连得到真实 agent MySQL 库时置 FLYWAY_ENABLED=true(如 docker-compose)。详见 db/README.md。
+  flyway:
+    enabled: ${FLYWAY_ENABLED:false}
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -27,7 +34,7 @@ spring:
 
 
 server:
-  port: ${SERVER_PORT:10010}
+  port: ${SERVER_PORT:18080}
   servlet:
     context-path: /api
 
@@ -146,6 +153,14 @@ memory:
     min-confidence: 0.55
 
 agent:
+  # 管理员令牌:保护 /chat/model-config(P0 过渡;留空=该端点 fail-closed 关闭)。P1 由网关 admin 角色取代。
+  admin:
+    token: ${AGENT_ADMIN_TOKEN:}
+  # CORS 白名单(F03/M1):精确 origin,禁用 "*";默认仅本地前端;生产用 env 注入真实域名。
+  cors:
+    allowed-origins: ${AGENT_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5180}
+    allowed-methods: ${AGENT_CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+    allow-credentials: ${AGENT_CORS_ALLOW_CREDENTIALS:false}
   model:
     provider: ${AGENT_MODEL_PROVIDER:auto}
     openai-compatible:

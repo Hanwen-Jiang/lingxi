@@ -6,7 +6,7 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:10010/api"
+      "value": "http://localhost:18080/api"
     }
   ],
   "item": [
