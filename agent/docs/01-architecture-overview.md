@@ -217,7 +217,7 @@ return switch (decision.getRoute()) {
 
 | 配置键 | 含义 | 默认值 |
 | --- | --- | --- |
-| `server.port` | 服务端口 | `10010` |
+| `server.port` | 服务端口 | `18080` |
 | `server.servlet.context-path` | 全局路由前缀，所有接口都带 `/api` | `/api` |
 | `agent.model.provider` | 模型来源：`auto` 表示有 OpenAI key 走 OpenAI 兼容，否则走 DashScope | `auto` |
 | `agent.react.planner.mode` | ReAct 的规划器模式 | `LLM` |
@@ -234,21 +234,21 @@ return switch (decision.getRoute()) {
 
 ## 动手试一试（curl 示例）
 
-下面三条命令演示「同一个智能入口，靠不同措辞走到不同路径」。注意端口 `10010` 和前缀 `/api`。
+下面三条命令演示「同一个智能入口，靠不同措辞走到不同路径」。注意端口 `18080` 和前缀 `/api`。
 
 ```bash
 # 1) 闲聊 → 兜底走 direct
-curl -X POST http://localhost:10010/api/chat/auto \
+curl -X POST http://localhost:18080/api/chat/auto \
   -H "Content-Type: application/json" \
   -d '{"userId":1,"sessionId":1001,"prompt":"你好，简单介绍下你自己"}'
 
 # 2) 带「对比/依据」关键词 → 走 adaptive-rag
-curl -X POST http://localhost:10010/api/chat/auto \
+curl -X POST http://localhost:18080/api/chat/auto \
   -H "Content-Type: application/json" \
   -d '{"userId":1,"sessionId":1001,"prompt":"对比一下方案 A 和 B 的优劣，要有依据"}'
 
 # 3) 斜杠命令强制指定 → 直接走 agent，忽略关键词
-curl -X POST http://localhost:10010/api/chat/auto \
+curl -X POST http://localhost:18080/api/chat/auto \
   -H "Content-Type: application/json" \
   -d '{"userId":1,"sessionId":1001,"prompt":"/agent-chat 现在几点了"}'
 ```
@@ -267,7 +267,7 @@ curl -X POST http://localhost:10010/api/chat/auto \
 
 ## 常见坑与注意点
 
-1. **别忘了 `/api` 前缀**。所有路由都挂在 `context-path: /api` 下。直接 `POST http://localhost:10010/chat/auto`（漏了 `/api`）会 404。
+1. **别忘了 `/api` 前缀**。所有路由都挂在 `context-path: /api` 下。直接 `POST http://localhost:18080/chat/auto`（漏了 `/api`）会 404。
 2. **斜杠命令优先级最高**，会盖过关键词判断。比如 prompt 是 `/direct-chat 帮我分析这段日志`，虽然有「分析」这个本该触发 adaptive-rag 的词，但因为前面有 `/direct-chat`，最终走的是 direct。
 3. **关键词是「包含匹配」，不是语义理解**。`decide()` 用的是 `String.contains()`（`AutoChatRouterService.java:279`），大小写已统一成小写但**不做分词**。所以「我想 remember 一下」会因为含 `remember` 被判到 agent；而一句没有任何关键词的复杂问题，可能被兜底成 direct，得不到 RAG 加持。这是规则路由的固有局限，心里要有数。
 4. **只有 `direct` 路径支持「逐 token 流式」**。看 `supportsTokenStreaming()`（`AutoChatRouterService.java:114`）——只有 direct 返回 `true`。其他路径走 `/chat/auto/stream` 时，是「先整体算完再一次性当作一个 delta 推给你」，不是真正的逐字流（`AutoChatController.java:73-90`）。

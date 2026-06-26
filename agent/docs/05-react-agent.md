@@ -238,12 +238,12 @@ ReActStep step = ReActStep.builder()
 
 ## 动手试一试(curl 示例)
 
-> 服务前缀是 `/api`(`server.servlet.context-path=/api`),端口 `10010`。下面假设服务跑在本机。
+> 服务前缀是 `/api`(`server.servlet.context-path=/api`),端口 `18080`。下面假设服务跑在本机。
 
 **① 直接回答(不检索)——预期 `strategy=REACT_DIRECT`:**
 
 ```bash
-curl -X POST http://localhost:10010/api/agent/chat \
+curl -X POST http://localhost:18080/api/agent/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1001,"sessionId":91001,"prompt":"帮我把这句话润色一下:系统已经完成升级。"}'
 ```
@@ -251,7 +251,7 @@ curl -X POST http://localhost:10010/api/agent/chat \
 **② 查时间(走工具)——预期 `strategy=REACT_TOOL`,`action.type=CURRENT_TIME`:**
 
 ```bash
-curl -X POST http://localhost:10010/api/agent/chat \
+curl -X POST http://localhost:18080/api/agent/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1001,"sessionId":91002,"prompt":"现在几点?"}'
 ```
@@ -259,7 +259,7 @@ curl -X POST http://localhost:10010/api/agent/chat \
 **③ 知识库检索——预期 `strategy=REACT_HYBRID_RAG`,`needRetrieval=true`,带 `citations`:**
 
 ```bash
-curl -X POST http://localhost:10010/api/agent/chat \
+curl -X POST http://localhost:18080/api/agent/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1001,"sessionId":91003,"prompt":"ORDER-409 是什么原因?请给出引用。"}'
 ```
@@ -267,7 +267,7 @@ curl -X POST http://localhost:10010/api/agent/chat \
 **④ 发邮件被护轨拦下(HIGH 风险需确认)——预期 `toolGovernance.confirmationRequired=true`:**
 
 ```bash
-curl -X POST http://localhost:10010/api/agent/chat \
+curl -X POST http://localhost:18080/api/agent/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1001,"sessionId":91005,"prompt":"请发送邮件给 test@example.com,标题测试,内容这是一封测试邮件。"}'
 ```
@@ -275,7 +275,7 @@ curl -X POST http://localhost:10010/api/agent/chat \
 **⑤ 带 `confirmedTools` 确认后再发——这次才真正执行:**
 
 ```bash
-curl -X POST http://localhost:10010/api/agent/chat \
+curl -X POST http://localhost:18080/api/agent/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1001,"sessionId":91005,"prompt":"请发送邮件给 test@example.com,标题测试,内容这是一封测试邮件。","confirmedTools":["email_send"]}'
 ```
@@ -283,14 +283,14 @@ curl -X POST http://localhost:10010/api/agent/chat \
 **查看已注册工具:**
 
 ```bash
-curl http://localhost:10010/api/agent/tools
+curl http://localhost:18080/api/agent/tools
 ```
 
 > 对应的 Postman 集合在 `docs/postman/` 下:
 > - `react-agent.postman_collection.json` —— 直接回答 / 时间 / 知识库检索这条主链路。
 > - `react-agent-tools.postman_collection.json` —— memory_write / memory_search / email_send(含确认前后两步)/ web_search 的工具编排与治理验证。
 >
-> 把 JSON 导入 Postman,改一下 `baseUrl`(默认 `http://localhost:10010/api`)即可一键跑通。
+> 把 JSON 导入 Postman,改一下 `baseUrl`(默认 `http://localhost:18080/api`)即可一键跑通。
 
 ---
 

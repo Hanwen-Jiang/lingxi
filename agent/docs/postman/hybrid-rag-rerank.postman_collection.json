@@ -1,13 +1,13 @@
 {
   "info": {
     "name": "InfiniteChat-Agent Hybrid RAG + Rerank 测试接口",
-    "description": "用于验证混合检索、RRF 融合、RuleBasedRerank、引用溯源和 cost-aware RAG 指标。默认服务地址：http://localhost:10010/api",
+    "description": "用于验证混合检索、RRF 融合、RuleBasedRerank、引用溯源和 cost-aware RAG 指标。默认服务地址：http://localhost:18080/api",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:10010/api",
+      "value": "http://localhost:18080/api",
       "type": "string"
     },
     {

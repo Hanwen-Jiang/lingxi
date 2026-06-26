@@ -190,13 +190,13 @@ Windows：
 服务地址：
 
 ```text
-http://localhost:10010/api
+http://localhost:18080/api
 ```
 
 Prometheus 指标：
 
 ```text
-http://localhost:10010/api/actuator/prometheus
+http://localhost:18080/api/actuator/prometheus
 ```
 
 ## Demo 流程

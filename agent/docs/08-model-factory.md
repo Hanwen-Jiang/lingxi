@@ -261,12 +261,12 @@ if (!mcpEnabled) {                    // 总开关 mcp.enabled=false(默认) -> 
 
 ## 动手试一试
 
-> 服务端口 `10010`,全局前缀 `/api`。下面以本机为例。
+> 服务端口 `18080`,全局前缀 `/api`。下面以本机为例。
 
 **1）查当前模型配置:**
 
 ```bash
-curl http://localhost:10010/api/chat/model-status
+curl http://localhost:18080/api/chat/model-status
 ```
 
 返回里关注 `provider` / `model` / `configured`。`configured=false` 说明缺 key,这时去聊天会收到友好报错。
@@ -274,7 +274,7 @@ curl http://localhost:10010/api/chat/model-status
 **2)运行时切到通义千问(不重启):**
 
 ```bash
-curl -X POST http://localhost:10010/api/chat/model-config \
+curl -X POST http://localhost:18080/api/chat/model-config \
   -H "Content-Type: application/json" \
   -d '{"provider":"dashscope","apiKey":"sk-你的DashScopeKey","model":"qwen-plus"}'
 ```
@@ -282,7 +282,7 @@ curl -X POST http://localhost:10010/api/chat/model-config \
 **3)再切回 OpenAI 兼容,并把模型换成支持推理的 gpt-5:**
 
 ```bash
-curl -X POST http://localhost:10010/api/chat/model-config \
+curl -X POST http://localhost:18080/api/chat/model-config \
   -H "Content-Type: application/json" \
   -d '{"provider":"openai-compatible","baseUrl":"https://api.openai.com","apiKey":"sk-...","model":"gpt-5.4-mini","reasoningEffort":"high","temperature":0.3}'
 ```
@@ -290,7 +290,7 @@ curl -X POST http://localhost:10010/api/chat/model-config \
 **4)列上游可用模型(仅 OpenAI 兼容有效):**
 
 ```bash
-curl http://localhost:10010/api/chat/models
+curl http://localhost:18080/api/chat/models
 ```
 
 **对照实验**:把上面切换接口和 `docs/postman/react-agent.postman_collection.json` 配合使用——先用该集合里的 ReAct 请求跑一次、记下答案与延迟;再 POST `/chat/model-config` 换供应商;重跑同一请求,直观对比"换模型前后"的表现差异。其余接口集合在 `docs/postman/` 下,可整目录导入 Postman。

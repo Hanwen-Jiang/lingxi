@@ -27,7 +27,7 @@ spring:
 
 
 server:
-  port: ${SERVER_PORT:10010}
+  port: ${SERVER_PORT:18080}
   servlet:
     context-path: /api
 

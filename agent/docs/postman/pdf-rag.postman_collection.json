@@ -1,13 +1,13 @@
 {
   "info": {
     "name": "InfiniteChat-Agent PDF RAG 接口测试",
-    "description": "通过接口验证 PDF 文档入库、RAG 引用溯源和 ReAct Agent 查询。默认服务地址：http://localhost:10010/api",
+    "description": "通过接口验证 PDF 文档入库、RAG 引用溯源和 ReAct Agent 查询。默认服务地址：http://localhost:18080/api",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:10010/api",
+      "value": "http://localhost:18080/api",
       "type": "string"
     },
     {

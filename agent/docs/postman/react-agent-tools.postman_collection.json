@@ -1,13 +1,13 @@
 {
   "info": {
     "name": "InfiniteChat-Agent ReAct 工具编排测试",
-    "description": "验证 ReAct Agent 的 memory_write、memory_search、email_send、web_search 工具编排与 Tool Governance。默认服务地址：http://localhost:10010/api",
+    "description": "验证 ReAct Agent 的 memory_write、memory_search、email_send、web_search 工具编排与 Tool Governance。默认服务地址：http://localhost:18080/api",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:10010/api",
+      "value": "http://localhost:18080/api",
       "type": "string"
     },
     {

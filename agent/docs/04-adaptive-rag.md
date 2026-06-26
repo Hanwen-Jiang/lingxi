@@ -199,33 +199,33 @@ return ruleBasedRetrievalPlanner.plan(request);
 
 ## 动手试一试(curl 示例)
 
-服务跑在 `http://localhost:10010`,所有路由带 `/api` 前缀。下面四个例子覆盖了四种典型策略,记得带 `"debug": true` 才能看到 `retrievalPlan` / `adaptiveTrace` / `evidenceEvaluation` 这些内部决策。
+服务跑在 `http://localhost:18080`,所有路由带 `/api` 前缀。下面四个例子覆盖了四种典型策略,记得带 `"debug": true` 才能看到 `retrievalPlan` / `adaptiveTrace` / `evidenceEvaluation` 这些内部决策。
 
 ```bash
 # 1) 错误码 → 走 KEYWORD
-curl -s -X POST http://localhost:10010/api/rag/adaptive/chat \
+curl -s -X POST http://localhost:18080/api/rag/adaptive/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1001,"sessionId":92001,"prompt":"ORDER-409 是什么原因？请给出引用。","debug":true}'
 
 # 2) 语义类("为什么…") → 走 VECTOR
-curl -s -X POST http://localhost:10010/api/rag/adaptive/chat \
+curl -s -X POST http://localhost:18080/api/rag/adaptive/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1001,"sessionId":92003,"prompt":"为什么 RAG 回答需要引用来源？","debug":true}'
 
 # 3) 信息不足 → FOLLOW_UP_REQUIRED(hit=false，反问补信息)
-curl -s -X POST http://localhost:10010/api/rag/adaptive/chat \
+curl -s -X POST http://localhost:18080/api/rag/adaptive/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1001,"sessionId":92004,"prompt":"这个错误怎么处理？","debug":true}'
 
 # 4) 闲聊/润色 → NO_RETRIEVAL(不检索，直接答)
-curl -s -X POST http://localhost:10010/api/rag/adaptive/chat \
+curl -s -X POST http://localhost:18080/api/rag/adaptive/chat \
   -H "Content-Type: application/json" \
   -d '{"userId":1001,"sessionId":92005,"prompt":"你好，帮我润色一句话：系统已经完成升级。","debug":true}'
 ```
 
 看返回时重点盯这几个字段:顶层的 `strategy`(形如 `ADAPTIVE_KEYWORD`)、`hit`、`rounds`;以及 `debug.retrievalPlan.strategy`、`debug.adaptiveTrace[].topScore/coverageScore`、`debug.evidenceEvaluation.sufficient`、`debug.queryRewrites`。
 
-完整的 8 个用例(含"多轮 Query Rewrite""LLM Planner 模式""debug=false 隐藏调试字段")已经整理在 Postman 集合里,直接导入即可一键跑通:`docs/postman/adaptive-rag.postman_collection.json`(集合内 `baseUrl` 已设为 `http://localhost:10010/api`)。
+完整的 8 个用例(含"多轮 Query Rewrite""LLM Planner 模式""debug=false 隐藏调试字段")已经整理在 Postman 集合里,直接导入即可一键跑通:`docs/postman/adaptive-rag.postman_collection.json`(集合内 `baseUrl` 已设为 `http://localhost:18080/api`)。
 
 ## 常见坑与注意点
 
