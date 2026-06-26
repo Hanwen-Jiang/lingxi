@@ -11,6 +11,7 @@ import com.lou.infinitechatagent.model.dto.StreamChatEvent;
 import com.lou.infinitechatagent.security.AuthPrincipal;
 import com.lou.infinitechatagent.security.CurrentUser;
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,7 +32,7 @@ public class AutoChatController {
     private AutoChatRouterService autoChatRouterService;
 
     @PostMapping
-    public BaseResponse<AutoChatResponse> chat(@RequestBody ChatRequest request,
+    public BaseResponse<AutoChatResponse> chat(@Valid @RequestBody ChatRequest request,
                                                @CurrentUser AuthPrincipal principal) {
         // 网关身份优先(B1):覆盖请求体 userId,贯通到自动路由各子链;过渡期回退 body。
         request.setUserId(principal.resolveUserId(request.getUserId()));
@@ -39,7 +40,7 @@ public class AutoChatController {
     }
 
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<StreamChatEvent>> stream(@RequestBody ChatRequest request,
+    public Flux<ServerSentEvent<StreamChatEvent>> stream(@Valid @RequestBody ChatRequest request,
                                                          @CurrentUser AuthPrincipal principal) {
         request.setUserId(principal.resolveUserId(request.getUserId()));
         AutoRouteDecision decision = autoChatRouterService.decide(request);

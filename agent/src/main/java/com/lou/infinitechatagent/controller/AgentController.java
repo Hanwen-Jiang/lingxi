@@ -15,6 +15,7 @@ import com.lou.infinitechatagent.agent.tool.ToolRegistry;
 import com.lou.infinitechatagent.security.AuthPrincipal;
 import com.lou.infinitechatagent.security.CurrentUser;
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -55,7 +56,7 @@ public class AgentController {
     }
 
     @PostMapping("/chat")
-    public BaseResponse<AgentResponse> chat(@RequestBody AgentRequest request,
+    public BaseResponse<AgentResponse> chat(@Valid @RequestBody AgentRequest request,
                                             @CurrentUser AuthPrincipal principal) {
         // 网关身份优先(B1):覆盖请求体 userId,使其贯通到 ReAct 编排/记忆/审计深层;过渡期回退 body。
         request.setUserId(principal.resolveUserId(request.getUserId()));

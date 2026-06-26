@@ -13,6 +13,7 @@ import com.lou.infinitechatagent.model.dto.StreamChatEvent;
 import com.lou.infinitechatagent.security.AuthPrincipal;
 import com.lou.infinitechatagent.security.CurrentUser;
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,7 +35,7 @@ public class AiChatController {
     private ChatHistoryService chatHistoryService;
 
     @PostMapping("/chat")
-    public BaseResponse<ChatResponse> chat(@RequestBody ChatRequest chatRequest,
+    public BaseResponse<ChatResponse> chat(@Valid @RequestBody ChatRequest chatRequest,
                                            @CurrentUser AuthPrincipal principal) {
         // 网关身份优先(B1);未入网关时回退请求体 userId(过渡)。
         Long userId = principal.resolveUserId(chatRequest.getUserId());
@@ -71,7 +72,7 @@ public class AiChatController {
     }
 
     @PostMapping(value = "/streamChat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<StreamChatEvent>> streamChat(@RequestBody ChatRequest chatRequest,
+    public Flux<ServerSentEvent<StreamChatEvent>> streamChat(@Valid @RequestBody ChatRequest chatRequest,
                                                              @CurrentUser AuthPrincipal principal) {
         Long userId = principal.resolveUserId(chatRequest.getUserId());
         MonitorContext context = MonitorContext.builder()
