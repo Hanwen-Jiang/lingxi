@@ -72,6 +72,8 @@ function parseSsePayload(chunk: string) {
   return {events, tail: blocks.at(-1)?.endsWith("\n\n") ? "" : blocks.at(-1) ?? ""};
 }
 
+export type ApiClient = ReturnType<typeof createApiClient>;
+
 export function createApiClient(apiBase: string) {
   const baseUrl = trimBase(apiBase);
 

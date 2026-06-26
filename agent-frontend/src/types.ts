@@ -230,6 +230,8 @@ export type ChatMode = {
 
 export type MessageStatus = "sending" | "streaming" | "complete" | "error";
 
+export type ChatStatus = "ready" | "submitted" | "streaming" | "error";
+
 export type WorkspaceMessage = {
   id: string;
   role: "user" | "assistant" | "system";
