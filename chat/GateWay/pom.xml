@@ -52,6 +52,12 @@
             <artifactId>jjwt</artifactId>
             <version>0.9.1</version>
         </dependency>
+        <!-- jjwt 0.9.1 在 JDK 9+ 需 JAXB 提供 javax.xml.bind.DatatypeConverter(JDK11+ 已从 JRE 移除),否则验签时抛 ClassNotFoundException 致请求重置。 -->
+        <dependency>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+            <version>2.3.1</version>
+        </dependency>
         <!-- fastjson 1.2.30 已移除：网关源码未使用，且该版本存在反序列化 CVE。 -->
         <dependency>
             <groupId>org.springframework</groupId>

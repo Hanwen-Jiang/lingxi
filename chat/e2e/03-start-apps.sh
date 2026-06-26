@@ -23,8 +23,11 @@ start_jar() {
   (
     cd "$(dirname "$jar")/.."
     set -a; . "$CHAT_ENV"; . "$E2E_ENV"; set +a
-    nohup java ${JAVA_OPTS:-} -jar "$jar" > "$logfile" 2>&1 &
-    echo $! > "$pidfile"
+    # setsid 把进程放进新会话,使其在本 wsl 命令退出后不被 SIGTERM(nohup 只挡 SIGHUP)。
+    # bash 先把自身 pid($$)写入 pidfile,再 exec 成 java(pid 不变)。
+    PIDFILE="$pidfile" JARF="$jar" JOPTS="${JAVA_OPTS:-}" \
+      setsid bash -c 'echo $$ > "$PIDFILE"; exec java $JOPTS -jar "$JARF"' \
+      > "$logfile" 2>&1 < /dev/null &
   )
   echo "started $name  log=$logfile"
 }

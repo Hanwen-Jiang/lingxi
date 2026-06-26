@@ -1,0 +1,132 @@
+/* ------------------------------------------------------------------ *
+ * 灵犀 (Lingxi) design tokens — semantic CSS variables.
+ *
+ * Self-sufficient token layer derived straight from DESIGN.md §2/§6 so the app
+ * builds without the licensed HeroUI Pro CSS artifact (which must be installed
+ * via the CN proxy: hpsetup + HEROUI_PERSONAL_TOKEN — see STATUS S4 blocker).
+ * The variable NAMES match HeroUI's (--background/--surface/--foreground/
+ * --muted/--separator/--accent), so HeroUI Pro components theme correctly the
+ * moment the real package is added — no token rename needed.
+ *
+ * Hard constraints (DESIGN.md): #006FEE is the only vivid accent · pure-black
+ * dark mode · flat depth, no color washes · neutral (not blue-tinted) light
+ * surfaces · no off-brand accent hues.
+ * The @theme mapping that turns these into Tailwind utilities lives in the app's
+ * styles.css.
+ * ------------------------------------------------------------------ */
+
+:root,
+.light,
+[data-theme="light"],
+[data-theme="default"] {
+  color-scheme: light;
+  /* DESIGN.md §2 — neutral (not blue-tinted) light surfaces. */
+  --background: #fafafa; /* neutral-50 app bg */
+  --surface: #ffffff; /* card/input surface */
+  --surface-2: #f4f4f5; /* neutral-100 nested */
+  --foreground: #07111f; /* main text */
+  --muted: #6b7280; /* secondary text */
+  --separator: #e4e4e7; /* neutral-200 borders */
+  --overlay: #ffffff;
+  --accent: #006fee; /* blue-500 — the only vivid accent */
+}
+
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+  /* DESIGN.md §1/§6 — pure black, no ambient wash. */
+  --background: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #111111;
+  --foreground: #fafafa;
+  --muted: #9aa0aa;
+  --separator: #1f1f22;
+  --overlay: #0a0a0a;
+  --accent: #006fee;
+}
+
+/* Brand + real-IM-state tokens (namespaced --lx-*). */
+:root {
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  --lx-accent: #006fee;
+  --lx-accent-strong: #005bc4; /* blue-600, strong action text (light) */
+
+  --lx-radius-row: 14px;
+  --lx-radius-panel: 22px; /* DESIGN.md: cards 18–32px */
+  --lx-radius-panel-lg: 28px;
+
+  /* Connection / delivery signals — quiet (a dot, never a large filled badge). */
+  --lx-state-online: #17c964;
+  --lx-state-offline: #f5a524;
+  --lx-state-reconnecting: #f5a524;
+  --lx-state-error: #f31260;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-width: 0;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  overflow-x: hidden; /* DESIGN.md §5: no horizontal overflow */
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+button,
+a,
+input,
+textarea,
+select {
+  min-width: 0;
+}
+
+/* Quiet scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--foreground) 18%, transparent) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--foreground) 16%, transparent);
+  border-radius: 9999px;
+}
+
+/* DESIGN.md §Interaction: motion subtle, disabled under reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

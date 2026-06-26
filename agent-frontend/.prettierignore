@@ -1,0 +1,12 @@
+dist
+node_modules
+*.min.css
+package-lock.json
+
+# Caches and generated/build artifacts
+.npm-cache
+tsconfig.tsbuildinfo
+
+# Author/agent docs kept verbatim (not part of the formatted source set)
+.codex
+RENAME.md

@@ -19,7 +19,12 @@ import type {
   StreamChatEvent,
 } from "./types";
 
-const DEFAULT_API_BASE = "http://localhost:10010/api";
+// Same-origin relative base. In prod the gateway/edge serves the SPA and
+// forwards /api/** to the agent (D1/D3); in dev Vite proxies /api (see
+// vite.config.ts). Override the whole base with VITE_API_BASE_URL to target a
+// non-default backend. (Was hardcoded to http://localhost:10010/api, which is
+// the chat gateway port — a bug; the agent is reached via /api, not :10010.)
+const DEFAULT_API_BASE = "/api";
 
 export class ApiError extends Error {
   code?: number;
@@ -41,7 +46,7 @@ function trimBase(baseUrl: string) {
   return baseUrl.replace(/\/+$/, "");
 }
 
-function parseSsePayload(chunk: string) {
+export function parseSsePayload(chunk: string) {
   const events: StreamChatEvent[] = [];
   const blocks = chunk.split(/\n\n/);
 
@@ -64,8 +69,10 @@ function parseSsePayload(chunk: string) {
     }
   }
 
-  return {events, tail: blocks.at(-1)?.endsWith("\n\n") ? "" : blocks.at(-1) ?? ""};
+  return {events, tail: blocks.at(-1)?.endsWith("\n\n") ? "" : (blocks.at(-1) ?? "")};
 }
+
+export type ApiClient = ReturnType<typeof createApiClient>;
 
 export function createApiClient(apiBase: string) {
   const baseUrl = trimBase(apiBase);
@@ -114,9 +121,12 @@ export function createApiClient(apiBase: string) {
         body: JSON.stringify(payload),
       }),
     listSessions: (userId: number, limit = 40) =>
-      request<ChatSessionSummary[]>(`/chat/sessions?userId=${encodeURIComponent(userId)}&limit=${encodeURIComponent(limit)}`, {
-        method: "GET",
-      }),
+      request<ChatSessionSummary[]>(
+        `/chat/sessions?userId=${encodeURIComponent(userId)}&limit=${encodeURIComponent(limit)}`,
+        {
+          method: "GET",
+        },
+      ),
     getSession: (userId: number, sessionId: number) =>
       request<ChatSessionDetail>(
         `/chat/sessions/${encodeURIComponent(sessionId)}?userId=${encodeURIComponent(userId)}`,
@@ -132,8 +142,7 @@ export function createApiClient(apiBase: string) {
         `/chat/sessions/${encodeURIComponent(sessionId)}/summarize?userId=${encodeURIComponent(userId)}`,
         {method: "POST"},
       ),
-    chat: (payload: ChatRequest) =>
-      request<ChatResponse>("/chat", {method: "POST", body: JSON.stringify(payload)}),
+    chat: (payload: ChatRequest) => request<ChatResponse>("/chat", {method: "POST", body: JSON.stringify(payload)}),
     autoChat: (payload: ChatRequest) =>
       request<AutoChatResponse>("/chat/auto", {method: "POST", body: JSON.stringify(payload)}),
     ragChat: (payload: ChatRequest) =>
@@ -146,12 +155,7 @@ export function createApiClient(apiBase: string) {
     agentChat: (payload: ChatRequest & {debug?: boolean; confirmedTools?: string[]}) =>
       request<AgentResponse>("/agent/chat", {method: "POST", body: JSON.stringify(payload)}),
     listAgentTools: () => request<unknown[]>("/agent/tools", {method: "GET"}),
-    ingestText: (payload: {
-      fileName?: string;
-      title?: string;
-      content: string;
-      sourceType?: string;
-    }) =>
+    ingestText: (payload: {fileName?: string; title?: string; content: string; sourceType?: string}) =>
       request<DocumentIngestJobResponse>("/rag/documents/text", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -193,19 +197,14 @@ export function createApiClient(apiBase: string) {
       summary?: string;
       confidence?: number;
       source?: string;
-    }) =>
-      request<MemoryItem>("/memory/write", {method: "POST", body: JSON.stringify(payload)}),
+    }) => request<MemoryItem>("/memory/write", {method: "POST", body: JSON.stringify(payload)}),
     listUserMemories: (userId: number, limit = 20, memoryType?: MemoryType) => {
       const params = new URLSearchParams({limit: String(limit)});
       if (memoryType) params.set("memoryType", memoryType);
 
       return request<MemoryItem[]>(`/memory/user/${userId}?${params.toString()}`, {method: "GET"});
     },
-    streamChat: async (
-      payload: ChatRequest,
-      onEvent: (event: StreamChatEvent) => void,
-      signal?: AbortSignal,
-    ) => {
+    streamChat: async (payload: ChatRequest, onEvent: (event: StreamChatEvent) => void, signal?: AbortSignal) => {
       const response = await fetch(`${baseUrl}/streamChat`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
@@ -236,11 +235,7 @@ export function createApiClient(apiBase: string) {
         parseSsePayload(`${buffer}\n\n`).events.forEach(onEvent);
       }
     },
-    autoStreamChat: async (
-      payload: ChatRequest,
-      onEvent: (event: StreamChatEvent) => void,
-      signal?: AbortSignal,
-    ) => {
+    autoStreamChat: async (payload: ChatRequest, onEvent: (event: StreamChatEvent) => void, signal?: AbortSignal) => {
       const response = await fetch(`${baseUrl}/chat/auto/stream`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
