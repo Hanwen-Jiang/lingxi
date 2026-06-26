@@ -1,9 +1,28 @@
 <!doctype html>
-<html lang="zh-CN" class="dark">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>InfiniteChat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>灵犀 Lingxi</title>
+    <meta name="description" content="灵犀 — 懂你的,不只是消息。" />
+    <script>
+      // Apply the saved/system/?theme= color scheme before the bundle loads to
+      // avoid a flash (DESIGN.md §9.3 supports ?theme=dark).
+      (function () {
+        try {
+          var param = new URLSearchParams(location.search).get("theme");
+          var stored = localStorage.getItem("lingxi-theme");
+          var pick = param === "dark" || param === "light" ? param : stored;
+          var dark =
+            pick === "dark" ||
+            pick === "light"
+              ? pick === "dark"
+              : window.matchMedia("(prefers-color-scheme: dark)").matches;
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.dataset.theme = dark ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

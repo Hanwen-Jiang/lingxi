@@ -1,16 +1,31 @@
-import {defineConfig} from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
+import {dirname, resolve} from "node:path";
+import {fileURLToPath} from "node:url";
 
-// Dev proxy points the IM REST routes at the local GateWay (Spring Cloud Gateway).
-// When VITE_API_BASE is set the app talks to a real backend; otherwise it runs on the mock layer.
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import {defineConfig} from "vite";
+
+const root = dirname(fileURLToPath(import.meta.url));
+
+// Real data goes through the chat Spring Cloud Gateway (D1: :10010, /api/v1).
+// VITE_API_BASE overrides; default empty = Mock mode. VITE_GATEWAY targets a
+// non-default gateway (e.g. the E2E segment :10110).
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      "@infinitechat/design-system": resolve(root, "packages/design-system/src/index.ts"),
+      "@": resolve(root, "src"),
+    },
+  },
   server: {
+    host: "127.0.0.1",
+    port: process.env.PORT ? Number(process.env.PORT) : 5273,
     proxy: {
       "/api": {
-        target: process.env.VITE_GATEWAY ?? "http://127.0.0.1:8080",
+        target: process.env.VITE_GATEWAY ?? "http://127.0.0.1:10010",
         changeOrigin: true,
+        ws: true,
       },
     },
   },

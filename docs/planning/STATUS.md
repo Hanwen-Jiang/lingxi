@@ -60,6 +60,21 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-26 · P0 落地:端口 18080 + 止损三件套 + Flyway 基线 DDL
+- 完成:P0 三单元全部落地并提交,**分支 `feat/agent-backend-p0-hardening`(已 push origin,3 commits)**。
+  - ① 端口:`SERVER_PORT` 默认 `10010→18080`(application.yml + .env.example);docs/postman/README 内 `10010` 全刷 `18080`(仅 `RENAME-NOTICE.md` 保留为迁移记录)。commit `843dfc0`。
+  - ② 止损:CORS 去 `*`+credentials 改 env 白名单(默认 localhost:5173/5180,凭据默认关、含 `*` 强制关);`/chat/model-config` 加管理员闸(header `X-Admin-Token`,未配 `AGENT_ADMIN_TOKEN` 则 fail-closed 关闭该端点)+ 丢弃请求体原始 `apiKey`(只用 env key)+ 审计日志;`/memory/item|disable` 加 `userId` 归属校验(非属主按 404,堵猜 memoryId 越权)。commit `85e5319`,离线 `mvnw compile` 绿。
+  - ③ Flyway:引入 `flyway-core`+`flyway-mysql`(BOM 版本),`db/migration/V1__agent_baseline_schema.sql`(5 张 MySQL 元数据/记忆/审计表,镜像现有 SchemaInitializer,全 IF NOT EXISTS)+ `db/pgvector/V1__pgvector_embedding_store.sql`(PgVector 表版本化事实来源)+ `db/README.md`。`spring.flyway.enabled=${FLYWAY_ENABLED:false}` **默认关**。commit `b927a00`,在线 `mvnw compile` 绿(依赖解析通过)。
+- 产出物:`agent/{pom.xml,.env.example}`、`agent/src/main/resources/{application.yml,db/migration/V1__*.sql,db/pgvector/V1__*.sql,db/README.md}`、`agent/src/main/java/.../config/CorsConfig.java`、`.../controller/{ChatHistoryController,MemoryController}.java`;远端分支 `origin/feat/agent-backend-p0-hardening`。
+- 关键决策(自行做出、可能影响他流):
+  - **用 git worktree 隔离开干**:开工时主 checkout 在 `feat/chat-frontend-design-system-shell` 且工作树有 S2/S4 未提交改动,在其上切分支会破坏他流在途工作 → 从 `main` 拉独立 worktree(`E:/jhw/proj-agent-p0`),全部改动只落 `agent/`,主 checkout 与他流改动零扰动。
+  - **Flyway 默认关闭**:本应用只有一个 DataSource(`ragDataSource`,Spring 自动 DataSource 因 `@ConditionalOnMissingBean` 退避),且带 H2 降级;MySQL 方言基线在 H2 会崩,故仅在连得到真实 `agent` MySQL 时由 `FLYWAY_ENABLED=true` 开启,默认关以保"本地无中间件也能起"。
+  - **止损均为过渡机制**:`X-Admin-Token`、`/memory` 的 `userId` 归属校验都是 P0 临时闸,P1 网关身份闭环后由可信 `X-User-Id` + admin 角色取代。
+- 阻塞:无(P0 全部自洽、隔离,无需他流前置)。
+- 交接 → S3:① agent 现默认 `18080`;P1 网关需加 `/api/agent|memory|rag` 路由并纳入验签 + 共用同一 `JWT_SECRET_KEY`,agent 才能入网关拒直连(B1/M17 闭环,我已备好 `GatewayIdentityFilter` 的落点)。② Flyway 与 S3 `chat-common` 的 Flyway 约定需对齐后再退役 agent 的 SchemaInitializer(见下"待中枢确认")。③ docker-compose 的 `agent` MySQL 库建库需 `utf8mb4`。
+- 交接 → S2:① agent 端口 `18080`(内网,前端走相对 `/api` 或经网关,勿再指 10010)。② CORS 现为白名单,默认仅 `localhost:5173/5180`;若 agent-frontend dev 端口不同需配 `AGENT_CORS_ALLOWED_ORIGINS`(或用 Vite proxy 走同源,CORS 即不参与)。③ `/chat/model-config` 现需 `X-Admin-Token` 且不再接受/回显 `apiKey`——与 D10「model-config 收为 admin-only 屏」对齐,前端按 admin 能力设计。
+- 待中枢确认:① **Flyway 默认 off→何时翻 on**:docker-compose 落地后是否由 compose 设 `FLYWAY_ENABLED=true`,以及 compose 的 `agent` MySQL 库初始化(charset/创建)归谁(S1 还是基建伞)。② **SchemaInitializer 退役时机**:P1 是否统一退役三个 `*SchemaInitializer`、改 Flyway 单一所有权,与 S3 `chat-common` 对齐。③ **model-config 的 P0 admin 令牌**是否够用过渡,还是直接等 P1 上网关 admin 角色(当前未配 token 即该端点关闭,不影响普通链路)。
+
 ### 2026-06-26 · 重建 agent/docs 学习文档体系
 - 完成:删旧文档地图(00-roadmap~06、project-structure v1/v2、旧 README、._ 垃圾),保留 Postman→`agent/docs/postman/`;并行 10-agent 重写 12 份文档(README+01-10 章+IMPROVEMENTS.md),15 张 mermaid,交叉链接校验无断链。
 - 产出物:`agent/docs/README.md`、`agent/docs/01..10-*.md`、`agent/docs/IMPROVEMENTS.md`、`agent/docs/postman/`。
@@ -100,6 +115,14 @@
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
 
+### 2026-06-26 · E2E 实跑启动:构建 ✅ + DB 管理员权限阻塞
+- 完成:按中枢下达开跑 `chat/e2e/` 01→04。①填好 `e2e.env`(E2E 专用 `JWT_SECRET_KEY`/`INTERNAL_SERVICE_TOKEN`);②middleware 探活在线(MariaDB 3307 / Redis 6379 / Nacos 8848 / Kafka 9092);③**`02-build.sh` 构建成功**——rsync 修复源码 `/mnt/e/jhw/proj/chat`→`~/projecta-e2e/chat` 后 `mvn package`,7 服务 jar 全部 `BUILD SUCCESS`(9.9s,WSL 仓库已热);④硬化 `01-setup-infra.sh`:建库+授权改用管理员账号(`E2E_DB_ADMIN_USER`/`E2E_DB_ADMIN_PASSWORD`,默认回退应用账号),建库后 `GRANT` 给应用账号。
+- 产出物:`chat/e2e/e2e.env`(gitignored)、`chat/e2e/01-setup-infra.sh`(改:管理员建库+授权);E2E jar 在 `~/projecta-e2e/chat/*/target/`。
+- 关键决策:无(契约级未动)。
+- 阻塞:**建 `InfiniteChat_e2e` 需 MariaDB 管理员权限**——运行账号 `infinite_chat` 仅授于 `InfiniteChat` 库,无 `CREATE DATABASE`(实测 `ERROR 1044`);runtime env 仅含受限账号;`root` 需 socket/sudo(不可非交互)。需用户/中枢二选一:① 导出 `E2E_DB_ADMIN_USER`/`E2E_DB_ADMIN_PASSWORD` 后我重跑;或 ② 以管理员执行 `CREATE DATABASE InfiniteChat_e2e DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL ON InfiniteChat_e2e.* TO 'infinite_chat'@'%'; FLUSH PRIVILEGES;`。**解阻后自动续跑 01(剩余步骤)→04 + 深度场景脚本化**。
+- 交接:无。
+- 待中枢确认:E2E 数据库管理员授权方式(见阻塞)。
+
 ### 2026-06-26 · 隔离式 E2E 测试环境(脚本+文档,未执行)
 - 完成:摸清 WSL 原生部署(projecta-runtime,旧 jar 在跑,修复在 /mnt/e/jhw/proj/chat);设计**与线上零冲突**的隔离 E2E:库 InfiniteChat_e2e · Redis db5 · Nacos 命名空间 e2e · 独立 Kafka :9192 · 端口+100(网关10110)。用命名空间隔离(非 group),因 NettyServer 用 3 参 registerInstance 固定 DEFAULT_GROUP,只有命名空间能隔离 NettyService。顺手修了自引入回归:服务拦截器挂 /** 会 401 掉 /actuator/health,已给 5 个服务加 `excludePathPatterns("/actuator/**","/error")`,全量重编 exit 0。静态验证:5 脚本 bash -n 通过、e2e.env.example source 通过(修了 MYSQL_URL/JAVA_OPTS 引号 bug)、JSON 提取器实测、LF 换行。**未执行 01~04**(等审核)。
 - 产出物:`docs/E2E-TESTING.md`(主交付,含 §9 审核清单)、`chat/e2e/{e2e.env.example,01-setup-infra.sh,02-build.sh,03-start-apps.sh,04-smoke-test.sh,99-stop.sh}`;并对 5 个服务加了 actuator 放行(代码改动)。
@@ -118,6 +141,15 @@
 ---
 
 ## S4 · chat 前端(owns chat-frontend/)
+
+### 2026-06-26 · P0/P1 落地:设计系统 + IA 壳 + 7 静态页 + Mock 地基 + ADR(并行不阻塞)
+- 完成:①抽 `@infinitechat/design-system`(品牌 token 来自 DESIGN.md:#006FEE/纯黑暗色/无渐变/Inter + **IM 真实态原语**:Skeleton/EmptyState/ErrorState(可重试不泄后端串)/ConnectionBanner/StatusDot/DeliveryTick(乐观发送态)/UnreadBadge/StatusPill + 品牌组件 Button/Panel/DividerRow/Field/Avatar + 灵犀 logo/glyph/wordmark + `#ic-rail-*` 图标精灵 + `verify-ui` 禁用模式扫描器);②按 DESIGN.md IA 搭壳(react-router 七目的地 home/messages/contacts/discover/assistant/settings/auth)+ 响应式布局(桌面四栏 rail·会话·主聊·助手 / 平板两栏 / 手机底部 dock)+ 七个静态高保真页;③技术栈 ADR ×2(栈选型 + WS 客户端策略)。④Mock 数据层 `src/api`= 唯一集成缝(Mock/真实同签名,含延迟/乐观/未读/断线→在线/助手 WS 推送回复);react-query(乐观发送+messageId 协调)+ zustand 接好。
+- 产出物:`chat-frontend/packages/design-system/`(整包,源经 alias `@infinitechat/design-system` 引用)、`chat-frontend/src/{app,api,features,store,lib}/*`、`chat-frontend/docs/adr/{0001-tech-stack,0002-websocket-client}.md`、改 `package.json`/`vite.config.ts`/`tsconfig.json`/`index.html`/`src/styles.css`。分支 `feat/chat-frontend-design-system-shell`。
+- 关键决策:**react-router(数据路由)+ react-query + zustand**(ADR 0001);设计系统暂落 `chat-frontend/packages/design-system` 经 Vite alias 引用(免 workspace 重排锁/EPERM,边界保持可上提);**token 自给**——按 DESIGN.md 在 `tokens.css` 定义全套语义变量,**变量名沿用 HeroUI 命名**(`--background/--surface/--foreground/--muted/--separator/--accent`),真实 Pro 包到位即可直接套件、无需改 token。
+- 阻塞:① 真实数据联调仍待 S3 的 B6/B7/B8/M9/M10/M11(P2);② **新发现:chat-frontend `npm install` 从公共镜像装到的 `@heroui-pro/react@1.0.0-beta.6` 是 stub(无 `exports`、无 `dist/css`、无组件子路径),与 agent-frontend 里经 CN 代理装的真实 licensed 工件不同**——故本期设计系统做成原生(不 import 任何 HeroUI 组件),仅按 DESIGN.md 自给 token。要正式用 HeroUI Pro 组件(charts/sheet/sidebar 等)须先用 `hpsetup` + `HEROUI_PERSONAL_TOKEN` 装真实工件。
+- 交接:**给 S2** —— `@infinitechat/design-system` 可消费(token + IM 真实态原语 + Button/Panel/Field/Avatar);若 S2 要 import,需中枢决定是否把包上提为根级 monorepo 包(跨目录,届时再写交接)。**与 S3** —— WS 握手适配层已按接口隔离(ADR 0002),待 B8 选型(`Sec-WebSocket-Protocol` vs `?token=&userUuid=`)定稿后一行切换。
+- 待中枢确认:① 设计系统包是否(及何时)上提为根级 monorepo 包供 S2 直接消费;② **谁负责装真实 HeroUI Pro licensed 工件**(需 `HEROUI_PERSONAL_TOKEN`,中枢查不了 token)——不挡当前原生壳,但挡后续采用 Pro 组件。
+- 验证(DESIGN.md §9):`npm run build` 绿(tsc+vite,1877 模块);`npm run verify:ui` 绿(39 文件零禁用模式);三端×routes `scrollWidth===clientWidth` 全过(桌面 1280 / 手机 375 / 窄屏 320 全部 6+1 路由零横向溢出);亮 `#FAFAFA`/暗 `#000000` 纯黑;主气泡 `rgb(0,111,238)`=#006FEE;主题切换持久化(`lingxi-theme`);核心流跑通(选会话→乐观发送→服务端协调→助手 WS 推送回复→缓存更新);桌面四栏(64/320/576/320)。注:preview 截图工具本会话一直超时(渲染器响应正常,eval/click/fill/snapshot 均可),已改用 eval/inspect 做权威校验。
 
 ### 2026-06-26 · 建立 HeroUI Pro 前端参考体系
 - 完成:通读 3 个 skills(heroui-react-pro/native-pro/design-taste 78 原则)、两个 MCP(heroui-pro 135、native-pro 80)、整面 `E:\HeroUI-Pro` 镜像(21-agent 工作流,~1.96M tokens:5 指南+9 类目+62 Web+34 Native 组件文档+6 模板);产出单文件蒸馏索引。
