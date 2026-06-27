@@ -68,15 +68,13 @@ export function SessionListContent({
       <div className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="truncate text-base font-semibold">Conversations</h1>
-            <p className="truncate text-sm text-muted">
-              {totalSessions ? `${totalSessions} real sessions` : "No saved sessions yet"}
-            </p>
+            <h1 className="truncate text-base font-semibold">我的对话</h1>
+            <p className="truncate text-sm text-muted">{totalSessions ? `共 ${totalSessions} 条对话` : "还没有对话"}</p>
           </div>
           <div className="flex shrink-0 gap-2">
             <Button
               isIconOnly
-              aria-label="Refresh sessions"
+              aria-label="刷新对话"
               className="icon-button"
               size="sm"
               variant="outline"
@@ -86,7 +84,7 @@ export function SessionListContent({
             </Button>
             <Button
               isIconOnly
-              aria-label="New session"
+              aria-label="新对话"
               className="icon-button"
               size="sm"
               variant="outline"
@@ -101,7 +99,7 @@ export function SessionListContent({
           <Search className="size-4 shrink-0" />
           <input
             disabled={!totalSessions}
-            placeholder={totalSessions ? "Search sessions" : "Search available after a session exists"}
+            placeholder={totalSessions ? "搜索对话" : "还没有可搜索的对话"}
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
           />
@@ -111,11 +109,11 @@ export function SessionListContent({
       <ScrollShadow className="min-h-0 flex-1 overflow-y-auto px-3 pb-4" hideScrollBar>
         {sessions.length === 0 ? (
           <div className="rounded-lg bg-surface p-4 text-sm leading-6 text-muted shadow-surface">
-            Send a message or create a session to populate real conversation history.
+            和灵犀聊聊,这里会留下你们的对话。
           </div>
         ) : (
           <ChatListView
-            aria-label="Conversation sessions"
+            aria-label="对话列表"
             className="session-list-view"
             density="compact"
             items={sessions}
@@ -135,14 +133,14 @@ export function SessionListContent({
               <ChatListView.Item
                 key={String(session.sessionId)}
                 id={String(session.sessionId)}
-                textValue={session.title || "Conversation"}
+                textValue={session.title || "新对话"}
               >
                 <ChatListView.Icon>
                   <MessageSquare className="size-4" />
                 </ChatListView.Icon>
                 <ChatListView.ItemContent>
                   <ChatListView.Text>
-                    <ChatListView.Title>{session.title || "Conversation"}</ChatListView.Title>
+                    <ChatListView.Title>{session.title || "新对话"}</ChatListView.Title>
                     <ChatListView.Preview>
                       {session.summary || formatTime(session.lastMessageAt || session.updatedAt)}
                     </ChatListView.Preview>

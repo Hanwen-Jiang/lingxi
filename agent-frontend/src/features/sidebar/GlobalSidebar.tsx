@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useState} from "react";
-import {MessageSquare, Moon, PanelLeft, Settings, Sun} from "lucide-react";
+import {LogOut, MessageSquare, Moon, PanelLeft, Settings, Sun} from "lucide-react";
 
 import {Button} from "@heroui/react/button";
 import {Sheet} from "@heroui-pro/react/sheet";
@@ -43,17 +43,25 @@ export function GlobalSidebar({
   health,
   view,
   onNavigate,
+  onLogout,
 }: {
   health: "checking" | "up" | "down";
   view: "chat" | "settings";
   onNavigate: (view: "chat" | "settings") => void;
+  onLogout?: () => void;
 }) {
   const healthClass = health === "up" ? "bg-success" : health === "checking" ? "bg-warning" : "bg-danger";
 
   return (
     <>
       <Sidebar className="hidden lg:flex">
-        <GlobalSidebarContents healthClass={healthClass} health={health} view={view} onNavigate={onNavigate} />
+        <GlobalSidebarContents
+          healthClass={healthClass}
+          health={health}
+          view={view}
+          onNavigate={onNavigate}
+          onLogout={onLogout}
+        />
       </Sidebar>
     </>
   );
@@ -63,10 +71,12 @@ export function MobileWorkspaceSheet({
   health,
   view,
   onNavigate,
+  onLogout,
 }: {
   health: "checking" | "up" | "down";
   view: "chat" | "settings";
   onNavigate: (view: "chat" | "settings") => void;
+  onLogout?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const isMobileNav = useMediaQuery(MOBILE_NAV_QUERY);
@@ -115,6 +125,7 @@ export function MobileWorkspaceSheet({
                 idPrefix="mobile-"
                 view={view}
                 onNavigate={handleNavigate}
+                onLogout={onLogout}
               />
             </div>
           </Sheet.Dialog>
@@ -130,12 +141,14 @@ function GlobalSidebarContents({
   idPrefix = "",
   view,
   onNavigate,
+  onLogout,
 }: {
   healthClass: string;
   health: "checking" | "up" | "down";
   idPrefix?: string;
   view: "chat" | "settings";
   onNavigate: (view: "chat" | "settings") => void;
+  onLogout?: () => void;
 }) {
   return (
     <>
@@ -184,6 +197,21 @@ function GlobalSidebarContents({
       </Sidebar.Content>
       <Sidebar.Footer>
         <SidebarThemeToggle />
+        {onLogout ? (
+          <button
+            type="button"
+            onClick={onLogout}
+            aria-label="退出登录"
+            className="flex min-h-9 w-full items-center gap-3 rounded-2xl px-2 text-sm text-foreground transition-colors hover:bg-default"
+          >
+            <span className="grid size-5 shrink-0 place-items-center text-muted">
+              <LogOut className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1 truncate text-left" data-sidebar="label">
+              退出登录
+            </span>
+          </button>
+        ) : null}
       </Sidebar.Footer>
     </>
   );

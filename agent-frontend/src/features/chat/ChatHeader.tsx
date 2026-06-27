@@ -141,7 +141,7 @@ function MobileSessionSheet({
       <Sheet.Trigger>
         <Button
           isIconOnly
-          aria-label="Open conversation history"
+          aria-label="打开对话历史"
           className="sidebar-trigger sidebar-trigger--mobile"
           size="sm"
           variant="outline"

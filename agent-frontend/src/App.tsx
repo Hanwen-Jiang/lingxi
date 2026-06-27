@@ -1,15 +1,18 @@
-import {useEffect, useMemo, useRef, useState} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {AnimatePresence} from "motion/react";
 
 import {Sidebar} from "@heroui-pro/react/sidebar";
 
-import {createApiClient, getDefaultApiBase} from "./api";
+import {ApiError, createApiClient, getDefaultApiBase} from "./api";
 import {AnimatedWorkspaceView} from "./components/AnimatedWorkspaceView";
+import {AuthScreen} from "./features/auth/AuthScreen";
+import {useAuth} from "./hooks/useAuth";
 import {useChat} from "./hooks/useChat";
 import {useIngestion} from "./hooks/useIngestion";
 import {useMemory} from "./hooks/useMemory";
 import {useModelConfig} from "./hooks/useModelConfig";
 import {useSessions} from "./hooks/useSessions";
+import {authStore} from "./lib/auth";
 import {CHAT_MODES} from "./lib/constants";
 import {readStorage, STORAGE_KEYS, writeStorage} from "./lib/storage";
 import {ChatHeader} from "./features/chat/ChatHeader";
@@ -33,15 +36,103 @@ function resolveInitialSession(): {id: number; restored: boolean} {
   return {id: Date.now(), restored: false};
 }
 
+// Per D5, contract §5, user/session ids are string-encoded snowflakes on the
+// wire. The hooks currently still expect number — that's an expand/contract
+// step S1/S3 will翻 across the stack; until then we coerce at the auth edge.
+// A non-numeric snowflake (e.g. "9007199…") would lose precision, but the
+// alternative — flipping the whole id type today — is the breaking change the
+// plan defers until S1/S3 翻 D5. The fallback keeps the legacy fixture working.
+function userIdToNumber(id: string): number {
+  const n = Number(id);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
 export function App() {
   const [apiBase] = useState(() => readStorage(STORAGE_KEYS.apiBase) ?? getDefaultApiBase());
-  const [userId] = useState(1);
-  // Computed once on mount; `restored` tells the init effect whether to reopen
-  // the persisted conversation.
+
+  // The api client needs to read the current access token on every request
+  // and notify us when a request comes back 401 / 40100. We keep it stable
+  // across renders (the apiBase rarely changes) and route both through
+  // authStore — the single source of truth for both the api client and the
+  // React layer (useAuth subscribes to the same store). We defer the clear
+  // to a microtask so the request that surfaced the 401 still finishes
+  // throwing (and any sibling requests in the same tick can settle) before
+  // React unmounts the workspace subtree.
+  const handleUnauthorized = useCallback(() => {
+    queueMicrotask(() => authStore.clear());
+  }, []);
+
+  const api = useMemo(
+    () =>
+      createApiClient(apiBase, {
+        getAccessToken: () => authStore.get().accessToken,
+        onUnauthorized: handleUnauthorized,
+      }),
+    [apiBase, handleUnauthorized],
+  );
+
+  const auth = useAuth(api);
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  const handleLogin = useCallback(
+    async (input: {phone: string; password: string}) => {
+      setLoginBusy(true);
+      setLoginError(null);
+      try {
+        await auth.login(input);
+      } catch (error) {
+        // Don't echo raw backend strings; if the contract surfaces a
+        // user-safe message we use it, otherwise a calm fallback.
+        if (error instanceof ApiError) {
+          if (error.status === 401 || error.code === 40100) {
+            setLoginError("手机号或密码不对。");
+          } else if (error.status === 429 || error.code === 42900) {
+            setLoginError("尝试太频繁,稍等一下再试。");
+          } else if (error.status === 422 || error.code === 42200) {
+            setLoginError(error.message || "请检查信息是否填对了。");
+          } else {
+            setLoginError("登录没成功,请重试。");
+          }
+        } else {
+          setLoginError(error instanceof Error ? error.message : "登录没成功,请重试。");
+        }
+      } finally {
+        setLoginBusy(false);
+      }
+    },
+    [auth],
+  );
+
+  // Persist apiBase so a reload restores the same backend target. (sessionId
+  // is persisted by the Workspace shell, scoped to the logged-in user.)
+  useEffect(() => {
+    writeStorage(STORAGE_KEYS.apiBase, apiBase);
+  }, [apiBase]);
+
+  // Until the auth contract is fully wired we gate the entire workspace behind
+  // login. Per D10/D12 this is the only thing an unauthenticated user sees.
+  if (!auth.isAuthenticated || !auth.user) {
+    return <AuthScreen busy={loginBusy} errorMessage={loginError} onLogin={(input) => void handleLogin(input)} />;
+  }
+
+  return <Workspace api={api} apiBase={apiBase} userId={userIdToNumber(auth.user.id)} onLogout={auth.logout} />;
+}
+
+function Workspace({
+  api,
+  apiBase,
+  userId,
+  onLogout,
+}: {
+  api: ReturnType<typeof createApiClient>;
+  apiBase: string;
+  userId: number;
+  onLogout: () => void;
+}) {
   const [initialSession] = useState(resolveInitialSession);
   const [sessionId, setSessionId] = useState(initialSession.id);
   const [view, setView] = useState<"chat" | "settings">("chat");
-  const api = useMemo(() => createApiClient(apiBase), [apiBase]);
   const activeMode = CHAT_MODES[0];
 
   const model = useModelConfig({api});
@@ -60,8 +151,6 @@ export function App() {
     sessionsRef.current = sessions;
   });
 
-  // Pull the stable (useCallback-memoized) actions out so the init effect can
-  // depend on plain identifiers rather than the freshly-rebuilt hook objects.
   const {checkHealth} = model;
   const {refreshSessions, loadSession} = sessions;
 
@@ -70,9 +159,6 @@ export function App() {
     void (async () => {
       try {
         await refreshSessions();
-        // Reopen the persisted conversation if it was restored from storage and
-        // still exists; loadSession throws for a missing/deleted session, which
-        // we swallow so the app stays on a fresh session instead of crashing.
         if (initialSession.restored) {
           await loadSession(initialSession.id);
         }
@@ -82,12 +168,6 @@ export function App() {
     })();
   }, [initialSession, checkHealth, refreshSessions, loadSession]);
 
-  // Persist apiBase and the active sessionId so a reload restores the same
-  // backend target and conversation. Writes are guarded inside writeStorage.
-  useEffect(() => {
-    writeStorage(STORAGE_KEYS.apiBase, apiBase);
-  }, [apiBase]);
-
   useEffect(() => {
     writeStorage(STORAGE_KEYS.lastSessionId, String(sessionId));
   }, [sessionId]);
@@ -95,7 +175,7 @@ export function App() {
   return (
     <Sidebar.Provider collapsible="offcanvas" reduceMotion toggleShortcut={false}>
       <div className="flex h-svh w-full min-w-0 overflow-hidden bg-background text-foreground">
-        <GlobalSidebar health={model.health} view={view} onNavigate={setView} />
+        <GlobalSidebar health={model.health} view={view} onNavigate={setView} onLogout={onLogout} />
         <Sidebar.Main className="min-w-0 flex-1">
           <AnimatePresence initial={false} mode="wait">
             <AnimatedWorkspaceView key={view} direction={view === "settings" ? 1 : -1}>

@@ -60,7 +60,7 @@ export function ModelPickerMenu({
 
   return (
     <div className={`model-picker-menu model-picker-menu--${variant}`} data-models-expanded={isModelListExpanded}>
-      <section aria-label="Reasoning effort" className="model-picker-panel model-picker-panel--reasoning">
+      <section aria-label="推理强度" className="model-picker-panel model-picker-panel--reasoning">
         <div className="model-picker-heading">推理</div>
         <div className="model-picker-list">
           {MODEL_PICKER_REASONING_EFFORTS.map((effort) => {
@@ -97,7 +97,7 @@ export function ModelPickerMenu({
 
       <section
         aria-hidden={!isModelListExpanded}
-        aria-label="Model"
+        aria-label="模型"
         className="model-picker-panel model-picker-panel--models"
       >
         <div className="model-picker-heading">模型</div>
@@ -165,7 +165,7 @@ export function ModelSelectControl({
       <Popover isOpen={isOpen} onOpenChange={setIsOpen}>
         <Popover.Trigger>
           <Button
-            aria-label="Choose model"
+            aria-label="选择模型"
             className="model-select-trigger"
             isDisabled={disabled}
             size="sm"

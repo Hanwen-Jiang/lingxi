@@ -50,7 +50,7 @@ function MobileModelPickerBody({
       <section className="flex flex-col gap-1.5">
         <div className="px-1 text-xs font-semibold text-muted">推理强度</div>
         <ListBox
-          aria-label="Reasoning effort"
+          aria-label="推理强度"
           className="w-full"
           disallowEmptySelection
           selectedKeys={new Set([selectedReasoning])}
@@ -79,7 +79,7 @@ function MobileModelPickerBody({
           </Button>
         </div>
         <ListBox
-          aria-label="Model"
+          aria-label="模型"
           className="w-full"
           disallowEmptySelection
           selectedKeys={new Set([selectedKey])}
@@ -149,7 +149,7 @@ export function MobileModelSheet({
     <Sheet isDetached isOpen={isOpen} placement="bottom" onOpenChange={setIsOpen}>
       <Sheet.Trigger>
         <Button
-          aria-label="Choose model"
+          aria-label="选择模型"
           className="model-select-trigger model-select-trigger--mobile"
           isDisabled={disabled}
           size="sm"

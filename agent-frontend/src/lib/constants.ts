@@ -29,6 +29,17 @@ export const MEMORY_TYPES: MemoryType[] = [
   "REFLECTION",
 ];
 
+// User-facing labels for memory categories — the enum strings are wire values
+// the backend stores, so we translate at the UI edge only.
+export const MEMORY_TYPE_LABELS: Record<MemoryType, string> = {
+  IMPORTANT_FACT: "重要事实",
+  PROJECT_CONTEXT: "项目背景",
+  USER_PREFERENCE: "个人偏好",
+  TECH_STACK: "技术栈",
+  OUTPUT_STYLE: "输出风格",
+  REFLECTION: "反思总结",
+};
+
 export const TERMINAL_JOB_STATUSES = new Set(["SUCCEEDED", "FAILED"]);
 
 export const COMPOSER_BUTTON_STYLE = {

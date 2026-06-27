@@ -22,3 +22,11 @@ export function writeStorage(key: string, value: string) {
     // Ignore: storage unavailable (private mode, quota, disabled).
   }
 }
+
+export function deleteStorage(key: string) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Ignore: storage unavailable (private mode, quota, disabled).
+  }
+}

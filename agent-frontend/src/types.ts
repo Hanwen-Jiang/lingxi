@@ -2,11 +2,38 @@ export type BaseResponse<T> = {
   code: number;
   data: T;
   message: string;
+  // Per docs/planning/03-contracts.md §2, the gateway also injects these.
+  // Optional here because the legacy envelope omits them — expand/contract.
+  traceId?: string;
+  timestamp?: number;
 };
 
 export type HealthResponse = {
   status?: string;
   components?: Record<string, unknown>;
+};
+
+// chat-backend Auth (POST /api/v1/user/login). Per S3's known bug,
+// LoginResponse.userId is currently null and the real id only lives in the
+// JWT sub claim — the auth layer falls back to decoding sub when userId is
+// missing. Phone-vs-email is the chat-backend Auth UX; we keep `account` as
+// the contract-agnostic input field name (S3 may pivot to email).
+export type LoginRequest = {
+  phone: string;
+  password: string;
+};
+
+export type LoginResponse = {
+  userId: string | null;
+  userName?: string;
+  avatar?: string;
+  signature?: string;
+  gender?: number;
+  status?: number;
+  token: string;
+  // Refresh token is not in the current response — S3 still owes us
+  // POST /api/v1/user/refresh. We tolerate either shape.
+  refreshToken?: string;
 };
 
 export type ChatRequest = {

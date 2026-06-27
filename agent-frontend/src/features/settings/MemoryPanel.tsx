@@ -7,9 +7,23 @@ import {Select} from "@heroui/react/select";
 
 import {PanelTitle, Field} from "../../components/ui/primitives";
 import type {ApiClient} from "../../api";
-import {getErrorMessage} from "../../lib/chat";
-import {MEMORY_TYPES} from "../../lib/constants";
+import {MEMORY_TYPES, MEMORY_TYPE_LABELS} from "../../lib/constants";
 import type {MemoryItem, MemoryType} from "../../types";
+
+// User-facing memory status labels — the enum strings are wire values, we
+// translate at the UI edge so D10/D12 (no internal terms) holds.
+function memoryStatusLabel(status?: string) {
+  switch (status) {
+    case "ACTIVE":
+      return "生效中";
+    case "DISABLED":
+      return "已停用";
+    case "SUPERSEDED":
+      return "已被纠正";
+    default:
+      return "生效中";
+  }
+}
 
 export function MemoryPanel({
   api,
@@ -33,7 +47,7 @@ export function MemoryPanel({
 
   async function writeMemory() {
     if (!content.trim()) return;
-    setStatus("Writing memory");
+    setStatus("正在写入…");
     try {
       await api.writeMemory({
         userId,
@@ -48,20 +62,20 @@ export function MemoryPanel({
       onItems(freshItems);
       setContent("");
       setSummary("");
-      setStatus("Memory written");
-    } catch (error) {
-      setStatus(getErrorMessage(error));
+      setStatus("已记下,灵犀会记住。");
+    } catch {
+      setStatus("写入失败,请重试。");
     }
   }
 
   return (
     <section className="space-y-5 xl:col-span-2">
-      <PanelTitle icon={<Brain className="size-4" />} title="Memory" />
+      <PanelTitle icon={<Brain className="size-4" />} title="记忆" />
       <div className="panel-section">
         <div className="space-y-1.5">
-          <span className="text-xs font-medium text-muted">Type</span>
+          <span className="text-xs font-medium text-muted">类型</span>
           <Select
-            aria-label="Memory type"
+            aria-label="记忆类型"
             fullWidth
             value={memoryType}
             onChange={(value) => {
@@ -75,8 +89,8 @@ export function MemoryPanel({
             <Select.Popover>
               <ListBox>
                 {MEMORY_TYPES.map((type) => (
-                  <ListBox.Item key={type} id={type} textValue={type}>
-                    {type}
+                  <ListBox.Item key={type} id={type} textValue={MEMORY_TYPE_LABELS[type]}>
+                    {MEMORY_TYPE_LABELS[type]}
                     <ListBox.ItemIndicator />
                   </ListBox.Item>
                 ))}
@@ -84,22 +98,22 @@ export function MemoryPanel({
             </Select.Popover>
           </Select>
         </div>
-        <Field label="Content">
+        <Field label="内容">
           <textarea
             className="field-input min-h-24 resize-y"
             value={content}
             onChange={(event) => setContent(event.target.value)}
           />
         </Field>
-        <Field label="Summary">
+        <Field label="摘要">
           <input className="field-input" value={summary} onChange={(event) => setSummary(event.target.value)} />
         </Field>
         <div className="settings-action-row">
           <Button className="settings-action-button" isDisabled={!content.trim()} onPress={() => void writeMemory()}>
-            Write
+            记下
           </Button>
           <Button className="settings-action-button" variant="outline" onPress={onRefresh}>
-            Refresh
+            刷新
           </Button>
         </div>
       </div>
@@ -107,15 +121,17 @@ export function MemoryPanel({
       <div className="grid gap-3 md:grid-cols-2">
         {items.length === 0 ? (
           <p className="rounded-2xl bg-surface p-3 text-sm text-muted shadow-surface">
-            No memories loaded for this user. Use Refresh or write a memory.
+            还没有记忆。点"记下"或刷新看看。
           </p>
         ) : (
           items.map((item) => (
             <div key={item.memoryId} className="rounded-2xl bg-surface p-3 shadow-surface">
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-sm font-medium">{item.memoryType ?? "Memory"}</span>
+                <span className="truncate text-sm font-medium">
+                  {item.memoryType ? (MEMORY_TYPE_LABELS[item.memoryType as MemoryType] ?? "记忆") : "记忆"}
+                </span>
                 <span className="rounded-full bg-surface-secondary px-2 py-1 text-xs text-muted">
-                  {item.status ?? "ACTIVE"}
+                  {memoryStatusLabel(item.status)}
                 </span>
               </div>
               <p className="mt-2 text-sm leading-6 text-foreground">{item.summary || item.content}</p>
