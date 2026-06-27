@@ -87,6 +87,23 @@ export const authStore = {
     persist(state);
     emit();
   },
+  // Swap in fresh tokens after a /refresh round-trip without disturbing the
+  // logged-in user. The new JWT may rotate the roles claim, so we re-parse
+  // and merge — id/name/avatar stay on the existing user record.
+  applyRefresh(next: {accessToken: string; refreshToken?: string | null}) {
+    if (!state.user) return;
+    const claims = decodeJwt(next.accessToken);
+    const user: AuthUser = {...state.user, roles: parseRoles(claims)};
+    state = {
+      accessToken: next.accessToken,
+      // S3's /refresh rotates the refresh token; fall back to the existing
+      // one if the response omits it (defensive — contract requires it).
+      refreshToken: next.refreshToken ?? state.refreshToken,
+      user,
+    };
+    persist(state);
+    emit();
+  },
   clear() {
     state = {accessToken: null, refreshToken: null, user: null};
     persist(state);

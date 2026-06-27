@@ -92,9 +92,18 @@ export type ApiClientOptions = {
   // Called for every request to inject Authorization. Return null/undefined to
   // send no Authorization header (e.g. for the login/health endpoints).
   getAccessToken?: () => string | null | undefined;
+  // Returns the persisted refresh token (per contract §7 + S3 P3). When 401
+  // hits, the client first tries to swap it for a fresh access token before
+  // bouncing the user to /auth. Omitting this disables auto-refresh.
+  getRefreshToken?: () => string | null | undefined;
+  // Called after a successful /refresh round-trip with the fresh
+  // LoginResponse so the auth layer can persist the new tokens (and roles
+  // claim if rotated) before the original request retries.
+  onRefreshed?: (response: LoginResponse) => void;
   // Called when the backend signals an authenticated request failed identity
-  // verification (HTTP 401 OR the per-contract 40100 code). The auth layer
-  // wires this to clear the session and redirect to /auth. Don't throw here —
+  // verification (HTTP 401 OR the per-contract 40100 code) AND there is no
+  // viable refresh token (or refresh itself fails). The auth layer wires
+  // this to clear the session and redirect to /auth. Don't throw here —
   // we still throw the ApiError so the caller can show a banner.
   onUnauthorized?: () => void;
 };
@@ -114,11 +123,75 @@ export function createApiClient(apiBase: string, options: ApiClientOptions = {})
     return token ? {Authorization: `Bearer ${token}`} : {};
   }
 
-  async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Shared in-flight refresh: if 5 parallel requests all 401 at once, we only
+  // hit /refresh once and let everyone wait on the same promise. Resolves to
+  // the new access token, or null if refresh isn't possible (no refresh token
+  // available, network fails, server rejects).
+  let refreshInFlight: Promise<string | null> | null = null;
+
+  async function performRefresh(): Promise<string | null> {
+    const refreshToken = options.getRefreshToken?.();
+    if (!refreshToken || !options.onRefreshed) return null;
+    try {
+      const res = await fetch(`${baseUrl}/v1/user/refresh`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({refreshToken}),
+      });
+      if (!res.ok) return null;
+      // Refresh may return either the bare LoginResponse or the wrapped
+      // envelope — same shape concern as the main request unwrap below.
+      const raw = (await res.json()) as BaseResponse<LoginResponse> | LoginResponse;
+      let payload: LoginResponse;
+      if (typeof raw === "object" && raw && "code" in raw && "data" in raw) {
+        const wrapped = raw as BaseResponse<LoginResponse>;
+        if (!ENVELOPE_SUCCESS_CODES.has(wrapped.code) || !wrapped.data?.token) return null;
+        payload = wrapped.data;
+      } else {
+        payload = raw as LoginResponse;
+      }
+      if (!payload.token) return null;
+      options.onRefreshed(payload);
+      return payload.token;
+    } catch {
+      return null;
+    }
+  }
+
+  function tryRefresh(): Promise<string | null> {
+    if (!refreshInFlight) {
+      refreshInFlight = performRefresh().finally(() => {
+        refreshInFlight = null;
+      });
+    }
+    return refreshInFlight;
+  }
+
+  function handleUnauthenticated<T>(body: BaseResponse<T> | T | string, status: number): never {
+    options.onUnauthorized?.();
+    const code =
+      typeof body === "object" && body && "code" in body ? Number((body as BaseResponse<T>).code) : undefined;
+    throw new ApiError(extractEnvelopeMessage(body) ?? "登录已失效,请重新登录。", {status, code});
+  }
+
+  async function request<T>(path: string, init?: RequestInit, retryWithRefresh = true): Promise<T> {
     const response = await fetch(`${baseUrl}${path}`, {
       headers: {"Content-Type": "application/json", ...authHeaders(), ...(init?.headers ?? {})},
       ...init,
     });
+
+    // 401 short-circuits parsing so we can replay the request with a fresh
+    // token before falling back to onUnauthorized.
+    if (response.status === 401 && retryWithRefresh) {
+      const newToken = await tryRefresh();
+      if (newToken) {
+        // Single retry only; if the replay still 401s we surface the auth
+        // failure via the second pass (retryWithRefresh=false).
+        return request<T>(path, init, false);
+      }
+      const body = await readBodySafely<T>(response);
+      return handleUnauthenticated<T>(body, 401);
+    }
 
     const contentType = response.headers.get("content-type") ?? "";
     const body = contentType.includes("json")
@@ -128,11 +201,7 @@ export function createApiClient(apiBase: string, options: ApiClientOptions = {})
     // Real HTTP status takes precedence (per contract §3: stop "always-200 +
     // body code"). 401 means re-auth no matter what the body says.
     if (response.status === 401) {
-      options.onUnauthorized?.();
-      throw new ApiError(extractEnvelopeMessage(body) ?? "登录已失效,请重新登录。", {
-        status: 401,
-        code: typeof body === "object" && body && "code" in body ? Number((body as BaseResponse<T>).code) : undefined,
-      });
+      return handleUnauthenticated<T>(body, 401);
     }
 
     if (!response.ok) {
@@ -144,6 +213,9 @@ export function createApiClient(apiBase: string, options: ApiClientOptions = {})
 
       // Body-code-level unauthenticated (still surfaces as 401 in §3's mapping,
       // but for the legacy "always-200" servers we tolerate it via this check).
+      // We don't retry-on-refresh for envelope 40100 because the underlying
+      // HTTP was 200 — the server already rendered a response, replaying with
+      // a new token usually yields the same envelope.
       if (UNAUTHENTICATED_CODES.has(wrapped.code)) {
         options.onUnauthorized?.();
         throw new ApiError(wrapped.message || "登录已失效,请重新登录。", {code: wrapped.code, status: 401});
@@ -157,6 +229,16 @@ export function createApiClient(apiBase: string, options: ApiClientOptions = {})
     }
 
     return body as T;
+  }
+
+  async function readBodySafely<T>(response: Response): Promise<BaseResponse<T> | T | string> {
+    try {
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("json")) return (await response.json()) as BaseResponse<T> | T;
+      return await response.text();
+    } catch {
+      return "";
+    }
   }
 
   return {

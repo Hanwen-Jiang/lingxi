@@ -66,6 +66,15 @@ export function App() {
     () =>
       createApiClient(apiBase, {
         getAccessToken: () => authStore.get().accessToken,
+        getRefreshToken: () => authStore.get().refreshToken,
+        // Persist refreshed tokens into authStore so subsequent requests pick
+        // them up via getAccessToken — the api client only sees what authStore
+        // holds. Roles are re-parsed from the new JWT in applyRefresh.
+        onRefreshed: (res) =>
+          authStore.applyRefresh({
+            accessToken: res.token,
+            refreshToken: res.refreshToken ?? null,
+          }),
         onUnauthorized: handleUnauthorized,
       }),
     [apiBase, handleUnauthorized],
