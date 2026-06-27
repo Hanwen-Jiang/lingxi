@@ -20,6 +20,14 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-27 · P1b 集成检查点:四流并入 main + STATUS 消解分叉
+- **本轮 P1b 数字(git 核实)**:S1 contract-safe 三件(userId sweep→@CurrentUser / @Valid / 按主体限流 / 结构化日志)✅;S2 品牌+a11y 收尾 + 登录壳+token 管线+Authorization 注入 ✅;S3 **chat-common 模块交付**(`chat/chat-common`,10 Java:Result/ErrorCode/Page/Snowflake/JwtUtil/IdentityHeaders/RequestContext/ApiException)✅(=#1 解锁件);S4 原生基元换真实 HeroUI Pro/OSS + 好友申请 mock action ✅。
+- **用户拍板(3 问)**:① **中枢现在合四条→main + 消解 STATUS 分叉**;② **下轮 S3 鉴权闭环优先**;③ STATUS 治理 = 中枢每次集成时合并(现状)。
+- **已执行**:四条 `p1b` 分支全部 merge 入 `main`(merge commits;无冲突);**STATUS 分叉已消解**(四流 P1b 条目均在统一 STATUS);`chat/chat-common` 已在 main。
+- **下一轮重心 = 鉴权闭环**:S3 先做网关 agent 路由 + 统一 JWT(§6/§7)→ 解锁 S1 翻 `enforce-identity` + S2 接真实登录 → 目标本轮把统一鉴权端到端跑通(E2E 验)。客户端 API(解锁 S4)与数据丢失级 B4/B5 紧随。S1/S2/S4 **从新 main 起分支**。
+- 关键提醒:S1 已声明 OTel 完整分布式 span 待系统级协调(避免与 X-Trace-Id MDC 撞键);错误码归一待 S1 按 chat-common 落地后对齐。
+- 阻塞:无。待中枢确认:无(线上仍 defer)。
+
 ### 2026-06-27 · D13 保持单一 monorepo(拍板)+ 复核:集成+契约已落地
 - **D13**:用户拍板**保持单一 monorepo**(不拆子仓),已写入 master-plan §5(D13)+§10。解决「仓库重建」条遗留的"是否拆分子仓"待确认项。
 - **复核确认 ②(本轮无需重做)**:上一轮已执行的 P1 集成检查点 + chat-common 契约规格**均已在 main**:`main = ce8adc4(= origin/main)`——S4 根 workspace+真实 Pro+WS、S2 设计系统+品牌、S1 身份 expand 全部并入;**C4 已解**(agent-frontend alias 改指根 `packages/design-system`,`tsc -b` exit 0);`docs/planning/03-contracts.md` 在库。故本轮只补 D13 + 重发 prompt,不再重复合并。
