@@ -131,6 +131,21 @@ function pushEventToFrame(e: PushEvent): WireFrame {
   }
 }
 
+/** Canned 灵犀 reply — product-facing copy only (no implementation wording). */
+function assistantReplyFor(content: string): string {
+  const q = content.trim();
+  if (/总结|梳理|回顾|重点/.test(q)) {
+    return "好的,我帮你梳理一下:核心开发组今天把周会改到了下午三点;周明在等你的联调进展。要我把这两件整理成待办吗?";
+  }
+  if (/起草|回复|写|措辞/.test(q)) {
+    return "这是一版草稿,发送前你可以再改:「收到,我下午三点参加周会;联调那边我整理好就同步给你。」需要更轻松或更正式的语气吗?";
+  }
+  if (/你好|在吗|hi|hello/i.test(q)) {
+    return "你好,我是灵犀。可以帮你梳理消息、起草回复、回顾要点 —— 直接说想做什么就行。";
+  }
+  return `收到。关于「${q}」,我可以帮你梳理重点、起草回复,或回顾相关上下文。告诉我下一步想怎么做。`;
+}
+
 export const mockApi: Api = {
   me: () => ME,
   userMap: () => ({[ME.id]: ME, ...PEOPLE}),
@@ -187,23 +202,43 @@ export const mockApi: Api = {
       delivery: "sent",
     };
     messages[sessionId] = [...(messages[sessionId] ?? []), saved];
-    // The assistant "灵犀" replies via a simulated WS push (assistant-in-IM).
-    if (sessionId === "s-lingxi") {
-      setTimeout(() => {
-        const reply: Message = {
-          id: nextId(),
-          sessionId,
-          senderId: "u-lingxi",
-          kind: "text",
-          content: "收到。接入真实网关后,这里会换成 /api/agent/chat 的流式回复。",
-          createdAt: (now() || T0) + 1,
-          delivery: "delivered",
-        };
-        messages[sessionId] = [...(messages[sessionId] ?? []), reply];
-        emit({type: "message", message: reply});
-      }, 700);
-    }
+    // Assistant conversations stream via streamAssistant (not this HTTP path).
     return {message: saved};
+  },
+
+  streamAssistant(_sessionId, content, onEvent) {
+    // SSE-shaped mock: a thinking latency, then char-by-char deltas, then done.
+    // P2 swaps this for a parser over the real `/api/agent/chat` SSE stream.
+    let aborted = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const chars = [...assistantReplyFor(content)];
+    // Chunk into ~5 phrase-sized deltas (real SSE sends token chunks, not single
+    // chars). Keeping the delta count low matters in dev, where each re-render of
+    // the unminified HeroUI tree is heavy; production renders are far cheaper.
+    const take = Math.max(10, Math.ceil(chars.length / 5));
+    let i = 0;
+    timers.push(
+      setTimeout(() => {
+        if (aborted) return;
+        onEvent({type: "start", v: 1});
+        const step = () => {
+          if (aborted) return;
+          if (i >= chars.length) {
+            onEvent({type: "usage", v: 1, tokens: chars.length});
+            onEvent({type: "done", v: 1});
+            return;
+          }
+          onEvent({type: "delta", v: 1, text: chars.slice(i, i + take).join("")});
+          i += take;
+          timers.push(setTimeout(step, 90));
+        };
+        step();
+      }, 320),
+    );
+    return () => {
+      aborted = true;
+      timers.forEach(clearTimeout);
+    };
   },
 
   async markRead(sessionId) {
@@ -231,3 +266,38 @@ export const mockApi: Api = {
     return t;
   },
 };
+
+/** Dev-only: drop the active WS so the WsClient's reconnect path (and the
+ *  `reconnecting` banner) can be exercised on Mock. Bound to `window.__lingxiDropWs`. */
+export function __simulateWsDrop() {
+  activeTransport?.onclose?.(false);
+}
+
+/** Dev-only: simulate an incoming message from another user via WS push — exercises
+ *  the real P2 path (push → dedup → cache + unread badge). Bound to `window.__lingxiIncoming`. */
+export function __simulateIncomingMessage(sessionId = "s-ada") {
+  const senderId = sessionId === "s-ada" ? "u-ada" : "u-lin";
+  const incoming: Message = {
+    id: nextId(),
+    sessionId,
+    senderId,
+    kind: "text",
+    content: "刚看到你的进度,赞!晚点细聊。",
+    createdAt: now() || T0,
+    delivery: "delivered",
+  };
+  messages[sessionId] = [...(messages[sessionId] ?? []), incoming];
+  const c = conversations.find((x) => x.id === sessionId);
+  if (c) {
+    c.lastMessage = incoming;
+    c.lastMessageTime = incoming.createdAt;
+    c.unreadCount += 1;
+  }
+  emit({type: "message", message: incoming});
+}
+
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  const w = window as Window & {__lingxiDropWs?: () => void; __lingxiIncoming?: (s?: string) => void};
+  w.__lingxiDropWs = __simulateWsDrop;
+  w.__lingxiIncoming = __simulateIncomingMessage;
+}
