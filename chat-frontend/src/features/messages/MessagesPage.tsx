@@ -11,6 +11,7 @@ import {
   DeliveryTick,
   EmptyState,
   ErrorState,
+  ScrollShadow,
   SectionLabel,
   SkeletonList,
   StatusDot,
@@ -81,7 +82,7 @@ function ConversationsColumn({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <ScrollShadow hideScrollBar className="min-h-0 flex-1 px-2 pb-3">
         {isLoading ? (
           <SkeletonList rows={6} />
         ) : isError ? (
@@ -93,7 +94,7 @@ function ConversationsColumn({
             <ConversationRow key={c.id} conv={c} users={users} active={c.id === selectedId} />
           ))
         )}
-      </div>
+      </ScrollShadow>
     </aside>
   );
 }
@@ -222,7 +223,7 @@ function ChatColumn({sessionId, className}: {sessionId?: string; className?: str
         </div>
       </header>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-4">
+      <ScrollShadow ref={scrollRef} hideScrollBar className="min-h-0 flex-1 space-y-1 px-4 py-4">
         {isLoading ? (
           <SkeletonList rows={5} />
         ) : isError ? (
@@ -242,7 +243,7 @@ function ChatColumn({sessionId, className}: {sessionId?: string; className?: str
             />
           ))
         )}
-      </div>
+      </ScrollShadow>
 
       <Composer
         value={draft}

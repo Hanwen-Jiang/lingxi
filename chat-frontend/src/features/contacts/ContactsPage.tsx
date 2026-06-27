@@ -12,7 +12,7 @@ import {
   SkeletonList,
 } from "@infinitechat/design-system";
 
-import {useApplies, useFriends} from "@/api/queries";
+import {useApplies, useFriends, useRespondApply} from "@/api/queries";
 import {Page, SignalStrip} from "@/features/_shared/Page";
 
 export function ContactsPage() {
@@ -76,6 +76,7 @@ function AppliesPanel({
   pending: {id: string; fromUser: {name: string}; reason: string}[];
   loading: boolean;
 }) {
+  const respond = useRespondApply();
   return (
     <Panel>
       <div className="flex items-center gap-2 px-4 pb-1 pt-3">
@@ -97,10 +98,21 @@ function AppliesPanel({
               </div>
             </div>
             <div className="flex items-center gap-2 self-end">
-              <Button size="sm" variant="secondary">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={respond.isPending}
+                onClick={() => respond.mutate({applyId: a.id, accept: false})}
+              >
                 忽略
               </Button>
-              <Button size="sm">接受</Button>
+              <Button
+                size="sm"
+                disabled={respond.isPending}
+                onClick={() => respond.mutate({applyId: a.id, accept: true})}
+              >
+                接受
+              </Button>
             </div>
           </DividerRow>
         ))

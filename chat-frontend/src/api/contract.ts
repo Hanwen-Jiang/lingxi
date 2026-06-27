@@ -23,6 +23,8 @@ export interface Api {
   listMessages(sessionId: Id, opts?: ListMessagesOptions): Promise<Page<Message>>; // B6
   listFriends(): Promise<Friend[]>; // M9
   listApplies(): Promise<FriendApply[]>;
+  /** Accept or reject a friend application. Accept adds the applicant to friends. */
+  respondApply(applyId: Id, accept: boolean): Promise<void>;
 
   sendMessage(sessionId: Id, content: string): Promise<SendResult>; // POST /chat/session
   markRead(sessionId: Id): Promise<void>; // M10

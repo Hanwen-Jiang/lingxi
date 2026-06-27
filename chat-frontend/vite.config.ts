@@ -21,6 +21,9 @@ export default defineConfig({
       "@infinitechat/design-system": resolve(root, "../packages/design-system/src/index.ts"),
       "@": resolve(root, "src"),
     },
+    // The design-system is a symlinked workspace package that imports HeroUI /
+    // react-aria; dedupe forces a single React instance (else "invalid hook call").
+    dedupe: ["react", "react-dom"],
   },
   server: {
     host: "127.0.0.1",

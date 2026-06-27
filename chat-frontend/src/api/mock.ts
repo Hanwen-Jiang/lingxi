@@ -146,7 +146,7 @@ export const mockApi: Api = {
     await delay(180);
     const all = messages[sessionId] ?? [];
     // newest `limit` (cursor pagination is exercised by the real branch / B6).
-    return {items: structuredClone(all).slice(-limit), nextCursor: undefined};
+    return {items: structuredClone(all).slice(-limit), nextCursor: undefined, hasMore: false};
   },
 
   async listFriends() {
@@ -157,6 +157,20 @@ export const mockApi: Api = {
   async listApplies() {
     await delay(120);
     return structuredClone(applies);
+  },
+
+  async respondApply(applyId, accept) {
+    await delay(150);
+    const apply = applies.find((a) => a.id === applyId);
+    if (!apply || apply.status !== "pending") return;
+    apply.status = accept ? "accepted" : "rejected";
+    if (accept && !friends.some((f) => f.id === apply.fromUser.id)) {
+      friends.push({
+        id: apply.fromUser.id,
+        name: apply.fromUser.name,
+        presence: apply.fromUser.presence,
+      });
+    }
   },
 
   async sendMessage(sessionId, content): Promise<SendResult> {

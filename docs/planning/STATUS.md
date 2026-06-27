@@ -106,6 +106,23 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-27 · P1b 不返工件:userId sweep 补全 + @Valid + 计费限流 + 结构化日志
+- 完成:P1b item-1(非阻塞、不返工的契约安全活)落地,**分支 `feat/agent-backend-p1b`(push origin,3 commits)**,均从新 main `863af6b` 起。
+  - **① body userId sweep 补全**(`b013906`):上轮未扫的 Rag(`/rag/chat`、`/rag/adaptive/chat`)、Auto(`/chat/auto`、`/chat/auto/stream`)、ChatHistory 会话(`/sessions`、`/sessions/{id}`、`/summarize`、create)全部接 `@CurrentUser`(principal 优先、body/param 回退)。RagDocument 端点不含 userId、无需扫。**至此 agent 全部按 userId 的端点都已收敛到网关身份(仍 expand 相)。**
+  - **② @Valid 激活**(`ad5a8aa`):加 `spring-boot-starter-validation`(Boot3 web 不再传递→原 handler 是 L8 死代码);chat/agent/adaptive 的 `prompt` `@NotNull`;7 个 LLM 端点 `@RequestBody` 加 `@Valid`。保守约束(只 `@NotNull prompt`,保留"空 prompt 问候"路径)→ 不破任何合法请求。
+  - **③ 计费限流**(`a3fa526`):`RateLimitInterceptor` 对 7 个 LLM 端点按主体(网关 userId,否则客户端 IP)固定窗口限流 → **429 + `Retry-After` + 体内 `code 42900`**(契约 §3 RATE_LIMITED,字面量、不动 `ErrorCode` 枚举);默认 30 次/60s 可配;进程内单实例(后续 Redis 令牌桶)。
+  - **④ 结构化日志**(同上 commit):`logging.pattern.level` 注入 `[traceId=%X{traceId}]`(TraceIdFilter 的 MDC),每行带链路 id。
+  - 测试:`RateLimitInterceptorTest` 3 例(capacity/独立桶/disabled)离线绿;`mvnw compile` 绿。
+- 产出物:新 `agent/.../ratelimit/{RateLimitInterceptor,test}.java`;改 `config/WebConfig.java`、`controller/{RagChat,AdaptiveRag,AutoChat,ChatHistory}Controller.java`、`{AiChat,Agent}Controller`(@Valid)、`{ChatRequest,AgentRequest,AdaptiveRagRequest}`(@NotNull)、`pom.xml`、`application.yml`、`.env.example`。
+- 关键决策:**错误码归一 / 真实 HTTP 状态 / 成功 code=0 全部未动**——遵仲裁"S1 暂勿定死 ErrorCode 编号,等 chat-common";限流码 42900 用字面量避免预占枚举。**OTel 完整分布式 span 故意不在 agent 单独半做**(会与已交付的 X-Trace-Id(MDC key `traceId`)撞键、且需 collector + 网关/chat 对齐)→ 作为系统级协调步骤后续;契约要求的 X-Trace-Id 透传+MDC+响应头已满足。
+- 阻塞:无。
+- **待 S3(gated,已"可对接",到位即翻、不返工):**
+  1. **chat-common 交接** → 我按 §3 对齐 agent `ErrorCode` 编号(agent 用 `7xxxx` 域子段)并**同步翻**:成功 `code 200→0`、错误映射真实 HTTP 状态(停 200)、`@Valid` 失败→`422/42200/data.fieldErrors`。**翻前在 STATUS 通知 S2**。
+  2. **网关 `/api/agent|memory|rag` 路由+验签就绪** → 翻 `AGENT_GATEWAY_ENFORCE_IDENTITY=true` 验拒直连 + 删 body/param userId(contract 相)。
+  3. **chat-common Flyway 约定** → 退役 agent 三个 `*SchemaInitializer` 改 Flyway 单一所有权。
+- 交接 → S2(补充):① **限流**:计费端点 `429 + Retry-After + code 42900`,前端应退避重试+提示;② **@Valid**:缺 `prompt` 会被拒(当前 50003+200,同步翻后转 422+42200+fieldErrors);③ ⚠️ **现状提醒**:agent 成功响应当前仍 `code=200`(P1-① 加法保留),与 §2 的 `code=0` 暂不一致——属"与 S3 同步翻"范畴,前端先按 `code===200` 判成功,我会在翻 `0` 前一轮通知。其余(不自塞 X-User-Id、过渡可带 body userId、包络含 traceId/响应头 X-Trace-Id)同 P1-① 记录。
+- 待中枢确认:① S3 chat-common 交接时间(解锁错误码归一 + 同步翻)。② 真实 HTTP 状态 + 成功 `code 0` 同步翻的节奏窗口(S1↔S3 同步、翻前通知 S2)。
+
 ### 2026-06-26 · P1-① 入网关身份(expand 相)+ 包络 traceId 加法
 - 完成:P1 身份基础落地,**分支 `feat/agent-backend-p1-identity`(已 push origin,commit `9133ee5`,从 main ee8d4fb 起)**。
   - **GatewayIdentityFilter**:信任统一网关注入的 `X-User-Id`(+ `X-User-Roles`),解析为 `AuthPrincipal` 挂请求属性;`@CurrentUser` + `CurrentUserArgumentResolver`(经新 `WebConfig` 注册)。
@@ -225,6 +242,28 @@
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
 
+### 2026-06-27 · ✅ unit1 `chat-common` 交付(解锁 S1)+ 交接 S1 附最终错误码枚举
+- 完成:**chat-common 模块实现并导出**(实现 `03-contracts.md`),从新 main 起 worktree `E:/jhw/proj-chat-p1b`(分支 `feat/chat-backend-p1b`),**已 push origin**(commit `a22c3b2`,**full reactor build green** 8 模块)。导出公开契约:
+  - `com.lou.common.api`:`Result<T>{code,message,data,traceId,timestamp}`(@JsonInclude NON_NULL,traceId 取自 RequestContext)、`PageResult<T>{items,nextCursor,hasMore}`、`FieldError{field,message}`、`ApiException(ErrorCode)`、`ErrorCode`(接口)、`CommonError`(枚举,见下)。
+  - `com.lou.common.security`:`JwtUtil`(HS256,sub=string userId,roles,iss=lingxi,access/refresh,密钥 `JWT_SECRET_KEY` 单源)、`IdentityHeaders`、`RequestContext`(ThreadLocal:userId/roles/traceId;`requireUserId()` 缺失即 401、`requireSelf()` 越权 403、`requireAdmin()`)。
+  - `com.lou.common.id`:`SnowflakeIdGenerator`(D9 按实例派生:env `WORKER_ID`/`DATACENTER_ID` 否则 hostname 哈希;`nextStr()` 出 string id)。
+- 产出物:`chat/chat-common/**`、`chat/pom.xml`(reactor 置首)。坐标 `com.lou:chat-common:0.0.1-SNAPSHOT`。
+- **交接 → S1(对齐编号,别两套):** agent(Spring Boot 3,不依赖 chat-common 工件)**镜像**以下最终错误码:
+  ```
+  CommonError(code → http):
+   OK=0→200 · BAD_REQUEST=40000→400 · UNAUTHENTICATED=40100→401 · FORBIDDEN=40300→403
+   NOT_FOUND=40400→404 · CONFLICT=40900→409 · VALIDATION_FAILED=42200→422
+   RATE_LIMITED=42900→429 · INTERNAL=50000→500 · DEPENDENCY_UNAVAILABLE=50300→503
+  域前导段(各域取连续子段,httpStatus 复用大类语义):
+   1xxxx Auth · 2xxxx Contact · 3xxxx Messaging/RedPacket · 4xxxx RealTime
+   5xxxx Offline · 6xxxx Moment · 7xxxx agent
+  VALIDATION_FAILED(422):data.fieldErrors=[{field,message}]
+  ```
+  其余对齐:包络 `{code,message,data,traceId,timestamp}`(code=0 成功);分页 `{items,nextCursor,hasMore}`;JWT **HS256**/sub=string id/roles csv;身份头 `X-User-Id`/`X-User-Roles`/`X-Trace-Id`/`X-Internal-Token`(客户端永不自带前两者)。S1 可立即据此定死编号、停用临时的 agent 自有 ErrorCode 分叉。
+- 关键决策:JWT 用 **HS256**(契约 §7,非现 chat 的 HS512——unit2 翻);错误码用「接口 + 通用枚举 + 各域自定义枚举」携 httpStatus,避免"全 200"。
+- 阻塞:无。
+- 下一单元(进行中):**unit2** 网关纳入 `/api/agent|memory|rag`→18080 + 统一 JWT(HS256/单源密钥)+ 修 `LoginResponse.userId`(返回 sub 的 string id)+ 刷新令牌端点——继续解锁 S1 的 enforce。
+
 ### 2026-06-26 · P1 启动 + ★1 复核:线上跑的是 pre-P0 旧分支(无鉴权),jjwt 崩溃前提不成立
 - 完成:从 main 开 `feat/chat-backend-p1` worktree(`E:/jhw/proj-chat-p1`)。执行★1前先复核线上运行态,**发现前提与实际不符**:
   - 线上 `~/projecta-current/chat` 在分支 `dc9c8e3 "fix chat build config and auth"`(原始基线),**无 `AuthGlobalFilter`、无 `AuthContextInterceptor`**;网关 jar 为 2026-06-16 旧构建。
@@ -271,6 +310,15 @@
 ---
 
 ## S4 · chat 前端(owns chat-frontend/)
+
+### 2026-06-27 · P1-4 原生基元换真实 HeroUI Pro/OSS + 好友申请接 mock action(分支 feat/chat-frontend-p1b)
+- 完成:① **原生基元逐组件换真实 HeroUI**(本会话 heroui MCP 掉线,改按 `AGENT-REFERENCE.md` + 实读 installed `d.ts`/BEM CSS 核验 beta.6 API):**Button** → 包真实 `@heroui/react/button`(react-aria;变体 primary/secondary/tertiary/outline/ghost/danger/danger-soft;`onClick→onPress`、`disabled→isDisabled`、`iconOnly→isIconOnly`、`block→fullWidth` 映射,**调用点零改**);**Switch** → 新增 DS `Switch` 包真实 OSS Switch(v3.2 复合 `Content>Control>Thumb`,checked/onChange),Settings 四个开关换之;**ScrollShadow** → 会话列表 + 消息线程换真实 OSS ScrollShadow(`ref` 转发到滚动元素,线程自动滚底仍 OK)。Avatar/Field/Sheet 因形状/复合锚定风险留作下一增量(现原生件 DESIGN.md 合规)。② **好友申请「接受/忽略」接 mock action**:契约+mock 加 `respondApply(applyId,accept)`(接受加好友、忽略置 rejected),`useRespondApply` mutation 失效 applies+friends,ContactsPage 按钮接通(pending 禁用)。③ **`Page<T>` 对齐 `03-contracts §4`**:加 `hasMore`,mock 响应带 `hasMore:false`。
+- **关键修复(workspace 坑):** 装真实 HeroUI(react-aria)后 dev 报 **Invalid hook call / dual-React**——symlink 的根 design-system 包引入 react-aria,Vite 解析出两份 React。`vite.config` 加 `resolve.dedupe:["react","react-dom"]` + 清 `.vite` 缓存解决(production build 本就过,仅 dev 暴露)。
+- 产出物:`packages/design-system/src/components/{Button,Switch}.tsx`、`.../index.ts`(导出 Switch + 再导出 ScrollShadow)、改 `chat-frontend/src/features/{settings/SettingsPage,messages/MessagesPage,contacts/ContactsPage}.tsx`、`chat-frontend/src/api/{contract,mock,queries,types}.ts`、`chat-frontend/vite.config.ts`。分支 `feat/chat-frontend-p1b`。
+- 关键决策:Button/Switch 包真实 OSS 件(与 agent-frontend 同款,D8),保留 DS 调用 API(onClick/disabled/iconOnly/block)使调用点零改;design-system 作单一 import 面(再导出 ScrollShadow)。
+- 阻塞:无(Mock 全通)。**WS 握手 B8 仍 gated**——S3 unit2(网关+统一 JWT)进行中、**B8 未在 30-plan §5 定形**;定形后我按 ADR 0002 一行切并端到端验。真实数据 wiring 待 S3 客户端 API(B6/B7/M9/M10/M11)交接(Mock 同签名,交接后一处切)。
+- 交接 → **S3**:WS 握手适配层就位(默认 `?token=&userUuid=`,合 `03-contracts §8`);B8 定形请在 STATUS 通知我。→ **S2**:DS 现含真实 HeroUI `Button`/`Switch`/`ScrollShadow`;若 agent-frontend 正式入根 workspace 消费 DS,token/组件 API 我(owner)配合对齐。
+- 验证:`build -w chat-frontend` 绿(2145 模块)+ `verify:ui` 绿(42 文件);运行时实测——真实 Button(`button--primary` BEM,bg `#006FEE`)、真实 Switch(`input[role=switch]` 切主题+持久化 `lingxi-theme`)、ScrollShadow(滚动+自动滚到底)、助手回复经 WS 客户端仍**一次去重**、好友申请接受→加好友+申请消失、三端 6 路由 320/375/desktop 零横向溢出。
 
 ### 2026-06-27 · WS 客户端适配层(ADR 0002)+ 对抗式复核修 4 项潜伏 bug(P1-3 核心)
 - 完成:按 ADR 0002 落地 WS 客户端适配层并对 Mock 推送测通:`WsClient`(指数退避+jitter 重连、心跳 30s、**收到 push 先落缓存再 ACK**、按 `msgUuid` 去重+有界淘汰、连接态机)+ 握手适配层(`buildHandshake`:`?token=&userUuid=` 默认 / `Sec-WebSocket-Protocol` 可切,待 S3 B8 定形)+ 线协议编解码(`MessageDTO{type,msgUuid,data}`、PushTypeEnum/MessageTypeEnum)+ 真实 `createWebSocketTransport`(P2 用)。api 契约 `connectWs`→`openWs(): WsTransport`(Mock=模拟单通道,真实=浏览器 WebSocket);`useWsBridge` 用 WsClient 把 push 桥进 react-query 缓存(push→失效→回填;重连→backfill),连接态→zustand→`ConnectionBanner`。
