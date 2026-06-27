@@ -3,6 +3,7 @@
 // (40-plan §4). The real branch lands in P2 as S3 ships B6/B7/B8/M9/M10/M11.
 import type {
   AssistantStreamEvent,
+  AuthSession,
   Conversation,
   Friend,
   FriendApply,
@@ -27,6 +28,18 @@ export interface Api {
   me(): User;
   /** Lookup table for rendering sender names/avatars. */
   userMap(): Record<Id, User>;
+
+  // --- Auth (03-contracts §7.1 · D14 email model; no phone/SMS) ---
+  /** Send an email verification code. POST /api/v1/user/sendMail {email} */
+  sendMail(email: string): Promise<void>;
+  /** Email + password login. POST /api/v1/user/login {email,password} */
+  login(email: string, password: string): Promise<AuthSession>;
+  /** Passwordless email-code login. POST /api/v1/user/loginCode {email,code} */
+  loginCode(email: string, code: string): Promise<AuthSession>;
+  /** Register with email + password + code. POST /api/v1/user/register */
+  register(email: string, password: string, code: string): Promise<AuthSession>;
+  /** Refresh tokens. POST /api/v1/user/refresh {refreshToken} */
+  refresh(refreshToken: string): Promise<AuthSession>;
 
   listConversations(): Promise<Conversation[]>; // B7
   listMessages(sessionId: Id, opts?: ListMessagesOptions): Promise<Page<Message>>; // B6

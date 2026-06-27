@@ -10,6 +10,7 @@ import type {
   ChatSessionSummary,
   DocumentIngestJobResponse,
   HealthResponse,
+  LoginCodeRequest,
   LoginRequest,
   LoginResponse,
   MemoryItem,
@@ -18,6 +19,9 @@ import type {
   ModelListResponse,
   ModelStatusResponse,
   RagQueryResponse,
+  RegisterRequest,
+  SendMailRequest,
+  SendMailResponse,
   StreamChatEvent,
 } from "./types";
 
@@ -157,12 +161,15 @@ export function createApiClient(apiBase: string, options: ApiClientOptions = {})
 
   return {
     baseUrl,
-    // chat-backend Auth (per 03-contracts.md §7 + §6 routing).
+    // chat-backend Auth (per 03-contracts.md §7.1 D14 — email model).
+    sendMail: (payload: SendMailRequest) =>
+      request<SendMailResponse>("/v1/user/sendMail", {method: "POST", body: JSON.stringify(payload)}),
+    register: (payload: RegisterRequest) =>
+      request<LoginResponse>("/v1/user/register", {method: "POST", body: JSON.stringify(payload)}),
     login: (payload: LoginRequest) =>
       request<LoginResponse>("/v1/user/login", {method: "POST", body: JSON.stringify(payload)}),
-    // S3 still owes this endpoint — call site treats it as best-effort. When it
-    // 404s (current state) we treat the access token as non-refreshable and
-    // require re-login on expiry.
+    loginCode: (payload: LoginCodeRequest) =>
+      request<LoginResponse>("/v1/user/loginCode", {method: "POST", body: JSON.stringify(payload)}),
     refresh: (refreshToken: string) =>
       request<LoginResponse>("/v1/user/refresh", {method: "POST", body: JSON.stringify({refreshToken})}),
     health: () => request<HealthResponse>("/actuator/health", {method: "GET"}),

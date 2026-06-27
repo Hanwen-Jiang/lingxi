@@ -15,6 +15,19 @@ export interface User {
   presence?: Presence;
 }
 
+/**
+ * Auth session (03-contracts §7.1 LoginResponse, D14 email model). Identity is
+ * the email; `token`/`refreshToken` drive Authorization + 401-refresh (D2). No
+ * phone. Persisted to localStorage; the real flow replaces only the mock api.
+ */
+export interface AuthSession {
+  userId: Id;
+  userName: string;
+  avatar?: string;
+  token: string;
+  refreshToken: string;
+}
+
 export type ConversationKind = "single" | "group" | "assistant";
 
 export type MessageKind = "text" | "image" | "redpacket" | "system";

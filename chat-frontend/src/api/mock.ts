@@ -3,7 +3,16 @@
 // optimistic send, assistant streaming, WS push — because the demoted prototype
 // only ever modeled "always success" (40-plan §1 risk note).
 import type {Api, SendResult} from "./contract";
-import type {Conversation, Friend, FriendApply, Message, Page, PushEvent, User} from "./types";
+import type {
+  AuthSession,
+  Conversation,
+  Friend,
+  FriendApply,
+  Message,
+  Page,
+  PushEvent,
+  User,
+} from "./types";
 import {decodeFrame, encodeFrame, OUT, PUSH, type WireFrame, type WsTransport} from "./ws/transport";
 
 const ME: User = {id: "u-me", name: "我", presence: "online", signature: "在线"};
@@ -146,9 +155,51 @@ function assistantReplyFor(content: string): string {
   return `收到。关于「${q}」,我可以帮你梳理重点、起草回复,或回顾相关上下文。告诉我下一步想怎么做。`;
 }
 
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/** Mock auth session — keeps ME's identity so the IM's "我" stays consistent. */
+function mockSession(): AuthSession {
+  return {
+    userId: ME.id,
+    userName: ME.name,
+    avatar: ME.avatar,
+    token: `mock-jwt-${nextId()}`,
+    refreshToken: `mock-refresh-${nextId()}`,
+  };
+}
+
 export const mockApi: Api = {
   me: () => ME,
   userMap: () => ({[ME.id]: ME, ...PEOPLE}),
+
+  // --- Auth (D14 email model; no phone/SMS) ---
+  async sendMail(email) {
+    await delay(420);
+    if (!EMAIL_RE.test(email)) throw new Error("请输入有效的邮箱地址");
+  },
+  async login(email, password) {
+    await delay(520);
+    if (!EMAIL_RE.test(email)) throw new Error("请输入有效的邮箱地址");
+    // Mock rule: any email + a ≥6-char password signs in; shorter shows the error state.
+    if (!password || password.length < 6) throw new Error("邮箱或密码不正确");
+    return mockSession();
+  },
+  async loginCode(email, code) {
+    await delay(520);
+    if (!EMAIL_RE.test(email)) throw new Error("请输入有效的邮箱地址");
+    if (!/^\d{6}$/.test(code)) throw new Error("验证码应为 6 位数字");
+    return mockSession();
+  },
+  async register(email, password, code) {
+    await delay(640);
+    if (!EMAIL_RE.test(email)) throw new Error("请输入有效的邮箱地址");
+    if (password.length < 6) throw new Error("密码至少 6 位");
+    if (!/^\d{6}$/.test(code)) throw new Error("验证码应为 6 位数字");
+    return mockSession();
+  },
+  async refresh(_refreshToken) {
+    await delay(180);
+    return mockSession();
+  },
 
   async listConversations() {
     await delay(140);

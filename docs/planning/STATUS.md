@@ -122,6 +122,24 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-27 · P3 鉴权闭环(agent 侧):翻 enforce + 删 body userId + 退役 X-Admin-Token
+- 完成:S3 网关 front agent(`043c2bb` 在 main)后,完成 agent 侧 contract 相闭环。**分支 `feat/agent-backend-p3`(push origin,commit `a68b2a7`,从新 main `1c722aa` 起)**:
+  - **翻 `enforce-identity` 默认 true(item 1)**:非公开请求缺失/非法网关注入的 `X-User-Id` 一律 **401**(拒直连/绕过);`GatewayIdentityFilter` @Value 默认 + `application.yml` + `.env.example` 全翻 true。本地无网关联调设 `AGENT_GATEWAY_ENFORCE_IDENTITY=false` 并自带 X-User-Id。
+  - **删 body/param userId 回退(contract 相,B1)**:移除 `AuthPrincipal.resolveUserId`,控制器改用 `requireUserId()`(缺失 401);`/memory/user/{userId}` 用 `requireSelf`(越权 403);移除 sessions/memory/toolAudit 的 `@RequestParam userId`;请求体 userId 被主体覆盖(客户端值永不被信)。reflection 端点也主体化。**至此 agent 全栈只信网关身份。**
+  - **退役 P0 `X-Admin-Token`**:`/chat/model-config` 仅认网关注入的 admin 角色(否则 403);删 token 字段/header/常量时比较 + `agent.admin.token`/`AGENT_ADMIN_TOKEN`。
+  - **item 2(code=0 + 真实 HTTP 状态)**:P2 已落 main、本轮确认 live;错误码 7xxxx 域(P2 已做)。
+- 产出物:`security/{AuthPrincipal,GatewayIdentityFilter}.java`、`controller/{AiChat,Agent,Memory,RagChat,AdaptiveRag,AutoChat,ChatHistory}Controller.java`、`application.yml`、`.env.example`、`AuthPrincipalTest`(改测 requireUserId/requireSelf)。
+- 关键决策:**enforce 默认 true = secure by default**;body userId 字段保留为内部载体但客户端值总被 principal 覆盖(语义上"删 body userId")。
+- 验证:**test-compile 全过**(全量 sweep 编译一致,无 resolveUserId 残留);`AuthPrincipalTest`(requireUserId→401 / requireSelf→403 / isAdmin)进程内**绿**。⚠️ **两个 Mockito 过滤器测试(GatewayIdentityFilter/RateLimit)本轮未能执行**——主机 OOM(G1 1GB mmap 失败)起不了 fork JVM,被迫 `forkCount=0` 又破 Mockito inline mock-maker;两者逻辑这轮未改、P2 已绿。**请 HUB/CI 在非受限主机复跑。**
+- **配合全栈鉴权 E2E(item 3):agent 侧已就绪**——经网关带 token→注入 X-User-Id→200;直连无头→401;伪造 X-User-Id 由网关剥离(网关职责,同 T11)。**全栈 E2E(agent 经网关 200 / 直连 401)需中枢/S3 跑**(我无法在本环境起 WSL 中间件 + 多服务全栈)。
+- **交接 → S2(重要,可能影响 dev 联调):**
+  1. ⚠️ **enforce 已默认 true** → agent-frontend **必须经统一网关(:10010)访问 agent**(网关注入 X-User-Id);**直连 agent:18080 将 401**。dev proxy 应指向网关,而非直连 18080;或纯本地无网关时设 `AGENT_GATEWAY_ENFORCE_IDENTITY=false` 并自带 X-User-Id 头。
+  2. **body/param userId 已彻底移除**——不要再传(已忽略),userId 来自网关身份。
+  3. **model-config 仅 admin 角色**(网关 `X-User-Roles` 含 admin);`X-Admin-Token` 已废。
+  4. 成功 `code=0` + 真实 HTTP 状态已 live(你 `{0,200}` 双兼容,无须改)。
+- 阻塞:无(agent 侧闭环完成)。
+- 待中枢确认:① **HUB/CI 复跑 Mockito 测试**(本机 OOM 跑不了)。② **全栈鉴权 E2E**(agent 经网关 200 / 直连 401)由中枢/S3 验。③ **D5 string id**(下轮做,翻前通知 S2)。④ **Flyway 退役 SchemaInitializer** 本轮未做(非冲刺必需;仍需 Flyway 双兼容 MySQL/H2 成单一 owner 的独立单元)。
+
 ### 2026-06-27 · P2 错误码归一 + 真实 HTTP 状态翻(items 2+3;依赖 S3 chat-common 已交付)
 - 完成:吃透 S3 已交付的 chat-common(`a22c3b2`,unit1),按其最终 `CommonError` 表把 agent 包络/错误码**一次性版本化翻**,落分支 **`feat/agent-backend-p2`(push origin,commit `50bad45`,从新 main `e182a0c` 起)**:
   - **错误码归一(item 2)**:重写 `common/ErrorCode`,每码带真实 `httpStatus`,对齐 chat-common 规范码(`0/40000/40100/40300/40400/40900/42200/42900/50000/50300`)+ agent 域 `7xxxx`(`SENSITIVE_WORD_ERROR=71000→400`)。**删掉 chat 继承的死码**(`TOKEN_*`、`70xxx` 用户、`90xxx` WS 等,全 0 引用)——停用 agent 自有分叉。
@@ -210,6 +228,15 @@
 ---
 
 ## S2 · agent 前端(owns agent-frontend/)
+
+### 2026-06-27 · P3 单元 1 · D14 邮箱登录 UI(close-loop-ready)
+- 完成:从新 main(1c722aa)起 `feat/agent-frontend-p3` 分支并 push origin(HTTPS、未合 main)。**提交 4f1da78**。前端按 §7.1 D14 邮箱模型彻底改造,**与 S3 unit1b(`04ec462` `feat/chat-backend-p3`)的 5 个端点 wire-compatible**——S3 一合 main,前端零改即可端到端跑通邮箱登录链路。① `types.ts`:删 phone DTO,加 `LoginCodeRequest`/`RegisterRequest`/`SendMailRequest`/`SendMailResponse`,`LoginRequest.email` 取代 phone。② `api.ts`:加 `sendMail`/`register`/`loginCode` 三薄客户端到 `/v1/user/{sendMail,register,loginCode}`(已有 `login`/`refresh`)。③ `hooks/useAuth.ts`:重写为单 `applySession` 兜底任一 LoginResponse,新增 `loginPassword`/`loginCode`/`register`/`sendMail`/`logout` actions(保留 JWT sub fallback)。④ `features/auth/AuthScreen.tsx`:全屏重写邮箱模型,三模式(密码 / 邮箱验证码 / 注册)通过 `AuthMode` 驱动;**60s 重发倒计时**(props `resendCooldown`/`codeNotice`/`onSendCode`);"注册一个" / "已经有账号? 去登录"互转入口;**完全无手机号字段**;所有文案 zh-CN 品牌化、不回显后端原始串。⑤ `App.tsx`:`handleLogin` 拆 4 handler(sendCode/loginPassword/loginCode/register),共享 `mapAuthError(error, mode)` 映射 401/429/422/409(D4 包络 {0,200}↔真实 HTTP 双兼容),1Hz 倒计时 tick。⑥ 新增 13 测试:**`useAuth.test.tsx`(6 条)**——D14 路由 + sub fallback + missing-token rejection;**`AuthScreen.test.tsx`(7 条)**——三模式 UI 契约 + 邮箱有效性 gates submit + 错误 banner 品牌文案。⑦ preview 实测:邮箱 input 在、手机号 input 不在、两 tabs + 注册入口齐全,**零英文残留**(snippet 仅 name/example/Lingxi 是 placeholder + 品牌)。**5 大门**:tsc/lint/prettier/test(7 文件 / **42 测试**,新增 13)/build 全 exit 0。
+- 产出物:`agent-frontend/src/{types.ts,api.ts}`、`agent-frontend/src/hooks/useAuth.ts`、`agent-frontend/src/features/auth/AuthScreen.tsx`、`agent-frontend/src/App.tsx`、新增 `agent-frontend/src/hooks/useAuth.test.tsx` + `agent-frontend/src/features/auth/AuthScreen.test.tsx`。
+- 关键决策:**`register` 自动建立 session**(chat Auth /register 返回 LoginResponse 含 token)——避免注册→再登录两次往返。**`AuthMode` 类型导出**给 App 用,`handleModeChange` 在切登录/注册时清空 stale 错误/notice banner。
+- 阻塞:无(client wire-compatible,等 S3 unit1b 合 main)。
+- 交接 → **HUB**:可在下一轮集成检查点把 `feat/chat-backend-p3`(S3 unit1b)+ `feat/agent-frontend-p3`(本)+ 其他流并入 main → 集成测试时直接跑邮箱链路。
+- 交接 → **S1**:S3 unit1a 已 front /api/agent,可以翻 `AGENT_GATEWAY_ENFORCE_IDENTITY=true`(本前端不发 X-User-Id,网关会注入)。
+- 待中枢确认:dev proxy A/B 方案选定(见 `docs/planning/dev-seed-accounts.md §7`)——闭环测试前需要前端 dev proxy 能打到 chat Auth(`/v1/user/login`)。
 
 ### 2026-06-27 · P2 单元 1 · model-config admin 门控(D10)+ apiKey 字段移除 + 行为测试
 - 完成:从新 main(e182a0c)起 `feat/agent-frontend-p2` 分支并 push origin(HTTPS、不合 main)。① `ModelConfigPanel` 加 `isAdmin` prop:非 admin 时显示"仅管理员可修改模型配置"的 Lock banner,不渲染表单。② **彻底移除 apiKey 字段**:input、placeholder、payload、`ModelConfigRequest` 类型字段全部删除 — D10 要求"前端不接收/回显 apiKey"(后端按 env 读)。③ `SettingsPanel` 内"运行环境"(API base/User ID/Session ID)同样 admin-only;**连接状态 chip 仍对所有用户可见**(应用是否在线是用户向);Ingestion + Memory 是用户自己的资源,保留可见。④ `App.tsx` 从 `auth.user` 派生 `isAdmin` + 新增 `VITE_DEV_ASSUME_ADMIN=true` dev-only 旁路(便于在 S3 unit2 ship `roles` claim 前本地测 admin 屏),`.env.example` 文档化。⑤ **新增 `SettingsWorkspace.test.tsx` 4 条 D10 行为测试**(普通用户态:连接 chip ✓/Ingestion ✓/Memory ✓/banner ✓/运行环境 ✗/模型配置 form ✗;admin 态:运行环境+表单 ✓/banner ✗;以及 apiKey 字段完全不渲染验证)。⑥ `test/setup.ts` 加 `matchMedia`/`scrollIntoView`/`ResizeObserver` polyfill(HeroUI Pro Sheet+Sidebar+ScrollShadow 挂载需要)。提交 ab5c294。**5 大门**:tsc/lint/prettier/test(5 文件 / **29 测试**,新增 4 条 admin gate)/build 全 exit 0。
@@ -365,6 +392,14 @@
 ---
 
 ## S4 · chat 前端(owns chat-frontend/)
+
+### 2026-06-27 · auth 对齐 D14 邮箱登录模型 + 鉴权门 + 会话持久化(分支 feat/chat-frontend-p3)
+- 完成:① **D14 auth seam(契约+mock 同签名,P2 一处切真实)**:`sendMail{email}` / `login{email,password}` / `loginCode{email,code}`(免密)/ `register{email,password,code}` / `refresh{refreshToken}` → `AuthSession{userId(string),userName,avatar,token,refreshToken}`(`03-contracts §7.1`,**邮箱身份、无手机号/短信**);mock 校验邮箱格式 + 密码≥6 + 6 位码(短密码/坏码→错误态),会话保 ME 身份(IM「我」零扰动)。② **auth store**(zustand + localStorage `lingxi.auth` 持久化 + 启动恢复)+ mutation(`useSendMail/useLogin/useLoginCode/useRegister`,成功即 signIn)。③ **AuthPage 重写(D14)**:邮箱+密码 / 邮箱验证码(免密)两种登录 + 邮箱码注册,**无手机号**;发送验证码(60s 冷却 + 「已发送到 {email}」提示)、加载态(请稍候/发送中)、错误态(`role=alert`)、成功跳转;沿用 DESIGN.md account-first + 段控 + trust strip。④ **鉴权门(D2)**:`RequireAuth` 无会话→`/auth`、`RedirectIfAuthed` 已登→`/`;Settings「退出登录」清会话→`/auth`。
+- 产出物:`chat-frontend/src/{store/auth.ts,api/auth.ts}`(新)、改 `chat-frontend/src/api/{types,contract,mock}.ts`、`.../features/auth/AuthPage.tsx`、`.../app/router.tsx`、`.../features/settings/SettingsPage.tsx`。分支 `feat/chat-frontend-p3`。
+- 关键决策:auth 主体=邮箱(无手机号,合 D14);mock 会话沿用 ME 身份(零扰动既有 IM 数据);auth 表单仍用原生 DS `TextField`(HeroUI v3 `TextField` 是容器复合、type/value 落点 root vs Input,无 MCP 难核验,**不返工**)。
+- 阻塞:无(Mock 全通)。**B8 仍 gated**(S3 本轮专注鉴权闭环、unit1a 网关 front agent;B8 未在 `30-plan §5` 定形)→ WS 真实 transport + 一行切待 S3。真实数据 wiring 待 S3 客户端 API(B6/B7/M9/M10/M11)。
+- 交接 → **S3**:auth seam 就位;接真实 `/api/v1/user/{sendMail,login,loginCode,register,refresh}` 时一处切(`LoginResponse` 形已对齐 §7.1、`userId` string)。B8/客户端 API 就绪请在 STATUS 通知我。→ **S2**:如登录 UI 共栈,可复用同款 auth seam/store 形态。
+- 验证:`build -w chat-frontend` 绿(2148 模块)+ `verify:ui` 绿(45 文件);运行时实测——**无会话→/auth 门**、**邮箱+密码登录→进应用+localStorage 持久化**、**错误态**(短密码 `role=alert`「邮箱或密码不正确」)、**验证码登录**(发送→「发送中…」→「重新发送 (52s)」冷却+「已发送到」提示→填 6 位→登录进应用)、**注册**(切「注册灵犀」→进应用)、**退出→清会话→/auth**;`/auth` 320 零横向溢出。注:本机 dev 偏慢(mock 延迟+慢 dev server,态切约 1–3s 才显),production 快。
 
 ### 2026-06-27 · 灵犀助手流式会话壳(Mock,SSE 就绪)+ 重连/收到推送态可演示(分支 feat/chat-frontend-p2)
 - 完成:① **灵犀助手流式会话壳(P2 接 `/api/agent/chat` 零改 UI)**:加 `AssistantStreamEvent`(`03-contracts §9`:`{type,…}` + 版本 `v`,type∈start/delta/usage/done/error)+ `Message.streaming`;契约+mock 加 `streamAssistant(sessionId,content,onEvent): abort`(SSE 形:思考延迟→分块 delta→usage→done;**产品向文案**,无实现/网关字样);`useAssistantStream` hook 把流写进 react-query 消息缓存(乐观用户消息 + 逐块增长的助手消息;stop 中止留存已生成)。**助手会话(s-lingxi)在 IM 内流式**(ChatColumn 按 `kind==="assistant"` 走流式),`/assistant` 目的地重写为**真实流式聊天**(命令条 + 共享 s-lingxi 线程 + 流式 composer,与 IM 同一缓存)。流式 UI:思考点(原生 ThinkingDots)→ 增长文本 + 光标 → 完成;流中 composer 显「停止生成」。抽 `features/messages/parts.tsx`(`MessageBubble`+`Composer`)给 IM 与助手页复用;`MessageBubble` memo 化(流时只重渲染增长气泡)。② **重连/收到推送态可演示**:dev 钩子 `window.__lingxiDropWs()`(掉线→WsClient 重连→「重新连接…」横幅→恢复在线,**实测通过**)、`window.__lingxiIncoming()`(他人消息经 WS push→去重→会话列表末条+未读角标,**实测列表更新**);二者保留 `emit`/WS push 路径存活(P2 真实他人消息同此路径)。
