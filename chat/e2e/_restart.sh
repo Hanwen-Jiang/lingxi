@@ -7,4 +7,5 @@ for s in AuthenticationService ContactService MessagingService RealTimeCommunica
   if [ -f "$f" ]; then pid=$(cat "$f" 2>/dev/null || true); [ -n "${pid:-}" ] && kill "$pid" 2>/dev/null && echo "stopped $s ($pid)"; rm -f "$f"; fi
 done
 sleep 4
-/mnt/e/jhw/proj/chat/e2e/03-start-apps.sh
+# 用与本脚本同目录的 03-start(保证 LF;避免误用别处 CRLF 版本静默失败)
+bash "$(dirname "$0")/03-start-apps.sh"

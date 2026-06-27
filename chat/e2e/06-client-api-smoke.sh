@@ -42,5 +42,13 @@ m=$(status "${AUTH[@]}" "$GW/api/v1/chat/session/9999999/messages?limit=5")
 r=$(status -X POST "${AUTH[@]}" -H 'Content-Type: application/json' -d '{}' "$GW/api/v1/chat/sessions/9999999/read")
 [ "$r" = "403" ] && ok "C6 非成员 markRead → 403" || ng "C6 markRead member-auth" 403 "$r"
 
+echo "[媒体上传契约 M11]"
+mu=$(curl -s -X POST "${AUTH[@]}" -H 'Content-Type: application/json' -d '{"fileName":"photo.JPG","contentType":"image/jpeg","size":123456}' "$GW/api/v1/user/media/upload-url")
+{ [ "$(printf '%s' "$mu" | jnum code)" = "0" ] && has "$mu" '"objectKey":"chat/'; } && ok "M1 媒体预签名 → code=0 + 用户隔离 objectKey + uploadUrl" || ng "M1 media presign" "code=0+chat/key" "$mu"
+mt=$(status -X POST "${AUTH[@]}" -H 'Content-Type: application/json' -d '{"fileName":"x.zip","contentType":"application/zip"}' "$GW/api/v1/user/media/upload-url")
+[ "$mt" = "422" ] && ok "M2 不支持的媒体类型 → 422" || ng "M2 unsupported type" 422 "$mt"
+mn=$(status -X POST -H 'Content-Type: application/json' -d '{"fileName":"a.jpg","contentType":"image/jpeg"}' "$GW/api/v1/user/media/upload-url")
+[ "$mn" = "401" ] && ok "M3 无 token 媒体预签名 → 401" || ng "M3 no-token media" 401 "$mn"
+
 echo "============ PASS=$P FAIL=$F ============"
 [ "$F" -eq 0 ] && echo "客户端 API 冒烟全绿 ✅" || { echo "存在失败 ❌"; exit 1; }
