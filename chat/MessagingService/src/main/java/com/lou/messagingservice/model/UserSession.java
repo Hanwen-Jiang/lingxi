@@ -41,6 +41,12 @@ public class UserSession {
     private Integer status;
 
     /**
+     * 该用户在该会话已读到的最后一条 message_id(NULL 视为 0)
+     */
+    @TableField("last_read_message_id")
+    private Long lastReadMessageId;
+
+    /**
      * 创建时间
      */
     private Date createdAt;

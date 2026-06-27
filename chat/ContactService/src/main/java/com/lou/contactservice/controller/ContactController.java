@@ -1,8 +1,11 @@
 package com.lou.contactservice.controller;
 
+import com.lou.common.api.PageResult;
+import com.lou.common.security.RequestContext;
 import com.lou.contactservice.common.Result;
 import com.lou.contactservice.config.UserContext;
 import com.lou.contactservice.data.AddFriend.AddFriendRequest;
+import com.lou.contactservice.data.FriendList.FriendListItem;
 import com.lou.contactservice.data.AddFriend.AddFriendResponse;
 import com.lou.contactservice.data.ApplyList.ApplyListRequest;
 import com.lou.contactservice.data.ApplyList.ApplyListResponse;
@@ -82,6 +85,31 @@ public class ContactController {
 //
 //        return Result.ok(response);
 //    }
+
+    /** 好友列表上限/默认页大小(03-contracts.md §4)。 */
+    private static final int DEFAULT_LIMIT = 20;
+    private static final int MAX_LIMIT = 100;
+    private static final int DEFAULT_FRIEND_STATUS = 1;
+
+    /**
+     * 好友列表(新客户端 API,chat-common 包络 + 游标分页)。
+     * 操作人一律取 RequestContext.requireUserId(),不信任入参 userId。
+     *
+     * GET /api/v1/contact/friends?cursor=&limit=&status=
+     */
+    @GetMapping("/friends")
+    public com.lou.common.api.Result<PageResult<FriendListItem>> listFriends(
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "limit", required = false) Integer limit,
+            @RequestParam(value = "status", required = false) Integer status) {
+        Long actorId = Long.valueOf(RequestContext.requireUserId());
+
+        int safeLimit = (limit == null || limit <= 0) ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
+        int safeStatus = (status == null) ? DEFAULT_FRIEND_STATUS : status;
+
+        PageResult<FriendListItem> page = friendService.listFriends(actorId, safeStatus, cursor, safeLimit);
+        return com.lou.common.api.Result.ok(page);
+    }
 
     @GetMapping("/{userUUid}/user")
     public Result<SearchUserResponse> searchUser(@Valid @ModelAttribute SearchUserRequest request) {

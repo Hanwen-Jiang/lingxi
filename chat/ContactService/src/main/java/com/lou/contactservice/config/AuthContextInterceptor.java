@@ -1,5 +1,6 @@
 package com.lou.contactservice.config;
 
+import com.lou.common.security.RequestContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -21,8 +22,24 @@ public class AuthContextInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        // 链路 traceId(网关注入),供 chat-common Result 回写。
+        String traceId = request.getHeader("X-Trace-Id");
+        if (traceId != null && !traceId.trim().isEmpty()) {
+            RequestContext.setTraceId(traceId.trim());
+        }
+
         String token = request.getHeader("X-Internal-Token");
         if (token != null && token.equals(internalToken)) {
+            // 服务间调用:如携带代行用户身份,一并写入 chat-common 上下文(新端点需要)。
+            String actingUser = request.getHeader("X-User-Id");
+            if (actingUser != null && !actingUser.trim().isEmpty()) {
+                RequestContext.setUserId(actingUser.trim());
+                try {
+                    UserContext.set(Long.valueOf(actingUser.trim()));
+                } catch (NumberFormatException ignored) {
+                    // 内部调用 userId 非数字时忽略,旧端点行为不变。
+                }
+            }
             return true;
         }
 
@@ -30,6 +47,8 @@ public class AuthContextInterceptor implements HandlerInterceptor {
         if (uid != null && !uid.trim().isEmpty()) {
             try {
                 UserContext.set(Long.valueOf(uid.trim()));
+                // 同步写入 chat-common 身份上下文(新端点 RequestContext.requireUserId() 依赖)。
+                RequestContext.setUserId(uid.trim());
                 return true;
             } catch (NumberFormatException e) {
                 writeUnauthorized(response);
@@ -44,6 +63,7 @@ public class AuthContextInterceptor implements HandlerInterceptor {
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
         UserContext.clear();
+        RequestContext.clear();
     }
 
     private void writeUnauthorized(HttpServletResponse response) throws Exception {

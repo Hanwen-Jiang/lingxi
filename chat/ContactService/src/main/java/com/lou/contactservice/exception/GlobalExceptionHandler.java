@@ -1,7 +1,10 @@
 package com.lou.contactservice.exception;
 
+import com.lou.common.api.ApiException;
+import com.lou.common.api.ErrorCode;
 import com.lou.contactservice.common.Result;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -13,6 +16,19 @@ import java.util.Map;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /**
+     * chat-common 业务异常(新客户端端点):返回 chat-common 统一包络 + 真实 HTTP 状态。
+     * 比兜底的 Throwable 处理器更具体,优先匹配;不影响旧端点的自有 Result/200 行为。
+     */
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<com.lou.common.api.Result<?>> handleApiException(ApiException ex) {
+        ErrorCode error = ex.getError();
+        log.warn("业务异常 code={} msg={}", error.code(), ex.getMessage());
+        return ResponseEntity
+                .status(error.httpStatus())
+                .body(com.lou.common.api.Result.error(error, ex.getMessage()));
+    }
 
 
     @ExceptionHandler(value = UserException.class)
