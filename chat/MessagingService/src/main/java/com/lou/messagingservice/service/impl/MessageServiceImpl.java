@@ -268,6 +268,7 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         SendMsgResponse responseMsgVo = new SendMsgResponse();
         BeanUtils.copyProperties(appMessage, responseMsgVo);
         responseMsgVo.setSessionId(String.valueOf(appMessage.getSessionId()));
+        responseMsgVo.setMessageId(String.valueOf(appMessage.getMessageId())); // D5 string 化
         responseMsgVo.setCreatedAt(appMessage.getCreated());
 
         log.info("消息 appMessage: {}", appMessage);
