@@ -33,6 +33,9 @@ public class EmbeddingStoreConfig {
     @Value("${pgvector.table}")
     private String table;
 
+    @Value("${pgvector.dimension:1024}")
+    private int dimension;
+
     @Value("${agent.local-fallback.enabled:true}")
     private boolean localFallbackEnabled;
 
@@ -47,7 +50,7 @@ public class EmbeddingStoreConfig {
                     .port(port)
                     .user(user)
                     .password(password)
-                    .dimension(1024)
+                    .dimension(dimension)
                     .database(database)
                     .build();
         } catch (RuntimeException e) {

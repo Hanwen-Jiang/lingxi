@@ -50,6 +50,10 @@ public class RagQueryService {
     @Value("${rag.citation.max-output-tokens:500}")
     private int maxOutputTokens;
 
+    // F07:引用展示阈值(高),后置于检索/重排之后;与检索召回阈值(rag.retrieval.min-score,低)解耦。
+    @Value("${rag.citation.min-score:0.75}")
+    private double citationMinScore;
+
     @Value("${rag.token.max-input-tokens:1800}")
     private int maxInputTokens;
 
@@ -72,9 +76,10 @@ public class RagQueryService {
         List<ChatMessage> historyMessages = chatMemory.messages();
         long retrievalStart = System.currentTimeMillis();
         List<RetrievedChunk> candidates = hybridSearchService.search(prompt);
-        List<RetrievedChunk> chunks = rerankEnabled
+        List<RetrievedChunk> reranked = rerankEnabled
                 ? rerankService.rerank(prompt, candidates, rerankTopK)
                 : candidates.stream().limit(rerankTopK).toList();
+        List<RetrievedChunk> chunks = applyCitationGate(reranked);
         AtomicBoolean contextTruncated = new AtomicBoolean(false);
         String memoryContext = buildAgentMemoryContext(agentContext);
         List<RetrievedChunk> budgetedChunks = applyTokenBudget(prompt, memoryContext, chunks, contextTruncated);
@@ -164,6 +169,35 @@ public class RagQueryService {
                 .map(chunk -> copyWithText(chunk, truncateByBudget(chunk.getText(), perChunkBudget)))
                 .filter(chunk -> chunk.getText() != null && !chunk.getText().isBlank())
                 .toList();
+    }
+
+    /**
+     * 引用展示阈值(F07 解耦):重排后仅保留达到 {@code rag.citation.min-score} 的片段作为最终证据+引用;
+     * 若全被过滤,保留 top-1(已按相关性排序)兜底,避免高阈值把可答问题误退化为 MISS。
+     * 阈值 ≤ 0 时不过滤(交由检索/重排;待真模型标定后再上调)。
+     */
+    private List<RetrievedChunk> applyCitationGate(List<RetrievedChunk> reranked) {
+        if (reranked.isEmpty() || citationMinScore <= 0) {
+            return reranked;
+        }
+        List<RetrievedChunk> passing = reranked.stream()
+                .filter(chunk -> bestScore(chunk) >= citationMinScore)
+                .toList();
+        return passing.isEmpty() ? List.of(reranked.get(0)) : passing;
+    }
+
+    private double bestScore(RetrievedChunk chunk) {
+        double best = 0.0;
+        if (chunk.getRerankScore() != null) {
+            best = Math.max(best, chunk.getRerankScore());
+        }
+        if (chunk.getVectorScore() != null) {
+            best = Math.max(best, chunk.getVectorScore());
+        }
+        if (chunk.getFusionScore() != null) {
+            best = Math.max(best, chunk.getFusionScore());
+        }
+        return best;
     }
 
     private RetrievedChunk copyWithText(RetrievedChunk source, String text) {

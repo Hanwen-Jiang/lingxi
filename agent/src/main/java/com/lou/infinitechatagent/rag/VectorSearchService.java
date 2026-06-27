@@ -23,7 +23,9 @@ public class VectorSearchService {
     @Resource
     private EmbeddingStore<TextSegment> embeddingStore;
 
-    @Value("${rag.citation.min-score:0.75}")
+    // F07:检索召回阈值与引用展示阈值解耦——检索用低/无阈值(默认 0.0),广召回交 RRF+Rerank 排序;
+    // 引用展示的高阈值(rag.citation.min-score)在 RagQueryService 后置应用。
+    @Value("${rag.retrieval.min-score:0.0}")
     private double minScore;
 
     @Value("${rag.citation.snippet-max-chars:500}")

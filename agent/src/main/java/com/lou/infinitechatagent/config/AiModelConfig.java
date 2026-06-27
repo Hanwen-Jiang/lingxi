@@ -3,6 +3,7 @@ package com.lou.infinitechatagent.config;
 import com.lou.infinitechatagent.exception.MissingAiModelConfigurationException;
 import com.lou.infinitechatagent.monitor.AiModelMonitorListener;
 import dev.langchain4j.community.model.dashscope.QwenChatModel;
+import dev.langchain4j.community.model.dashscope.QwenEmbeddingModel;
 import dev.langchain4j.community.model.dashscope.QwenStreamingChatModel;
 import dev.langchain4j.model.ModelProvider;
 import dev.langchain4j.model.chat.ChatModel;
@@ -14,6 +15,7 @@ import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,10 +25,17 @@ import org.springframework.web.client.RestClient;
 import java.util.List;
 
 @Configuration
+@Slf4j
 public class AiModelConfig {
 
     @Value("${pgvector.dimension:1024}")
     private int embeddingDimension;
+
+    @Value("${langchain4j.community.dashscope.embedding-model.api-key:}")
+    private String dashScopeEmbeddingApiKey;
+
+    @Value("${langchain4j.community.dashscope.embedding-model.model-name:text-embedding-v4}")
+    private String dashScopeEmbeddingModel;
 
     @Resource
     private AiModelMonitorListener aiModelMonitorListener;
@@ -49,6 +58,18 @@ public class AiModelConfig {
     @Bean
     @Primary
     public EmbeddingModel embeddingModel() {
+        // F06/M15:有 DASHSCOPE_API_KEY 时用真实语义嵌入(text-embedding-v4),dimension 与 PgVector 表对齐;
+        // 否则显式降级到 HashEmbeddingModel(哈希伪向量,无语义,仅供本地无网络跑通)。
+        if (hasText(dashScopeEmbeddingApiKey)) {
+            log.info("RAG Embedding - 使用 DashScope 真实嵌入模型 {}(dimension={})", dashScopeEmbeddingModel, embeddingDimension);
+            return QwenEmbeddingModel.builder()
+                    .apiKey(dashScopeEmbeddingApiKey)
+                    .modelName(dashScopeEmbeddingModel)
+                    .dimension(embeddingDimension)
+                    .build();
+        }
+        log.warn("RAG Embedding - 未配置 DASHSCOPE_API_KEY,降级到 HashEmbeddingModel(哈希伪向量,无语义召回)。"
+                + "真实检索请配置 DASHSCOPE_API_KEY 以启用 {} 语义嵌入。", dashScopeEmbeddingModel);
         return new HashEmbeddingModel(embeddingDimension);
     }
 

@@ -111,7 +111,8 @@ public class DocumentIngestionService {
         String fileName = resolveFileName(document);
         String filePath = resolveFilePath(document);
         String docId = "doc_" + sha256(fileName);
-        String contentHash = sha256(document.text() + "\nchunk_profile:" + chunkProfile(fileName));
+        String contentHash = sha256(document.text() + "\nchunk_profile:" + chunkProfile(fileName)
+                + "\nembedding:" + embeddingSignature());
         Optional<String> previousContentHash = findDocumentContentHash(docId);
         if (previousContentHash.isPresent() && !previousContentHash.get().equals(contentHash)) {
             purgeDocumentChunks(docId);
@@ -734,6 +735,14 @@ public class DocumentIngestionService {
     private String resolveFilePath(Document document) {
         String filePath = document.metadata().getString("absolute_directory_path");
         return filePath == null ? "" : filePath;
+    }
+
+    /**
+     * 嵌入模型签名并入内容哈希(F06 配套):切换嵌入实现(如 Hash↔真实 DashScope)→ 哈希变化 →
+     * 旧片段被 purge 并以新模型重嵌入,避免"换了真模型但库里仍是旧哈希伪向量"导致检索失效。
+     */
+    private String embeddingSignature() {
+        return embeddingModel.getClass().getSimpleName();
     }
 
     private String sha256(String value) {

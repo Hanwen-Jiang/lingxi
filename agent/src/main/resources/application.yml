@@ -100,6 +100,8 @@ rag:
     vector-results: 20
     keyword-results: 20
     candidate-results: 20
+    # F07:检索召回阈值(低/无,默认 0.0)——广召回交 RRF+Rerank 排序;与引用展示阈值 citation.min-score 解耦。
+    min-score: ${RAG_RETRIEVAL_MIN_SCORE:0.0}
   rerank:
     enabled: true
     provider: ${RAG_RERANK_PROVIDER:bge}
@@ -111,7 +113,8 @@ rag:
     failure-cooldown-ms: ${RAG_RERANK_FAILURE_COOLDOWN_MS:60000}
     top-k: 5
   citation:
-    min-score: 0.75
+    # F07:引用展示阈值(高)——RagQueryService 重排后置应用(带 top-1 兜底,永不清空);按真实嵌入/重排分标定后调。
+    min-score: ${RAG_CITATION_MIN_SCORE:0.75}
     snippet-max-chars: 500
     max-output-tokens: 500
   token:
