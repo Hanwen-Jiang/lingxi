@@ -9,21 +9,21 @@ public class ResultUtils {
      * 成功
      */
     public static <T> BaseResponse<T> success(T data) {
-        return new BaseResponse<>(200, data, "ok");
+        return new BaseResponse<>(ErrorCode.SUCCESS.getCode(),data, "ok");
     }
 
     /**
      * 成功
      */
     public static <T> BaseResponse<T> success(T data, String message) {
-        return new BaseResponse<>(200, data, message);
+        return new BaseResponse<>(ErrorCode.SUCCESS.getCode(),data, message);
     }
 
     /**
      * 成功
      */
     public static BaseResponse<Void> success() {
-        return new BaseResponse<>(200, null, "ok");
+        return new BaseResponse<>(ErrorCode.SUCCESS.getCode(),null, "ok");
     }
 
     /**

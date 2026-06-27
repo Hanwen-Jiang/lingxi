@@ -1,6 +1,9 @@
 spring:
   application:
     name: InfiniteChat-Agent
+  # 统一包络 JsonInclude 策略(契约 §2:全栈一致 NON_NULL)——与 chat-common Result 对齐。
+  jackson:
+    default-property-inclusion: non_null
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}

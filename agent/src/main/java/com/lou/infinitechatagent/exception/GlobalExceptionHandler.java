@@ -1,71 +1,70 @@
 package com.lou.infinitechatagent.exception;
 
-
-import java.util.HashMap;
-import java.util.Map;
-
-
 import com.lou.infinitechatagent.common.BaseResponse;
 import com.lou.infinitechatagent.common.ErrorCode;
-import com.lou.infinitechatagent.common.ResultUtils;
-
 import dev.langchain4j.guardrail.InputGuardrailException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.validation.FieldError;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.List;
+import java.util.Map;
+
 /**
- * 全局异常处理器
+ * 全局异常处理器。契约 §3:**停止"全 200 + 体内 code"** —— 错误映射真实 HTTP 状态(401/403/404/422/429/5xx),
+ * body 仍为统一包络 {@link BaseResponse}{code,message,data,traceId,timestamp}。
  */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
-    public BaseResponse<?> businessExceptionHandler(BusinessException e) {
-        log.error("BusinessException", e);
-        return ResultUtils.error(e.getCode(), e.getMessage());
+    public ResponseEntity<BaseResponse<?>> businessException(BusinessException e) {
+        log.warn("BusinessException code={} msg={}", e.getCode(), e.getMessage());
+        return respond(e.getCode(), e.getMessage(), null);
     }
 
     @ExceptionHandler(MissingAiModelConfigurationException.class)
-    public BaseResponse<?> missingAiModelConfigurationExceptionHandler(MissingAiModelConfigurationException e) {
+    public ResponseEntity<BaseResponse<?>> missingAiModelConfiguration(MissingAiModelConfigurationException e) {
         log.error("Missing AI model configuration: {}", e.getMessage());
-        return ResultUtils.error(ErrorCode.SYSTEM_ERROR, e.getMessage());
-    }
-
-    @ExceptionHandler(RuntimeException.class)
-    public BaseResponse<?> runtimeExceptionHandler(RuntimeException e) {
-        log.error("RuntimeException", e);
-        return ResultUtils.error(ErrorCode.SYSTEM_ERROR, "系统错误");
+        return respond(ErrorCode.DEPENDENCY_UNAVAILABLE.getCode(), e.getMessage(), null);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public BaseResponse<?> handleValidationException(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = ((FieldError) error).getField();
-            String message = error.getDefaultMessage();
-            errors.put(fieldName, message);
-        });
-        String message = errors.toString();
-        return ResultUtils.error(ErrorCode.INVALID_PARAMETER_ERROR, message);
+    public ResponseEntity<BaseResponse<?>> validation(MethodArgumentNotValidException ex) {
+        // 契约 §3:VALIDATION_FAILED(422),data.fieldErrors=[{field,message}]
+        List<Map<String, String>> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
+                .map(fe -> Map.of(
+                        "field", fe.getField(),
+                        "message", fe.getDefaultMessage() == null ? "" : fe.getDefaultMessage()))
+                .toList();
+        return respond(ErrorCode.INVALID_PARAMETER_ERROR.getCode(), "参数校验失败",
+                Map.of("fieldErrors", fieldErrors));
     }
 
-
-    @ExceptionHandler(value = MissingServletRequestParameterException.class)
-    public BaseResponse<?> handlerMissingServletRequestParameterException(Exception e) {
-        log.error("缺少必填参数:{}", e.toString());
-        return ResultUtils.error(ErrorCode.INVALID_PARAMETER_ERROR, "缺少必填参数");
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<BaseResponse<?>> missingParam(MissingServletRequestParameterException e) {
+        log.warn("缺少必填参数: {}", e.getParameterName());
+        return respond(ErrorCode.PARAMS_ERROR.getCode(), "缺少必填参数: " + e.getParameterName(), null);
     }
 
     @ExceptionHandler(InputGuardrailException.class)
-    public BaseResponse<?> inputGuardrailExceptionHandler(InputGuardrailException e) {
-        log.error("敏感词拦截: {}", e.getMessage());
-        // 直接从异常信息里获取提示内容返回给前端
-        // 或者统一返回 SENSITIVE_WORD_ERROR
-        return ResultUtils.error(ErrorCode.SENSITIVE_WORD_ERROR);
+    public ResponseEntity<BaseResponse<?>> inputGuardrail(InputGuardrailException e) {
+        log.warn("输入护轨拦截: {}", e.getMessage());
+        return respond(ErrorCode.SENSITIVE_WORD_ERROR.getCode(), ErrorCode.SENSITIVE_WORD_ERROR.getMessage(), null);
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<BaseResponse<?>> runtime(RuntimeException e) {
+        log.error("RuntimeException", e);
+        return respond(ErrorCode.SYSTEM_ERROR.getCode(), "系统错误", null);
+    }
+
+    private static ResponseEntity<BaseResponse<?>> respond(int code, String message, Object data) {
+        BaseResponse<Object> body = new BaseResponse<>(code, data, message);
+        return ResponseEntity.status(ErrorCode.httpStatusForCode(code)).body(body);
     }
 }
