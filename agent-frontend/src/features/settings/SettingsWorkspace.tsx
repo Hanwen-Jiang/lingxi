@@ -18,6 +18,7 @@ export function SettingsWorkspace({
   apiBase,
   health,
   healthMessage,
+  isAdmin,
   jobs,
   memoryItems,
   modelStatus,
@@ -35,6 +36,7 @@ export function SettingsWorkspace({
   apiBase: string;
   health: "checking" | "up" | "down";
   healthMessage: string;
+  isAdmin: boolean;
   jobs: DocumentIngestJobResponse[];
   memoryItems: MemoryItem[];
   modelStatus: ModelStatusResponse | null;
@@ -82,6 +84,7 @@ export function SettingsWorkspace({
             apiBase={apiBase}
             health={health}
             healthMessage={healthMessage}
+            isAdmin={isAdmin}
             modelStatus={modelStatus}
             sessionId={sessionId}
             userId={userId}
@@ -107,6 +110,7 @@ function SettingsPanel({
   apiBase,
   health,
   healthMessage,
+  isAdmin,
   modelStatus,
   sessionId,
   userId,
@@ -116,6 +120,7 @@ function SettingsPanel({
   apiBase: string;
   health: "checking" | "up" | "down";
   healthMessage: string;
+  isAdmin: boolean;
   modelStatus: ModelStatusResponse | null;
   sessionId: number;
   userId: number;
@@ -123,14 +128,8 @@ function SettingsPanel({
 }) {
   return (
     <section className="space-y-5">
-      <PanelTitle icon={<Settings className="size-4" />} title="运行环境" />
-      <div className="panel-section runtime-context-panel" aria-label="运行环境">
-        <ReadOnlyField label="API base" value={apiBase} />
-        <div className="grid grid-cols-2 gap-3">
-          <ReadOnlyField label="User ID" value={userId} />
-          <ReadOnlyField label="Session ID" value={sessionId} />
-        </div>
-      </div>
+      {/* "Connection" chips are user-visible. Everyone gets to see whether the
+          assistant is online. */}
       <div className="panel-section">
         <PanelTitle icon={<HeartPulse className="size-4" />} title="连接状态" />
         <div className="flex flex-wrap gap-2">
@@ -142,7 +141,21 @@ function SettingsPanel({
           </Chip>
         </div>
       </div>
-      <ModelConfigPanel api={api} modelStatus={modelStatus} onModelStatus={onModelStatus} />
+      {/* "Runtime context" leaks implementation terms (API base / numeric IDs)
+          to the UI, which D10 forbids for end users. Admins keep it. */}
+      {isAdmin ? (
+        <>
+          <PanelTitle icon={<Settings className="size-4" />} title="运行环境" />
+          <div className="panel-section runtime-context-panel" aria-label="运行环境">
+            <ReadOnlyField label="API base" value={apiBase} />
+            <div className="grid grid-cols-2 gap-3">
+              <ReadOnlyField label="User ID" value={userId} />
+              <ReadOnlyField label="Session ID" value={sessionId} />
+            </div>
+          </div>
+        </>
+      ) : null}
+      <ModelConfigPanel api={api} isAdmin={isAdmin} modelStatus={modelStatus} onModelStatus={onModelStatus} />
     </section>
   );
 }

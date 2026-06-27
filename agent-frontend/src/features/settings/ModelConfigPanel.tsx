@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react";
-import {Gauge} from "lucide-react";
+import {Gauge, Lock} from "lucide-react";
 
 import {Button} from "@heroui/react/button";
 import {ListBox} from "@heroui/react/list-box";
@@ -13,17 +13,18 @@ import type {ModelStatusResponse, ReasoningEffort} from "../../types";
 
 export function ModelConfigPanel({
   api,
+  isAdmin,
   modelStatus,
   onModelStatus,
 }: {
   api: ApiClient;
+  isAdmin: boolean;
   modelStatus: ModelStatusResponse | null;
   onModelStatus: (status: ModelStatusResponse) => void;
 }) {
   const [provider, setProvider] = useState(modelStatus?.provider ?? "openai-compatible");
   const [baseUrl, setBaseUrl] = useState(modelStatus?.baseUrl ?? "https://api.openai.com");
   const [model, setModel] = useState(modelStatus?.model ?? "gpt-5.4-mini");
-  const [apiKey, setApiKey] = useState("");
   const [temperature, setTemperature] = useState(String(modelStatus?.temperature ?? 0.7));
   const [maxOutputTokens, setMaxOutputTokens] = useState(String(modelStatus?.maxOutputTokens ?? 1024));
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(
@@ -47,14 +48,12 @@ export function ModelConfigPanel({
       const nextStatus = await api.updateModelConfig({
         provider,
         baseUrl,
-        apiKey: apiKey.trim() || undefined,
         model,
         temperature: Number(temperature),
         maxOutputTokens: Number(maxOutputTokens),
         reasoningEffort: provider === "openai-compatible" ? reasoningEffort : undefined,
       });
       onModelStatus(nextStatus);
-      setApiKey("");
       setStatus(nextStatus.configured ? "已保存。" : (nextStatus.message ?? "已保存。"));
     } catch {
       // Don't leak raw backend error strings into the UI (D10/D12).
@@ -62,11 +61,23 @@ export function ModelConfigPanel({
     }
   }
 
+  // D10 — non-admins get a quiet read-only banner instead of the form.
+  // The endpoint is also gated server-side (gateway admin role), so this is
+  // defence-in-depth, not the primary check.
+  if (!isAdmin) {
+    return (
+      <div className="panel-section">
+        <PanelTitle icon={<Lock className="size-4" />} title="模型配置" />
+        <p className="text-sm leading-6 text-muted">仅管理员可修改模型配置。如需调整,请联系管理员。</p>
+      </div>
+    );
+  }
+
   return (
     <div className="panel-section">
       <PanelTitle icon={<Gauge className="size-4" />} title="模型配置" />
       <p className="text-sm leading-6 text-muted">
-        修改后会立即生效,新对话会使用新设置。API key 仅会发送给后端,不会回显。
+        管理员屏:修改后会立即生效,新对话会使用新设置。API key 由后端从环境变量读取,前端不接收、不回显。
       </p>
       <div className="space-y-1.5">
         <span className="text-xs font-medium text-muted">供应商</span>
@@ -130,15 +141,6 @@ export function ModelConfigPanel({
           </Select>
         </div>
       ) : null}
-      <Field label="API key">
-        <input
-          className="field-input"
-          placeholder={modelStatus?.configured ? "留空保留当前 key" : "粘贴 API key"}
-          type="password"
-          value={apiKey}
-          onChange={(event) => setApiKey(event.target.value)}
-        />
-      </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="温度">
           <input

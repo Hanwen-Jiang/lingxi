@@ -12,7 +12,7 @@ import {useIngestion} from "./hooks/useIngestion";
 import {useMemory} from "./hooks/useMemory";
 import {useModelConfig} from "./hooks/useModelConfig";
 import {useSessions} from "./hooks/useSessions";
-import {authStore} from "./lib/auth";
+import {authStore, isAdmin as computeIsAdmin} from "./lib/auth";
 import {CHAT_MODES} from "./lib/constants";
 import {readStorage, STORAGE_KEYS, writeStorage} from "./lib/storage";
 import {ChatHeader} from "./features/chat/ChatHeader";
@@ -116,17 +116,33 @@ export function App() {
     return <AuthScreen busy={loginBusy} errorMessage={loginError} onLogin={(input) => void handleLogin(input)} />;
   }
 
-  return <Workspace api={api} apiBase={apiBase} userId={userIdToNumber(auth.user.id)} onLogout={auth.logout} />;
+  // D10 — admin gate for model-config + runtime-context panels. We derive it
+  // from the JWT `roles` claim parsed at login. `VITE_DEV_ASSUME_ADMIN=true`
+  // is a dev-only override so we can exercise the admin UI locally before S3
+  // ships the `roles` claim in real tokens; never enable in prod builds.
+  const isAdmin = computeIsAdmin(auth.user) || import.meta.env.VITE_DEV_ASSUME_ADMIN === "true";
+
+  return (
+    <Workspace
+      api={api}
+      apiBase={apiBase}
+      isAdmin={isAdmin}
+      userId={userIdToNumber(auth.user.id)}
+      onLogout={auth.logout}
+    />
+  );
 }
 
 function Workspace({
   api,
   apiBase,
+  isAdmin,
   userId,
   onLogout,
 }: {
   api: ReturnType<typeof createApiClient>;
   apiBase: string;
+  isAdmin: boolean;
   userId: number;
   onLogout: () => void;
 }) {
@@ -185,6 +201,7 @@ function Workspace({
                   apiBase={apiBase}
                   health={model.health}
                   healthMessage={model.healthMessage}
+                  isAdmin={isAdmin}
                   jobs={ingestion.jobs}
                   memoryItems={memory.memoryItems}
                   modelStatus={model.modelStatus}
