@@ -5,7 +5,6 @@ import {Button} from "@heroui/react/button";
 
 import {PanelTitle, Field} from "../../components/ui/primitives";
 import type {ApiClient} from "../../api";
-import {getErrorMessage} from "../../lib/chat";
 import type {DocumentIngestJobResponse} from "../../types";
 
 export function IngestionPanel({
@@ -24,7 +23,7 @@ export function IngestionPanel({
   const [status, setStatus] = useState<string | null>(null);
 
   async function ingestText() {
-    setStatus("Submitting text ingestion");
+    setStatus("正在提交…");
     try {
       const job = await api.ingestText({
         title: textTitle,
@@ -33,55 +32,55 @@ export function IngestionPanel({
         sourceType: "manual_text",
       });
       onJob(job);
-      setStatus("Text ingestion job submitted");
+      setStatus("已提交,正在入库");
       setTextContent("");
-    } catch (error) {
-      setStatus(getErrorMessage(error));
+    } catch {
+      setStatus("提交失败,请重试。");
     }
   }
 
   async function ingestUpload(file: File | undefined) {
     if (!file) return;
-    setStatus("Uploading document");
+    setStatus("正在上传…");
     try {
       const job = await api.uploadDocument(file);
       onJob(job);
-      setStatus("Upload job submitted");
-    } catch (error) {
-      setStatus(getErrorMessage(error));
+      setStatus("已上传,正在入库");
+    } catch {
+      setStatus("上传失败,请重试。");
     }
   }
 
   async function ingestLocalPath() {
-    setStatus("Submitting local path");
+    setStatus("正在提交…");
     try {
       const job = await api.ingestLocalPath(localPath);
       onJob(job);
-      setStatus("Local path job submitted");
-    } catch (error) {
-      setStatus(getErrorMessage(error));
+      setStatus("已提交,正在入库");
+    } catch {
+      setStatus("提交失败,请重试。");
     }
   }
 
   return (
     <section className="space-y-5">
-      <PanelTitle icon={<FileInput className="size-4" />} title="Knowledge Import" />
+      <PanelTitle icon={<FileInput className="size-4" />} title="知识入库" />
       <div className="panel-section">
         <div className="flex items-center gap-2 text-sm font-medium">
           <FileInput className="size-4" />
-          Text Import
+          导入文本
         </div>
-        <Field label="Title">
+        <Field label="标题">
           <input className="field-input" value={textTitle} onChange={(event) => setTextTitle(event.target.value)} />
         </Field>
-        <Field label="File name">
+        <Field label="文件名">
           <input
             className="field-input"
             value={textFileName}
             onChange={(event) => setTextFileName(event.target.value)}
           />
         </Field>
-        <Field label="Content">
+        <Field label="正文">
           <textarea
             className="field-input min-h-28 resize-y"
             value={textContent}
@@ -89,13 +88,13 @@ export function IngestionPanel({
           />
         </Field>
         <Button className="settings-action-button" isDisabled={!textContent.trim()} onPress={() => void ingestText()}>
-          Submit Text
+          提交文本
         </Button>
       </div>
       <div className="panel-section">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Upload className="size-4" />
-          File Upload
+          上传文件
         </div>
         <input
           className="field-input file:mr-3 file:rounded-xl file:border-0 file:bg-surface-secondary file:px-3 file:py-1.5 file:text-sm"
@@ -106,9 +105,9 @@ export function IngestionPanel({
       <div className="panel-section">
         <div className="flex items-center gap-2 text-sm font-medium">
           <FileUp className="size-4" />
-          Local Path
+          服务器路径
         </div>
-        <Field label="Server path">
+        <Field label="路径">
           <input className="field-input" value={localPath} onChange={(event) => setLocalPath(event.target.value)} />
         </Field>
         <Button
@@ -117,16 +116,14 @@ export function IngestionPanel({
           variant="outline"
           onPress={() => void ingestLocalPath()}
         >
-          Submit Path
+          提交路径
         </Button>
       </div>
       {status ? <div className="rounded-2xl bg-surface p-3 text-sm text-muted shadow-surface">{status}</div> : null}
       <div className="space-y-3">
-        <PanelTitle icon={<RefreshCw className="size-4" />} title="Ingestion Jobs" />
+        <PanelTitle icon={<RefreshCw className="size-4" />} title="入库任务" />
         {jobs.length === 0 ? (
-          <p className="rounded-2xl bg-surface p-3 text-sm text-muted shadow-surface">
-            No ingestion jobs submitted from this workspace yet.
-          </p>
+          <p className="rounded-2xl bg-surface p-3 text-sm text-muted shadow-surface">还没有入库任务。</p>
         ) : (
           jobs.map((job) => (
             <div key={job.jobId} className="rounded-2xl bg-surface p-3 shadow-surface">
@@ -135,13 +132,30 @@ export function IngestionPanel({
                 <JobStatus status={job.status} />
               </div>
               <p className="mt-2 text-xs leading-5 text-muted">{job.message ?? job.jobId}</p>
-              {job.chunkCount !== undefined ? <p className="mt-1 text-xs text-muted">{job.chunkCount} chunks</p> : null}
+              {job.chunkCount !== undefined ? (
+                <p className="mt-1 text-xs text-muted">已切片 {job.chunkCount} 段</p>
+              ) : null}
             </div>
           ))
         )}
       </div>
     </section>
   );
+}
+
+function jobStatusLabel(status: string) {
+  switch (status) {
+    case "SUCCEEDED":
+      return "完成";
+    case "FAILED":
+      return "失败";
+    case "PROCESSING":
+      return "处理中";
+    case "PENDING":
+      return "等待中";
+    default:
+      return "进行中";
+  }
 }
 
 function JobStatus({status}: {status: string}) {
@@ -160,7 +174,7 @@ function JobStatus({status}: {status: string}) {
       ) : (
         <RefreshCw className="size-3" />
       )}
-      {status}
+      {jobStatusLabel(status)}
     </span>
   );
 }

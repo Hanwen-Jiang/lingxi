@@ -65,6 +65,22 @@
   box-sizing: border-box;
 }
 
+/* a11y: honor the OS prefers-reduced-motion preference (L14). The ds tokens.css
+ * already ships a similar block, but agent-frontend's styles.css is not
+ * imported there, so we restate it here so all transitions/animations defined
+ * locally (and any HeroUI Pro layer animations) collapse for reduced-motion
+ * users. Motion/react components additionally read useReducedMotion(). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 html,
 body,
 #root {

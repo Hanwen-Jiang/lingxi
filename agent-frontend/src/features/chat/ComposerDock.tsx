@@ -93,18 +93,12 @@ export function ComposerDock({
   const routeMeta = lastRouteResult ? `${route}${lastRouteResult.forced ? " · 强制" : ""}` : "灵犀自动选择";
   const progressValue = status === "streaming" ? 64 : status === "submitted" ? 32 : status === "error" ? 100 : 0;
   const statusText =
-    status === "streaming"
-      ? "回复中"
-      : status === "submitted"
-        ? "已发送"
-        : status === "error"
-          ? "出错了"
-          : "可发送";
+    status === "streaming" ? "回复中" : status === "submitted" ? "已发送" : status === "error" ? "出错了" : "可发送";
 
   const refreshModels = useCallback(async () => {
     if (!openAiProtocol) {
       setModelOptions([]);
-      setModelsStatus("Model listing is available for OpenAI-compatible providers.");
+      setModelsStatus("当前供应商暂不支持列出模型。");
       return;
     }
     setIsLoadingModels(true);
@@ -112,8 +106,7 @@ export function ComposerDock({
       const response = await api.listModels();
       setModelOptions(response.models ?? []);
       setModelsStatus(
-        response.message ??
-          (response.source === "upstream" ? "Loaded models from upstream." : "Using configured model."),
+        response.message ?? (response.source === "upstream" ? "已加载在线模型列表。" : "已使用配置的模型。"),
       );
     } catch (error) {
       setModelsStatus(getErrorMessage(error));
@@ -155,9 +148,10 @@ export function ComposerDock({
           reasoningEffort: openAiProtocol ? nextReasoning : undefined,
         });
         onModelStatus(nextStatus);
-        setTuningStatus(nextStatus.configured ? "Model saved." : (nextStatus.message ?? "Model saved."));
-      } catch (error) {
-        setTuningStatus(getErrorMessage(error));
+        setTuningStatus(nextStatus.configured ? "已保存。" : (nextStatus.message ?? "已保存。"));
+      } catch {
+        // Don't leak raw backend error strings into the UI (D10/D12).
+        setTuningStatus("保存失败,请重试。");
       } finally {
         setIsSaving(false);
       }
@@ -351,20 +345,12 @@ export function ComposerDock({
                         >
                           <Mic className="size-4" />
                         </PromptInput.Action>
-                        <PromptInput.Send
-                          aria-label="发送"
-                          className="composer-send-button"
-                          isDisabled={!hasValue}
-                        >
+                        <PromptInput.Send aria-label="发送" className="composer-send-button" isDisabled={!hasValue}>
                           <ArrowUp className="size-4" />
                         </PromptInput.Send>
                       </>
                     ) : (
-                      <PromptInput.Action
-                        aria-label="语音输入"
-                        className="composer-send-button"
-                        tooltip="语音输入"
-                      >
+                      <PromptInput.Action aria-label="语音输入" className="composer-send-button" tooltip="语音输入">
                         <Mic className="size-4" />
                       </PromptInput.Action>
                     )}

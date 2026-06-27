@@ -7,7 +7,6 @@ import {Select} from "@heroui/react/select";
 
 import {PanelTitle, Field} from "../../components/ui/primitives";
 import type {ApiClient} from "../../api";
-import {getErrorMessage} from "../../lib/chat";
 import {REASONING_EFFORTS} from "../../lib/constants";
 import {normalizeReasoningEffort} from "../../lib/model";
 import type {ModelStatusResponse, ReasoningEffort} from "../../types";
@@ -43,7 +42,7 @@ export function ModelConfigPanel({
   }, [modelStatus]);
 
   async function saveModelConfig() {
-    setStatus("Saving model configuration");
+    setStatus("正在保存…");
     try {
       const nextStatus = await api.updateModelConfig({
         provider,
@@ -56,25 +55,23 @@ export function ModelConfigPanel({
       });
       onModelStatus(nextStatus);
       setApiKey("");
-      setStatus(
-        nextStatus.configured ? "Model configuration saved" : (nextStatus.message ?? "Model configuration saved"),
-      );
-    } catch (error) {
-      setStatus(getErrorMessage(error));
+      setStatus(nextStatus.configured ? "已保存。" : (nextStatus.message ?? "已保存。"));
+    } catch {
+      // Don't leak raw backend error strings into the UI (D10/D12).
+      setStatus("保存失败,请重试。");
     }
   }
 
   return (
     <div className="panel-section">
-      <PanelTitle icon={<Gauge className="size-4" />} title="Model Configuration" />
+      <PanelTitle icon={<Gauge className="size-4" />} title="模型配置" />
       <p className="text-sm leading-6 text-muted">
-        Runtime changes apply to new chat, agent, and RAG requests. API keys are accepted by the backend and never
-        echoed back.
+        修改后会立即生效,新对话会使用新设置。API key 仅会发送给后端,不会回显。
       </p>
       <div className="space-y-1.5">
-        <span className="text-xs font-medium text-muted">Provider</span>
+        <span className="text-xs font-medium text-muted">供应商</span>
         <Select
-          aria-label="Provider"
+          aria-label="供应商"
           fullWidth
           value={provider}
           onChange={(value) => {
@@ -87,8 +84,8 @@ export function ModelConfigPanel({
           </Select.Trigger>
           <Select.Popover>
             <ListBox>
-              <ListBox.Item id="openai-compatible" textValue="OpenAI compatible">
-                OpenAI compatible
+              <ListBox.Item id="openai-compatible" textValue="OpenAI 兼容">
+                OpenAI 兼容
                 <ListBox.ItemIndicator />
               </ListBox.Item>
               <ListBox.Item id="dashscope" textValue="DashScope">
@@ -102,14 +99,14 @@ export function ModelConfigPanel({
       <Field label="Base URL">
         <input className="field-input" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
       </Field>
-      <Field label="Model">
+      <Field label="模型">
         <input className="field-input" value={model} onChange={(event) => setModel(event.target.value)} />
       </Field>
       {provider === "openai-compatible" ? (
         <div className="space-y-1.5">
-          <span className="text-xs font-medium text-muted">Reasoning effort</span>
+          <span className="text-xs font-medium text-muted">推理强度</span>
           <Select
-            aria-label="Reasoning effort"
+            aria-label="推理强度"
             fullWidth
             value={reasoningEffort}
             onChange={(value) => {
@@ -136,14 +133,14 @@ export function ModelConfigPanel({
       <Field label="API key">
         <input
           className="field-input"
-          placeholder={modelStatus?.configured ? "Leave blank to keep current key" : "Paste API key"}
+          placeholder={modelStatus?.configured ? "留空保留当前 key" : "粘贴 API key"}
           type="password"
           value={apiKey}
           onChange={(event) => setApiKey(event.target.value)}
         />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Temperature">
+        <Field label="温度">
           <input
             className="field-input"
             step="0.1"
@@ -152,7 +149,7 @@ export function ModelConfigPanel({
             onChange={(event) => setTemperature(event.target.value)}
           />
         </Field>
-        <Field label="Max tokens">
+        <Field label="最大输出 tokens">
           <input
             className="field-input"
             min={1}
@@ -167,7 +164,7 @@ export function ModelConfigPanel({
         variant="outline"
         onPress={() => void saveModelConfig()}
       >
-        Save Model
+        保存
       </Button>
       {status ? <p className="text-sm leading-6 text-muted">{status}</p> : null}
     </div>
