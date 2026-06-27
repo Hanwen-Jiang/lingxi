@@ -114,6 +114,25 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-27 · P2 错误码归一 + 真实 HTTP 状态翻(items 2+3;依赖 S3 chat-common 已交付)
+- 完成:吃透 S3 已交付的 chat-common(`a22c3b2`,unit1),按其最终 `CommonError` 表把 agent 包络/错误码**一次性版本化翻**,落分支 **`feat/agent-backend-p2`(push origin,commit `50bad45`,从新 main `e182a0c` 起)**:
+  - **错误码归一(item 2)**:重写 `common/ErrorCode`,每码带真实 `httpStatus`,对齐 chat-common 规范码(`0/40000/40100/40300/40400/40900/42200/42900/50000/50300`)+ agent 域 `7xxxx`(`SENSITIVE_WORD_ERROR=71000→400`)。**删掉 chat 继承的死码**(`TOKEN_*`、`70xxx` 用户、`90xxx` WS 等,全 0 引用)——停用 agent 自有分叉。
+  - **真实 HTTP 状态翻(item 3)**:成功包络 `code 200→0`(ResultUtils);`GlobalExceptionHandler` 改返 `ResponseEntity` 带真实状态(401/403/404/422/429/500/503),**停"全 200 + 体内 code"**;`@Valid` 失败→`422 + data.fieldErrors=[{field,message}]`(契约 §3);`spring.jackson.default-property-inclusion=non_null`(§2 全栈一致)。网关身份 401(40100)/限流 429(42900)本就真实状态,现全错误一致。
+  - 测试:身份/限流/RagDocument/护轨 5 类绿;离线 `mvnw` 绿。
+- 产出物:`common/{ErrorCode,ResultUtils}.java`、`exception/GlobalExceptionHandler.java`、`application.yml`(jackson)。
+- 关键决策:错误码以 **03-contracts §3 为唯一基准**镜像(agent 不依赖 chat-common 工件);guardrail 拦截归 agent 域 `71000`(400)。**安全无破 S2**:S2 自述 D4 `{0,200}` 双兼容 + 真实状态自动适配(其 ledger),故 agent 单侧翻不破前端。
+- 阻塞:无(本翻自洽;下列 gated 项等 S3)。
+- **本轮 gated、未做(到位即接,不返工):**
+  1. **item 1 翻 `enforce-identity=true`** — 等 **S3 网关 `/api/agent|memory|rag` 路由 + 验签(unit2,STATUS 记"进行中")**。就绪后我翻 enforce + 验拒直连(无 X-User-Id→401)、验伪造 X-User-Id 被剥离 + 退役 `X-Admin-Token`(改认网关 admin 角色)。**现在翻会 401 掉本地无网关的直连联调,故不翻。**
+  2. **item 4 D5 string id** — chat-common 已落,但 S2 明确"D5 翻转**需通知**、之后一次性翻 types/hooks"。属独立单元:我下轮在持久化边界做 Long↔String 双读(expand/contract)+ 响应 id 串化,**翻前在 STATUS 通知 S2**。
+  3. **item 5 退役 SchemaInitializer** — chat-common **未导出 Flyway/迁移约定**(分库 D6,各服务自管 schema);且退役与 P0 的"Flyway 默认 off + H2 降级保本地启动"耦合(退役后 Flyway-off 本地无人建表)。需单独一单元(让 Flyway 成 MySQL+H2 双兼容的唯一所有者),非快速件。**待中枢确认是否本轮范围。**
+- **交接 → S2(本轮契约变更,S2 双兼容应无须改,但告知):**
+  - 成功响应 `code` 现为 **`0`**(原 200;你已 `{0,200}` 双兼容);错误现返**真实 HTTP 状态**(401/403/404/422/429/5xx)+ 包络 code(你已自动适配)。
+  - `@Valid` 失败:HTTP **422** + `data.fieldErrors=[{field,message}]`;限流:**429** + `Retry-After` + code `42900`;护轨拦截:**400** + code `71000`。
+  - 响应 JSON 现 **NON_NULL**(null 字段省略)——按"缺失==null"解析。
+  - **string id(D5)翻转我会单独提前通知**(你那时一次性翻 types/hooks)。
+- 待中枢确认:① S3 网关 agent 路由(unit2)就绪时间 → 我翻 `enforce-identity`。② item 5 退役 SchemaInitializer 是否本轮范围(需让 Flyway 双兼容 MySQL/H2 成唯一 owner)。③ D5 string id 翻转节奏(我翻前通知 S2)。
+
 ### 2026-06-27 · P1b 不返工件:userId sweep 补全 + @Valid + 计费限流 + 结构化日志
 - 完成:P1b item-1(非阻塞、不返工的契约安全活)落地,**分支 `feat/agent-backend-p1b`(push origin,3 commits)**,均从新 main `863af6b` 起。
   - **① body userId sweep 补全**(`b013906`):上轮未扫的 Rag(`/rag/chat`、`/rag/adaptive/chat`)、Auto(`/chat/auto`、`/chat/auto/stream`)、ChatHistory 会话(`/sessions`、`/sessions/{id}`、`/summarize`、create)全部接 `@CurrentUser`(principal 优先、body/param 回退)。RagDocument 端点不含 userId、无需扫。**至此 agent 全部按 userId 的端点都已收敛到网关身份(仍 expand 相)。**
@@ -184,6 +203,15 @@
 
 ## S2 · agent 前端(owns agent-frontend/)
 
+### 2026-06-27 · P2 单元 1 · model-config admin 门控(D10)+ apiKey 字段移除 + 行为测试
+- 完成:从新 main(e182a0c)起 `feat/agent-frontend-p2` 分支并 push origin(HTTPS、不合 main)。① `ModelConfigPanel` 加 `isAdmin` prop:非 admin 时显示"仅管理员可修改模型配置"的 Lock banner,不渲染表单。② **彻底移除 apiKey 字段**:input、placeholder、payload、`ModelConfigRequest` 类型字段全部删除 — D10 要求"前端不接收/回显 apiKey"(后端按 env 读)。③ `SettingsPanel` 内"运行环境"(API base/User ID/Session ID)同样 admin-only;**连接状态 chip 仍对所有用户可见**(应用是否在线是用户向);Ingestion + Memory 是用户自己的资源,保留可见。④ `App.tsx` 从 `auth.user` 派生 `isAdmin` + 新增 `VITE_DEV_ASSUME_ADMIN=true` dev-only 旁路(便于在 S3 unit2 ship `roles` claim 前本地测 admin 屏),`.env.example` 文档化。⑤ **新增 `SettingsWorkspace.test.tsx` 4 条 D10 行为测试**(普通用户态:连接 chip ✓/Ingestion ✓/Memory ✓/banner ✓/运行环境 ✗/模型配置 form ✗;admin 态:运行环境+表单 ✓/banner ✗;以及 apiKey 字段完全不渲染验证)。⑥ `test/setup.ts` 加 `matchMedia`/`scrollIntoView`/`ResizeObserver` polyfill(HeroUI Pro Sheet+Sidebar+ScrollShadow 挂载需要)。提交 ab5c294。**5 大门**:tsc/lint/prettier/test(5 文件 / **29 测试**,新增 4 条 admin gate)/build 全 exit 0。
+- 产出物:`agent-frontend/src/{App,types}.tsx/ts`、`agent-frontend/src/features/settings/{ModelConfigPanel,SettingsWorkspace}.tsx`、新增 `agent-frontend/src/features/settings/SettingsWorkspace.test.tsx`、`agent-frontend/src/test/setup.ts`、`agent-frontend/.env.example`。
+- 关键决策:**不动 ComposerDock 的"快速切模型/推理强度"**(它也调 `/chat/model-config`,但只发 `model`+`reasoningEffort`,且按 mode list 限定值)— 这是**契约/后端**问题(端点没区分"admin 全局配置" vs "用户态偏好",理想应出 `/chat/session-preference` 端点)。**flag 给 S1**:见 commit message 末段交接。本前端轮不返工(后端没分双端点之前,在前端拆开普通用户和 admin 是无意义的)。
+- 阻塞:无(本单元不依赖任何契约)。
+- 交接 → **S1**:模型配置端点考虑拆分 `/chat/model-config`(admin)+ `/chat/session-preference`(用户态);否则非 admin 的"切模型"会撞 admin 闸门。
+- 交接 → **S3**:`useAuth.login()` 已从 JWT `sub` 兜底 `userId` + 解析 `roles` claim(`parseRoles`);S3 unit2 落 `roles=admin` JWT 后,前端直接生效(无需我侧改动)。
+- 待中枢确认:无。
+
 ### 2026-06-27 · P1b 单元 1+2 · 复跑 5 大门 + 品牌通刷收尾 + a11y;登录壳 + token 管线 + Authorization 注入
 - **从新 main(863af6b)起 `feat/agent-frontend-p1b` 分支并 push origin(HTTPS)**;ds 根级 alias 已自动指向 `packages/design-system`,源 tsc/build 绿。
 - **单元 1(cba028b)**:① 修 `.prettierrc.json` 加 `endOfLine: auto`(根因:Windows checkout CRLF + 项目无 `.gitattributes`,导致 41 文件 prettier 失配,实际无格式差异)。② 上一轮品牌通刷遗漏的最后几处面向用户英文全部清干净:`ModelPicker/ModelPickerMobile` 的 `Reasoning effort`/`Choose model`/`Model` aria 译为中文;`SessionInsightPanel` 重写(`本次对话`/`对话总结`/`逐轮回顾`/`第 N 轮` + ds `<EmptyState>`,turn status 映射 zh);`SessionList` 全译(`我的对话`/`共 X 条对话` 等 + 空态友好文案);`IngestionPanel` 中文化(panel title `知识入库`、操作按钮、状态串、job status 映射);`MemoryPanel` 中文化 + 新增 `MEMORY_TYPE_LABELS`(wire enum→ 中文标签)+ `memoryStatusLabel`;`ModelConfigPanel` 中文化(每个 label/placeholder/button/status,后端原始错误串不再透传)。③ **a11y(L14)**:`AnimatedWorkspaceView` 接 `useReducedMotion()`,reduced-motion 用户立即降级到 instant cross-fade;`styles.css` 加全局 `@media (prefers-reduced-motion: reduce)` 兜底所有 CSS animation/transition。④ ds `<EmptyState>` 用上(SessionInsightPanel 空 turn 态)。**5 大门全绿** + preview eval 验过 `englishLeak: []`。
@@ -249,6 +277,17 @@
 ---
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
+
+### 2026-06-27 · ✅ unit1a 网关 front agent + 注入 X-User-Id/Roles(交接 S1:可翻 enforce)
+- 完成:worktree `E:/jhw/proj-chat-p2`(分支 `feat/chat-backend-p2`,从 main `e182a0c`),**已 push**(commit `043c2bb`,GateWay+chat-common build green)。
+  - `GateWay/application.yml`:新增路由 `/api/agent|memory|rag` → `${AGENT_GATEWAY_URI:http://localhost:18080}`(**保留 `/api` 前缀**转发;非白名单 → 走验签)。
+  - `AuthGlobalFilter`:改用 chat-common `JwtUtil`/`IdentityHeaders`;验签通过注入 `X-User-Id`(sub)+ `X-User-Roles`(roles 声明 csv,有才注入);**剥离客户端伪造的 X-User-Id/X-User-Roles**;白名单加 `/api/v1/user/refresh`;401 包络改 `{code:40100,message,data:null,timestamp}`。
+  - `NettyConsistentHashLoadBalancer`:路由 key 改用 chat-common `JwtUtil.parseSubject`。
+  - 注:jjwt 验签**算法无关**(按 token 头 alg + 同一 `JWT_SECRET_KEY`),网关同时验 HS512(现存)与 HS256(unit1b 后 Auth 改签),无需原子切换。
+- **交接 → S1(可翻 enforce):** 网关已 front `/api/agent|memory|rag` + 验签 + 注入 `X-User-Id`/`X-User-Roles` + 剥离伪造头 → **S1 可翻 `AGENT_GATEWAY_ENFORCE_IDENTITY=true` 验拒直连/拒伪造头**。注意:① 经网关到 agent **保留前缀** `/api/agent/**`(与 context-path `/api` 对齐);② `X-User-Roles` 当前可能为空(Auth 暂未签 roles,unit1b 补;admin 仍走你 P0 的 `X-Admin-Token` 过渡);③ 网关→agent 默认 `http://localhost:18080`,部署设 `AGENT_GATEWAY_URI`。
+- 关键决策:agent 路由用**直连 URI**(非 lb://),因 agent SB3 与网关 SB2.6 跨版本 Nacos 互通不可靠;契约 §6 亦写 "agent:18080"。
+- 阻塞:无。
+- 下一单元(进行中,解锁 S2):**unit1b** = Auth 改签 chat-common HS256(+roles)+ 修 `LoginResponse.userId`(返回 sub 的 string id)+ `/api/v1/user/refresh`(S2 壳就绪,同 envelope)+ 短 access TTL。
 
 ### 2026-06-27 · ✅ unit1 `chat-common` 交付(解锁 S1)+ 交接 S1 附最终错误码枚举
 - 完成:**chat-common 模块实现并导出**(实现 `03-contracts.md`),从新 main 起 worktree `E:/jhw/proj-chat-p1b`(分支 `feat/chat-backend-p1b`),**已 push origin**(commit `a22c3b2`,**full reactor build green** 8 模块)。导出公开契约:
@@ -318,6 +357,15 @@
 ---
 
 ## S4 · chat 前端(owns chat-frontend/)
+
+### 2026-06-27 · 灵犀助手流式会话壳(Mock,SSE 就绪)+ 重连/收到推送态可演示(分支 feat/chat-frontend-p2)
+- 完成:① **灵犀助手流式会话壳(P2 接 `/api/agent/chat` 零改 UI)**:加 `AssistantStreamEvent`(`03-contracts §9`:`{type,…}` + 版本 `v`,type∈start/delta/usage/done/error)+ `Message.streaming`;契约+mock 加 `streamAssistant(sessionId,content,onEvent): abort`(SSE 形:思考延迟→分块 delta→usage→done;**产品向文案**,无实现/网关字样);`useAssistantStream` hook 把流写进 react-query 消息缓存(乐观用户消息 + 逐块增长的助手消息;stop 中止留存已生成)。**助手会话(s-lingxi)在 IM 内流式**(ChatColumn 按 `kind==="assistant"` 走流式),`/assistant` 目的地重写为**真实流式聊天**(命令条 + 共享 s-lingxi 线程 + 流式 composer,与 IM 同一缓存)。流式 UI:思考点(原生 ThinkingDots)→ 增长文本 + 光标 → 完成;流中 composer 显「停止生成」。抽 `features/messages/parts.tsx`(`MessageBubble`+`Composer`)给 IM 与助手页复用;`MessageBubble` memo 化(流时只重渲染增长气泡)。② **重连/收到推送态可演示**:dev 钩子 `window.__lingxiDropWs()`(掉线→WsClient 重连→「重新连接…」横幅→恢复在线,**实测通过**)、`window.__lingxiIncoming()`(他人消息经 WS push→去重→会话列表末条+未读角标,**实测列表更新**);二者保留 `emit`/WS push 路径存活(P2 真实他人消息同此路径)。
+- 关键决策:`/assistant` 与 `/messages/s-lingxi` 共享 s-lingxi 缓存(「消息+助手一个产品」,两入口同步);助手回复改**流式**(替代上轮的 WS 单条 push);流式指示器用**原生** ThinkingDots(`ChatLoader.Dots` 渲染正常但非必要,移除其 DS 再导出);消息线程用普通 overflow div(`ScrollShadow` 仅留在会话列表——线程流式频繁重渲染时无谓)。
+- 产出物:`chat-frontend/src/features/messages/parts.tsx`(新)、改 `chat-frontend/src/features/{messages/MessagesPage,assistant/AssistantPage}.tsx`、`chat-frontend/src/api/{types,contract,mock,queries}.ts`、`packages/design-system/src/index.ts`。分支 `feat/chat-frontend-p2`。
+- 阻塞:无(Mock 全通)。**B8 仍 gated**(S3 在做鉴权闭环、unit1a 网关 front agent;B8 未在 `30-plan §5` 定形)→ WS 真实 transport + 一行切待 S3。真实数据 wiring 待 S3 客户端 API(B6/B7/M9/M10/M11)。
+- 交接 → **S3**:WS 握手适配层 + 流式 SSE 解析点就位;B8 定形/客户端 API 就绪请在 STATUS 通知我。→ **S2**:`/api/agent/chat` 流式接入时复用本 SSE 事件形(start/delta/usage/done/error + v);助手页预留复用 S2 的 trace/citation 组件位。
+- 关键说明:**P1-4 剩余基元(Avatar/Field)本轮未换**——HeroUI v3 的 `TextField` 是容器型复合(type/value 落在 root vs Input,无 MCP 难核验,误置会破登录表单)、`Avatar` 无 `xl`/默认形状待核;为「不返工」保留原生(均 DESIGN.md 合规),待 MCP 恢复逐件核验后再换。
+- 验证:`build -w chat-frontend` 绿(2146 模块)+ `verify:ui` 绿(43 文件);运行时实测——助手 `/assistant` 与 IM s-lingxi 均流式(思考点→逐块增长→完成、停止按钮)、掉线→「重新连接」横幅→恢复、他人消息 push→列表末条+未读、s-ada 线程 3 气泡、三端 6 路由 375/desktop 零横向溢出。注:**dev 流式偏慢**(本机 dev server 重渲染开销大,build 亦 ~7s;已把 delta 降到 ~5 块),production build 渲染快得多。
 
 ### 2026-06-27 · P1-4 原生基元换真实 HeroUI Pro/OSS + 好友申请接 mock action(分支 feat/chat-frontend-p1b)
 - 完成:① **原生基元逐组件换真实 HeroUI**(本会话 heroui MCP 掉线,改按 `AGENT-REFERENCE.md` + 实读 installed `d.ts`/BEM CSS 核验 beta.6 API):**Button** → 包真实 `@heroui/react/button`(react-aria;变体 primary/secondary/tertiary/outline/ghost/danger/danger-soft;`onClick→onPress`、`disabled→isDisabled`、`iconOnly→isIconOnly`、`block→fullWidth` 映射,**调用点零改**);**Switch** → 新增 DS `Switch` 包真实 OSS Switch(v3.2 复合 `Content>Control>Thumb`,checked/onChange),Settings 四个开关换之;**ScrollShadow** → 会话列表 + 消息线程换真实 OSS ScrollShadow(`ref` 转发到滚动元素,线程自动滚底仍 OK)。Avatar/Field/Sheet 因形状/复合锚定风险留作下一增量(现原生件 DESIGN.md 合规)。② **好友申请「接受/忽略」接 mock action**:契约+mock 加 `respondApply(applyId,accept)`(接受加好友、忽略置 rejected),`useRespondApply` mutation 失效 applies+friends,ContactsPage 按钮接通(pending 禁用)。③ **`Page<T>` 对齐 `03-contracts §4`**:加 `hasMore`,mock 响应带 `hasMore:false`。

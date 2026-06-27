@@ -29,7 +29,21 @@ export interface Message {
   content: string;
   createdAt: number;
   delivery: DeliveryState;
+  /** Assistant message currently streaming in (token-by-token). */
+  streaming?: boolean;
 }
+
+/**
+ * Assistant stream event (03-contracts §9: `{type, …}` + schema version `v`).
+ * The Mock emits these; in P2 the real client parses the `/api/agent/chat` SSE
+ * stream into the SAME events — so the UI never changes.
+ */
+export type AssistantStreamEvent =
+  | {type: "start"; v: number}
+  | {type: "delta"; v: number; text: string}
+  | {type: "usage"; v: number; tokens: number}
+  | {type: "done"; v: number}
+  | {type: "error"; v: number; message: string};
 
 export interface Conversation {
   id: Id; // sessionId

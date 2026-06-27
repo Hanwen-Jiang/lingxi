@@ -1,3 +1,5 @@
+import {useCallback, useEffect, useRef, useState} from "react";
+
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 
 import {api} from "./index";
@@ -21,6 +23,101 @@ export function useFriends() {
 
 export function useApplies() {
   return useQuery({queryKey: ["applies"], queryFn: () => api.listApplies()});
+}
+
+let assistantSeq = 0;
+
+/**
+ * Streaming send for the 灵犀 assistant (assistant-in-IM). Adds the user message
+ * + a growing assistant message to the message cache, fed by streamAssistant's
+ * SSE-shaped events. P2 swaps the mock stream for `/api/agent/chat` — the cache
+ * mechanics here don't change.
+ */
+export function useAssistantStream(sessionId: string) {
+  const qc = useQueryClient();
+  const me = api.me();
+  const [streaming, setStreaming] = useState(false);
+  const abortRef = useRef<(() => void) | null>(null);
+  const botIdRef = useRef<string | null>(null);
+
+  const patchBot = useCallback(
+    (botId: string, fn: (m: Message) => Message) => {
+      qc.setQueryData<Page<Message>>(["messages", sessionId], (old) =>
+        old ? {...old, items: old.items.map((m) => (m.id === botId ? fn(m) : m))} : old,
+      );
+    },
+    [qc, sessionId],
+  );
+
+  const send = useCallback(
+    (content: string) => {
+      const text = content.trim();
+      if (!text || streaming) return;
+      const userId = `tmp-${Date.now()}-${assistantSeq++}`;
+      const botId = `as-${Date.now()}-${assistantSeq++}`;
+      const at = Date.now();
+      const userMsg: Message = {
+        id: userId,
+        clientTempId: userId,
+        sessionId,
+        senderId: me.id,
+        kind: "text",
+        content: text,
+        createdAt: at,
+        delivery: "sent",
+      };
+      const botMsg: Message = {
+        id: botId,
+        sessionId,
+        senderId: "u-lingxi",
+        kind: "text",
+        content: "",
+        createdAt: at + 1,
+        delivery: "delivered",
+        streaming: true,
+      };
+      qc.setQueryData<Page<Message>>(["messages", sessionId], (old) =>
+        old ? {...old, items: [...old.items, userMsg, botMsg]} : {items: [userMsg, botMsg]},
+      );
+      botIdRef.current = botId;
+      setStreaming(true);
+
+      abortRef.current = api.streamAssistant(sessionId, text, (e) => {
+        switch (e.type) {
+          case "delta":
+            patchBot(botId, (m) => ({...m, content: m.content + e.text}));
+            break;
+          case "done":
+            patchBot(botId, (m) => ({...m, streaming: false}));
+            setStreaming(false);
+            abortRef.current = null;
+            qc.invalidateQueries({queryKey: ["conversations"]});
+            break;
+          case "error":
+            patchBot(botId, (m) => ({...m, streaming: false, content: m.content || "（出错了,稍后再试)"}));
+            setStreaming(false);
+            abortRef.current = null;
+            break;
+          case "start":
+          case "usage":
+            break;
+        }
+      });
+    },
+    [qc, me.id, sessionId, streaming, patchBot],
+  );
+
+  /** Abort an in-flight stream (e.g., user hit stop), keeping the partial text. */
+  const stop = useCallback(() => {
+    abortRef.current?.();
+    abortRef.current = null;
+    if (botIdRef.current) patchBot(botIdRef.current, (m) => ({...m, streaming: false}));
+    setStreaming(false);
+  }, [patchBot]);
+
+  useEffect(() => () => abortRef.current?.(), []);
+
+  return {send, stop, streaming};
 }
 
 /** Accept/reject a friend application; refreshes the apply box and friend list. */

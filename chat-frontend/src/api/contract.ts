@@ -1,7 +1,16 @@
 // The API seam contract. Mock and (future) real branches implement the SAME
 // signatures, so flipping VITE_API_BASE swaps data sources without touching UI
 // (40-plan §4). The real branch lands in P2 as S3 ships B6/B7/B8/M9/M10/M11.
-import type {Conversation, Friend, FriendApply, Id, Message, Page, User} from "./types";
+import type {
+  AssistantStreamEvent,
+  Conversation,
+  Friend,
+  FriendApply,
+  Id,
+  Message,
+  Page,
+  User,
+} from "./types";
 import type {WsTransport} from "./ws/transport";
 
 export interface SendResult {
@@ -28,6 +37,14 @@ export interface Api {
 
   sendMessage(sessionId: Id, content: string): Promise<SendResult>; // POST /chat/session
   markRead(sessionId: Id): Promise<void>; // M10
+
+  /** Stream the 灵犀 assistant reply (Mock now; P2 = SSE `/api/agent/chat`). Emits
+   *  AssistantStreamEvents; returns an abort function. */
+  streamAssistant(
+    sessionId: Id,
+    content: string,
+    onEvent: (e: AssistantStreamEvent) => void,
+  ): () => void;
 
   /** Open a WS transport (mock: a simulated channel; real: a browser WebSocket via
    *  the B8 handshake). The WsClient (ADR 0002) layers reconnect/backoff/heartbeat/
