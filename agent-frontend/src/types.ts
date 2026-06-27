@@ -222,10 +222,13 @@ export type ModelStatusResponse = {
 
 export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | string;
 
+// Per D10: model-config is an admin-only screen and the request never carries
+// an apiKey from the client (server reads its env-bound key; sending one here
+// would let any caller exfiltrate it via SSRF). The field is intentionally
+// absent from the type so any accidental client-side use fails at tsc.
 export type ModelConfigRequest = {
   provider?: string;
   baseUrl?: string;
-  apiKey?: string;
   model?: string;
   temperature?: number;
   maxOutputTokens?: number;
