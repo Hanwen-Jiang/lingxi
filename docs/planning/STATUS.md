@@ -20,6 +20,14 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-27 · P2 集成 + D14 邮箱登录 + 下轮=鉴权闭环冲刺
+- **本轮 P2 数字(git 核实,均单 commit)**:S3 `043c2bb` 网关 fronts agent 路由+注入 X-User-Id/Roles(**仅此片**:未做统一 JWT/LoginResponse 修/refresh/6 服务接 chat-common);S1 `50bad45` 错误码对齐 chat-common + 真实 HTTP 状态(**enforce 仍 false**);S2 `ab5c294` model-config admin 屏(D10);S4 `9421434` 流式"灵犀"助手壳(Mock,SSE-ready)。
+- **如实评估**:🔴 **鉴权闭环本轮未闭**(网关路由有了,但 enforce 未翻、JWT 未统一、LoginResponse.userId 未修、/refresh 未做 → S2 真实登录仍接不通);**包络短暂漂移**(agent 已翻真实 HTTP,chat 仍 200+code,待 S3 把 chat-common Result 接进 6 服务收口,S2 已 {0,200} 双兼容兜底)。瓶颈持续在 S3 关键路径(每轮一薄片)。
+- **用户拍板(3 问)**:① 中枢现在合四条→main;② **下轮=专注鉴权闭环冲刺**(数据丢失/客户端 API 暂停,S4 续 Mock);③ **D14 登录模型=邮箱+密码 且 邮箱验证码(注册/免密),去手机号/短信**。
+- **已执行**:四条 `p2` 分支全部 merge 入 `main`(无冲突);**D14 落进 master-plan §5/§10 + `03-contracts.md §7.1`**(登录端点契约)。
+- **下一轮唯一目标 = 端到端鉴权闭环**:S3 统一 JWT(HS256 单源)+ 修 LoginResponse.userId + `/refresh` + **邮箱登录(D14)** + 6 服务接 chat-common Result;S1 翻 enforce + 同步翻真实 HTTP/code=0;S2 接真实邮箱登录;中枢跑全栈鉴权 E2E。完成即闭环。
+- 阻塞:无。待中枢确认:无(线上仍 defer)。
+
 ### 2026-06-27 · P1b 集成检查点:四流并入 main + STATUS 消解分叉
 - **本轮 P1b 数字(git 核实)**:S1 contract-safe 三件(userId sweep→@CurrentUser / @Valid / 按主体限流 / 结构化日志)✅;S2 品牌+a11y 收尾 + 登录壳+token 管线+Authorization 注入 ✅;S3 **chat-common 模块交付**(`chat/chat-common`,10 Java:Result/ErrorCode/Page/Snowflake/JwtUtil/IdentityHeaders/RequestContext/ApiException)✅(=#1 解锁件);S4 原生基元换真实 HeroUI Pro/OSS + 好友申请 mock action ✅。
 - **用户拍板(3 问)**:① **中枢现在合四条→main + 消解 STATUS 分叉**;② **下轮 S3 鉴权闭环优先**;③ STATUS 治理 = 中枢每次集成时合并(现状)。

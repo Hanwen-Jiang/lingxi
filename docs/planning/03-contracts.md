@@ -79,6 +79,21 @@ agent context-path 为 `/api`,网关转发保留前缀(`/api/agent/**`→agent `
 - `JWT_SECRET_KEY` 在**网关 + 全部 chat 服务 + Auth 签发方**完全一致(由 chat-common 统一持有/读取);**agent 不持**。
 - 修 `LoginResponse.userId` 恒 null:返回 `sub` 的 string id。
 
+## 7.1 登录模型(D14:邮箱,去手机号/短信)
+
+身份主体 = **邮箱**。**移除手机号/短信验证**(删 `loginCode` 的 SMS 路径)。支持两种登录 + 邮箱验证码注册:
+
+| 端点 | 入参 | 说明 |
+| --- | --- | --- |
+| `POST /api/v1/user/sendMail` | `{email}` | 发邮箱验证码(写 Redis `verify:email:{email}`,已有) |
+| `POST /api/v1/user/register` | `{email, password, code}` | 邮箱验证码注册(原 phone 改 email) |
+| `POST /api/v1/user/login` | `{email, password}` | 邮箱+密码登录 |
+| `POST /api/v1/user/loginCode` | `{email, code}` | 邮箱验证码**免密登录**(原 SMS 路径删除) |
+| `POST /api/v1/user/refresh` | `{refreshToken}` | 刷新(§7) |
+
+- 登录/注册成功返回 `LoginResponse{userId(string),userName,avatar,...,token,refreshToken}`(`userId` 修为 sub 的 string id)。
+- 前端(S2/S4)登录 UI:邮箱+密码 与"邮箱验证码"两种方式,无手机号输入。`phone` 字段在 DTO 可保留为可空兼容,但**不作为验证/登录依据**。
+
 ## 8. WS 握手(浏览器可用)
 
 - 默认 **`?token=&userUuid=` 查询参数**(浏览器 WebSocket 不能设自定义握手头);保留 header 给原生端;仍验 `sub == userUuid`。
