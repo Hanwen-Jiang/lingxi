@@ -5,7 +5,7 @@ import {Sidebar} from "@heroui-pro/react/sidebar";
 
 import {ApiError, createApiClient, getDefaultApiBase} from "./api";
 import {AnimatedWorkspaceView} from "./components/AnimatedWorkspaceView";
-import {AuthScreen} from "./features/auth/AuthScreen";
+import {AuthScreen, RESEND_COOLDOWN_SECONDS, type AuthMode} from "./features/auth/AuthScreen";
 import {useAuth} from "./hooks/useAuth";
 import {useChat} from "./hooks/useChat";
 import {useIngestion} from "./hooks/useIngestion";
@@ -72,37 +72,111 @@ export function App() {
   );
 
   const auth = useAuth(api);
-  const [loginBusy, setLoginBusy] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [codeNotice, setCodeNotice] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
-  const handleLogin = useCallback(
-    async (input: {phone: string; password: string}) => {
-      setLoginBusy(true);
-      setLoginError(null);
+  // Resend cooldown ticks down once per second. The send-mail handler kicks
+  // it to RESEND_COOLDOWN_SECONDS; the user sees a live "Ns 后可重发" label.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = window.setInterval(() => setResendCooldown((n) => (n > 0 ? n - 1 : 0)), 1000);
+    return () => window.clearInterval(t);
+  }, [resendCooldown]);
+
+  // Map backend errors → calm, user-facing strings. Per D4/D10 we never echo
+  // raw backend wording; per S3 unit1b 401 is now a real HTTP status (not
+  // 200+code), so we branch on both for the {0,200}↔real-HTTP transition.
+  // `mode` lets us tailor the password-mismatch wording (registration uses
+  // different copy).
+  const mapAuthError = (error: unknown, mode: AuthMode): string => {
+    if (error instanceof ApiError) {
+      if (error.status === 401 || error.code === 40100) {
+        return mode === "code" ? "验证码不对,或者已经过期。" : "邮箱或密码不对。";
+      }
+      if (error.status === 429 || error.code === 42900) {
+        return "尝试太频繁,稍等一下再试。";
+      }
+      if (error.status === 422 || error.code === 42200) {
+        return error.message || "请检查填写的信息是否正确。";
+      }
+      if (error.status === 409 || error.code === 40900) {
+        return "这个邮箱已经注册过了,试试直接登录。";
+      }
+    }
+    if (error instanceof Error) return error.message;
+    return mode === "register" ? "注册没成功,请重试。" : "登录没成功,请重试。";
+  };
+
+  const handleSendCode = useCallback(
+    async (email: string) => {
+      setAuthError(null);
+      setCodeNotice(null);
       try {
-        await auth.login(input);
+        await auth.sendMail(email);
+        setCodeNotice(`验证码已发送到 ${email},${RESEND_COOLDOWN_SECONDS} 秒后可重发。`);
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
       } catch (error) {
-        // Don't echo raw backend strings; if the contract surfaces a
-        // user-safe message we use it, otherwise a calm fallback.
-        if (error instanceof ApiError) {
-          if (error.status === 401 || error.code === 40100) {
-            setLoginError("手机号或密码不对。");
-          } else if (error.status === 429 || error.code === 42900) {
-            setLoginError("尝试太频繁,稍等一下再试。");
-          } else if (error.status === 422 || error.code === 42200) {
-            setLoginError(error.message || "请检查信息是否填对了。");
-          } else {
-            setLoginError("登录没成功,请重试。");
-          }
-        } else {
-          setLoginError(error instanceof Error ? error.message : "登录没成功,请重试。");
-        }
-      } finally {
-        setLoginBusy(false);
+        // Reuse the same mapper — sendMail can 429/422 too. Code-mode wording
+        // is fine here (sendMail context is the code/register flows).
+        setAuthError(mapAuthError(error, "code"));
       }
     },
     [auth],
   );
+
+  const handleLoginPassword = useCallback(
+    async (input: {email: string; password: string}) => {
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        await auth.loginPassword(input);
+      } catch (error) {
+        setAuthError(mapAuthError(error, "password"));
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [auth],
+  );
+
+  const handleLoginCode = useCallback(
+    async (input: {email: string; code: string}) => {
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        await auth.loginCode(input);
+      } catch (error) {
+        setAuthError(mapAuthError(error, "code"));
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [auth],
+  );
+
+  const handleRegister = useCallback(
+    async (input: {email: string; password: string; code: string}) => {
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        await auth.register(input);
+      } catch (error) {
+        setAuthError(mapAuthError(error, "register"));
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [auth],
+  );
+
+  // Toggling between login (password/code) and register clears stale
+  // banners so the user isn't reading an error from a different flow.
+  const handleModeChange = useCallback(() => {
+    setAuthError(null);
+    setCodeNotice(null);
+  }, []);
 
   // Persist apiBase so a reload restores the same backend target. (sessionId
   // is persisted by the Workspace shell, scoped to the logged-in user.)
@@ -113,7 +187,19 @@ export function App() {
   // Until the auth contract is fully wired we gate the entire workspace behind
   // login. Per D10/D12 this is the only thing an unauthenticated user sees.
   if (!auth.isAuthenticated || !auth.user) {
-    return <AuthScreen busy={loginBusy} errorMessage={loginError} onLogin={(input) => void handleLogin(input)} />;
+    return (
+      <AuthScreen
+        busy={authBusy}
+        codeNotice={codeNotice}
+        errorMessage={authError}
+        resendCooldown={resendCooldown}
+        onLoginCode={(input) => void handleLoginCode(input)}
+        onLoginPassword={(input) => void handleLoginPassword(input)}
+        onModeChange={handleModeChange}
+        onRegister={(input) => void handleRegister(input)}
+        onSendCode={(email) => void handleSendCode(email)}
+      />
+    );
   }
 
   // D10 — admin gate for model-config + runtime-context panels. We derive it

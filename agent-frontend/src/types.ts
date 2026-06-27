@@ -13,14 +13,41 @@ export type HealthResponse = {
   components?: Record<string, unknown>;
 };
 
-// chat-backend Auth (POST /api/v1/user/login). Per S3's known bug,
-// LoginResponse.userId is currently null and the real id only lives in the
-// JWT sub claim — the auth layer falls back to decoding sub when userId is
-// missing. Phone-vs-email is the chat-backend Auth UX; we keep `account` as
-// the contract-agnostic input field name (S3 may pivot to email).
+// chat-backend Auth, email model (D14 / 03-contracts.md §7.1). All identity
+// is keyed on email; the legacy phone field is removed from the contract.
+// Five endpoints back the login UI:
+//   POST /api/v1/user/sendMail   → {email}
+//   POST /api/v1/user/register   → {email, password, code}   → LoginResponse
+//   POST /api/v1/user/login      → {email, password}         → LoginResponse
+//   POST /api/v1/user/loginCode  → {email, code}             → LoginResponse
+//   POST /api/v1/user/refresh    → {refreshToken}            → LoginResponse
+// LoginResponse.userId is the sub string id (S3 unit1b fix) and refreshToken
+// is included (HS256, access ≈30m / refresh ≈7d).
 export type LoginRequest = {
-  phone: string;
+  email: string;
   password: string;
+};
+
+export type LoginCodeRequest = {
+  email: string;
+  code: string;
+};
+
+export type RegisterRequest = {
+  email: string;
+  password: string;
+  code: string;
+};
+
+export type SendMailRequest = {
+  email: string;
+};
+
+// chat-backend MailResponse just carries a status string ("ok"); we don't
+// rely on the body shape because the contract only promises success/failure
+// via HTTP status + envelope code.
+export type SendMailResponse = {
+  status?: string;
 };
 
 export type LoginResponse = {
@@ -31,8 +58,6 @@ export type LoginResponse = {
   gender?: number;
   status?: number;
   token: string;
-  // Refresh token is not in the current response — S3 still owes us
-  // POST /api/v1/user/refresh. We tolerate either shape.
   refreshToken?: string;
 };
 
