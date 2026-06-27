@@ -20,6 +20,15 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-27 · P4 集成:鉴权 E2E 13/13 验收 + IM 前端吃真后端 + RAG 真嵌入;下轮=IM 实时闭环+数据安全
+- **本轮 P4 数字(git 核实)**:S3 ① 邮箱登录 **E2E 13/13 绿(会话内)** ② 客户端读 API(ChatClientController 会话/历史/markRead + 好友 + 媒体 + cursor 分页 + ApiExceptionHandler 包络)③ WS 握手适配 + `06-client-api-smoke.sh`;S1 RAG **真嵌入**+阈值解耦(M15/F06/F07);S2 401→refresh→retry + dev proxy;S4 接通真实客户端**读 API + auth**(`api/{http,real}.ts` 真接缝)。
+- **里程碑**:🎉 统一鉴权 **E2E 实测闭环(13/13)**;IM 前端开始消费真实后端读接口;RAG 可真语义检索。
+- **已集成**:四条 p4 并入 `main = ae420c8`(无冲突,已 push);`feat/agent-frontend-p4` 空(S2 提交在 chat-frontend-p4,已随并)。
+- **仍欠(关键)**:🔴 **数据丢失 B4/B5 未做(拖 4 轮)**——消息仍只靠 Kafka 消费者落库、无 DLQ;**IM 实时收发(live WS 发/收)+ 媒体发送未端到端**;其余 5 服务包络收口部分;S2/S4 分支仍缠。
+- **用户拍板(3 问)**:① 中枢现在合→main;② **下轮=IM 实时闭环 + 数据安全 一起**;③ 下轮做完 **S3 会话内跑 IM 全链路 E2E 验收**。
+- **下一轮**:S3 主力(live WS 收发推送 + B4/B5 + 余下包络收口 + IM E2E);S4 接 live 收发/媒体写路径(读已通);S2 验真实登录端到端 + 接 agent 死端点/工具确认 UX;S1 sync code=0 + 备 agent 给 IM 内助手 + 工具确认挑战令牌(F01)。
+- 阻塞:无。待中枢确认:无(线上仍 defer)。
+
 ### 2026-06-27 · P3 集成(鉴权代码闭环)+ E2E 验收受限 + 下轮=解锁 S4
 - **本轮 P3 数字(git 核实)**:S3 `04ec462` 邮箱登录(D14)+HS256 统一 JWT(chat-common)+/refresh+删 SMS;S1 `a68b2a7` enforce-identity=true+删 body userId+退役 admin token;S2 `4f1da78` agent-frontend D14 登录模型;S4 `53a2800` chat-frontend D14 登录+auth gate(Mock)。🎉 **统一鉴权代码层闭环**。
 - **已集成**:四条 p3 并入 `main = cff5131`(无冲突,已 push);`feat/agent-frontend-p3` 空(S2 提交落在 chat-frontend-p3,已随之并入)。
