@@ -132,6 +132,23 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-27 · P4 RAG 真嵌入 + 检索/引用阈值解耦(主线 M15/F06/F07)
+- 完成:补 agent 真实价值缺陷的主线。**分支 `feat/agent-backend-p4`(push origin,commit `9a875da`,从新 main `db84e48` 起)**:
+  - **① 真实语义嵌入 @Primary(F06/M15)**:`AiModelConfig.embeddingModel()` 有 `DASHSCOPE_API_KEY` 时返回 **QwenEmbeddingModel(text-embedding-v4)**,dimension 对齐 `pgvector.dimension`;否则**显式降级** `HashEmbeddingModel`(WARN 日志,仅本地无网络跑通)。`langchain4j-community-dashscope` 已在 pom、`QwenEmbeddingModel` 类已核实存在(javap 确认 builder 有 apiKey/modelName/dimension)。
+  - **② 检索召回阈值 ↔ 引用展示阈值解耦(F07)**:`VectorSearchService` 检索过滤改用 `rag.retrieval.min-score`(默认 **0.0**,广召回交 RRF+Rerank),不再用高的 `citation.min-score`(这正是"向量召回近乎为 0"的根因);`rag.citation.min-score`(0.75)改为 `RagQueryService` **重排后置展示门 + top-1 兜底**(高阈值永不把可答问题清空)。两旋钮均 env 可配,**待真模型 live 标定后上调**。
+  - **③ 切模型自动重嵌入**:把嵌入模型签名(className)并入 `DocumentIngestionService` 内容哈希——切换 Hash↔真实嵌入时旧片段被 purge 重嵌入,避免"接了真模型但库里仍是旧哈希伪向量"导致检索失效。
+  - `EmbeddingStoreConfig` 维度改从 `pgvector.dimension`(原写死 1024)。
+- 产出物:`config/{AiModelConfig,EmbeddingStoreConfig}.java`、`rag/{VectorSearchService,RagQueryService,DocumentIngestionService}.java`、`application.yml`、`.env.example`。
+- 关键决策:**检索低阈值 + 展示高阈值 + top-1 兜底** 的三段式——既修召回(检索 0.0)又不因未标定的高阈值再次把 RAG 打死(top-1 永不清空);嵌入签名入哈希让模型切换真正生效。
+- 验证:**离线 `mvnw compile` 绿**。⚠️ **真嵌入的召回增益需 live `DASHSCOPE_API_KEY` + PgVector 才能验**(本环境无 key/无 PgVector,起不了);**请 HUB/CI 或在有 key 的环境实跑** `/rag/chat` 对比 hash vs 真嵌入召回,并据真实分布**标定 citation.min-score**。上轮 Mockito 测试的主机 OOM 仍在,本轮无新增测试。
+- 阻塞:无(改动自洽、agent-only)。
+- 本轮**未做 / 顺延**:
+  - **F08 关键词全文索引 + 中文分词**:可选,属独立单元(MySQL ngram fulltext 需配套 Flyway 索引 + 分词器),未与嵌入主线捆绑。
+  - **D5 string id 收尾**:仍需 S2 协同(S2 明确"需通知后一次性翻 types/hooks")+ 是响应全量 id 串化的大改 → 下个独立单元做,**翻前 STATUS 通知 S2**。
+  - **item 3 成功 code=0**:P2 已落 main(确认 live);S3 chat 侧真实 HTTP/code=0 仍未翻(STATUS 记其包络漂移),但分库分前端,不影响 agent。
+- 交接 → 中枢/运维:`DASHSCOPE_API_KEY` 现同时驱动 RAG 真实嵌入;**首次切到真嵌入需重新 ingest**(内容哈希已含嵌入签名,RagDataLoader 启动会自动重嵌入;PgVector 表维度须与 text-embedding-v4 的 1024 一致)。
+- 待中枢确认:① 有 key 环境实跑 RAG 真嵌入召回 + 标定 citation.min-score。② D5 string id 翻转排期(我翻前通知 S2)。③ F08 是否排独立单元。
+
 ### 2026-06-27 · P3 鉴权闭环(agent 侧):翻 enforce + 删 body userId + 退役 X-Admin-Token
 - 完成:S3 网关 front agent(`043c2bb` 在 main)后,完成 agent 侧 contract 相闭环。**分支 `feat/agent-backend-p3`(push origin,commit `a68b2a7`,从新 main `1c722aa` 起)**:
   - **翻 `enforce-identity` 默认 true(item 1)**:非公开请求缺失/非法网关注入的 `X-User-Id` 一律 **401**(拒直连/绕过);`GatewayIdentityFilter` @Value 默认 + `application.yml` + `.env.example` 全翻 true。本地无网关联调设 `AGENT_GATEWAY_ENFORCE_IDENTITY=false` 并自带 X-User-Id。
@@ -239,6 +256,22 @@
 
 ## S2 · agent 前端(owns agent-frontend/)
 
+### 2026-06-27 · P4 单元 1 · 401→refresh→retry 自动续期 + dev proxy 改指网关
+- 完成:从新 main(db84e48)起 `feat/agent-frontend-p4` 分支并 push origin(HTTPS、未合 main)。**提交 7cca0bd**。配合 S3 P3 已 ship 的 `/v1/user/refresh`(commit `04ec462` in main)+ E2E 13/13 绿(S3 P4 item0),把"401 → 自动续期 → 重放"半侧接通。
+  ① **`api.ts` refresh-retry 管线**:`ApiClientOptions` 加 `getRefreshToken`/`onRefreshed`;遇 401 时先 POST `/v1/user/refresh` 拿新 LoginResponse → `onRefreshed` 回传 → 用新 bearer 重放原请求一次;`refreshInFlight: Promise<string|null>|null` 共享,**并发 401 合并成单次 /refresh**;**重放仍 401 不再循环**(retryWithRefresh=false);兼容 `/refresh` 返 bare LoginResponse 或 envelope 包装两种形态(D4 expand/contract);**body code 40100 仍直接 onUnauthorized**(服务器已渲染 200,重放无意义)。
+  ② **`lib/auth.ts authStore.applyRefresh`**:仅刷 access/refresh token,**不动 user.id/name/avatar**;从新 JWT re-parse roles(S3 可能轮换)合并;省略 refreshToken 时保留旧值。
+  ③ **`App.tsx`**:`createApiClient` 多传 `getRefreshToken: () => authStore.get().refreshToken` + `onRefreshed: (res) => authStore.applyRefresh(...)`,让 api 客户端和 React 层共享单一事实来源。
+  ④ **`vite.config.ts` + `.env.example`**:dev proxy 默认从 `:18080`(agent)改到 `:10010`(chat 网关)——03-contracts.md §6 网关已 front `/api/v1/**`→chat 服务 + `/api/agent|memory|rag/**`→agent 一处验签,**单一前门**;agent 直连仍可经 `VITE_API_PROXY_TARGET` 覆盖(用于网关未起时的开发,代价:`/v1/user/*` 登录端点 404 — 已在 .env.example 文档)。
+  ⑤ **`api.test.ts` 新增 5 条 refresh-retry 用例**:① happy path(retry 带 rotated bearer、onUnauthorized 不调);② /refresh 自身失败 → 不重放 → onUnauthorized;③ 无 refresh token → 不调 /refresh → onUnauthorized;④ **并发 401 → 单次 /refresh**(in-flight dedup);⑤ 重放仍 401 → **不死循环**(单次重放守卫)。
+  ⑥ Preview 实测:注入登录态 + reload → App 进 chat workspace(token 注入路径 + UI 切换链路完整),清掉登录态 → 回登录页。
+- 5 大门:tsc / lint / prettier / **test (7 files / 47 测试,新增 5)** / build 全 exit 0。
+- 产出物:`agent-frontend/{src/api.ts,src/api.test.ts,src/App.tsx,src/lib/auth.ts,vite.config.ts,.env.example}`。
+- 关键决策:**dev proxy 默认走网关**(选 A 方案,因为 S3 P3 已让网关 front `/api/agent|memory|rag`)—— 之前 `dev-seed-accounts.md §7` 提的"等中枢拍 A/B" 自此自我 resolved。`/refresh` 不通过 `request()` 调用(避免 401 时 refresh 自身又递归触发 refresh);**body code 40100 不做 retry**(HTTP 200 已渲染,重放无意义,与 S3 真实 HTTP 41xx 路径区分)。
+- 阻塞:无(P3 wire-compat 加上本 P4 unit 1 = 完整客户端鉴权管线;实跑 E2E 待 chat 网关 + Auth 起着 — 等 S3 P4 item0 验过的 WSL 栈或下个 unit 接通本地)。
+- 交接 → **HUB**:可在下一轮集成检查点把 `feat/agent-frontend-p4`(本)并入 main → 配合 S3 P4 邮箱 E2E 完成"全栈鉴权 + 前端 401 续期"实证闭环。
+- 交接 → **S3/中枢**:本前端默认 dev proxy `:10010`(网关)→ E2E 联调需保网关在 `:10010` 起着;否则前端 `/v1/user/*` 调用会 404。
+- 待中枢确认:无。
+
 ### 2026-06-27 · P3 单元 1 · D14 邮箱登录 UI(close-loop-ready)
 - 完成:从新 main(1c722aa)起 `feat/agent-frontend-p3` 分支并 push origin(HTTPS、未合 main)。**提交 4f1da78**。前端按 §7.1 D14 邮箱模型彻底改造,**与 S3 unit1b(`04ec462` `feat/chat-backend-p3`)的 5 个端点 wire-compatible**——S3 一合 main,前端零改即可端到端跑通邮箱登录链路。① `types.ts`:删 phone DTO,加 `LoginCodeRequest`/`RegisterRequest`/`SendMailRequest`/`SendMailResponse`,`LoginRequest.email` 取代 phone。② `api.ts`:加 `sendMail`/`register`/`loginCode` 三薄客户端到 `/v1/user/{sendMail,register,loginCode}`(已有 `login`/`refresh`)。③ `hooks/useAuth.ts`:重写为单 `applySession` 兜底任一 LoginResponse,新增 `loginPassword`/`loginCode`/`register`/`sendMail`/`logout` actions(保留 JWT sub fallback)。④ `features/auth/AuthScreen.tsx`:全屏重写邮箱模型,三模式(密码 / 邮箱验证码 / 注册)通过 `AuthMode` 驱动;**60s 重发倒计时**(props `resendCooldown`/`codeNotice`/`onSendCode`);"注册一个" / "已经有账号? 去登录"互转入口;**完全无手机号字段**;所有文案 zh-CN 品牌化、不回显后端原始串。⑤ `App.tsx`:`handleLogin` 拆 4 handler(sendCode/loginPassword/loginCode/register),共享 `mapAuthError(error, mode)` 映射 401/429/422/409(D4 包络 {0,200}↔真实 HTTP 双兼容),1Hz 倒计时 tick。⑥ 新增 13 测试:**`useAuth.test.tsx`(6 条)**——D14 路由 + sub fallback + missing-token rejection;**`AuthScreen.test.tsx`(7 条)**——三模式 UI 契约 + 邮箱有效性 gates submit + 错误 banner 品牌文案。⑦ preview 实测:邮箱 input 在、手机号 input 不在、两 tabs + 注册入口齐全,**零英文残留**(snippet 仅 name/example/Lingxi 是 placeholder + 品牌)。**5 大门**:tsc/lint/prettier/test(7 文件 / **42 测试**,新增 13)/build 全 exit 0。
 - 产出物:`agent-frontend/src/{types.ts,api.ts}`、`agent-frontend/src/hooks/useAuth.ts`、`agent-frontend/src/features/auth/AuthScreen.tsx`、`agent-frontend/src/App.tsx`、新增 `agent-frontend/src/hooks/useAuth.test.tsx` + `agent-frontend/src/features/auth/AuthScreen.test.tsx`。
@@ -322,6 +355,33 @@
 ---
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
+
+### 2026-06-27 · ✅ P4 item1【解锁 S4】客户端 API 已交付并运行期验证(commit `bd27c9e`)
+- 完成:在 `feat/chat-backend-p4` 新增 5 个客户端端点(均 **chat-common `Result`/`PageResult`,成功 code=0;所有 id 字符串化;操作人取 `RequestContext` 绝不信 body;游标分页 base64 不透明;成员鉴权**)。旧端点不动(其自有 Result 保留到 item3 翻转)。
+- E2E **双绿**:`04` 鉴权回归 **13/13**(新 API 部署后闭环不受影响)+ `06` 客户端 API **7/7**(C1 sessions code=0、C2 无 token 401、C3 friends code=0、C4 PageResult 形状、C5 非成员拉历史 403、C6 非成员 markRead 403)。
+
+- **🤝 交接 S4 — 可直接联调的端点契约**(全部需 `Authorization: Bearer <access>`,经网关;成功 `{code:0,data:...}`,错误真实 HTTP 401/403/400):
+  1. **会话/收件箱列表** `GET /api/v1/chat/sessions` → `Result<List<SessionListItem>>`;item:`{sessionId(str),type,name,avatar,lastMessage(可空),lastMessageTime(可空),unreadCount}`(单聊 name/avatar=对方;群聊=session.name+群头像[暂空])。
+  2. **历史消息分页** `GET /api/v1/chat/session/{sessionId}/messages?cursor=&limit=` → `Result<PageResult<MessageItem>>`;item:`{messageId(str),sessionId(str),senderId(str),type,content,replyId(可空),createdAt}`;**非成员→403**;keyset `message_id DESC`;`limit` 默认 20 上限 100;`nextCursor` 不透明(仅 hasMore 时给)。
+  3. **标记已读** `POST /api/v1/chat/sessions/{sessionId}/read` body 可选 `{lastReadMessageId}`(不传=该会话最新)→ `Result<String>`(新 last_read,单调只增);**非成员→403**。
+  4. **好友列表** `GET /api/v1/contact/friends?cursor=&limit=&status=` → `Result<PageResult<FriendListItem>>`;item:`{friendId(str),nickname,avatar,signature,status}`;`status` 默认 1(好友);keyset 分页。
+  5. **浏览器 WS 握手(B8)**:`token`/`userUuid` 可走 **URL 查询参数** `?token=&userUuid=`(浏览器 WS 不能设握手头),亦兼容握手头;服务端验签且 **sub==userUuid** 才放行。WS 路径见 §8(网关 `/api/v1/netty` 白名单,由 Netty 端校验)。
+  6. **媒体上传契约(M11)** `POST /api/v1/user/media/upload-url`(需登录)body `{fileName,contentType,size?}` → `Result<{uploadUrl(预签名 PUT),fileUrl(上传后写入消息的 CDN URL),objectKey,method:"PUT",contentType,expiresInSec,maxSizeBytes}}`。**对象键服务端按当前用户隔离生成** `chat/{userId}/{date}/{uuid}.{ext}`(客户端无法指定 → 防跨用户覆盖/路径穿越);MIME 白名单(image/video/audio/pdf)+ 分类型大小上限,违规 → **422**。客户端流程:调本接口 → 用 `method`+`uploadUrl` 直传(带 `Content-Type`)→ 把 `fileUrl` 放进消息体。
+
+- DB 迁移(已对 E2E 库执行,**待线上登记**):`ALTER TABLE user_session ADD COLUMN IF NOT EXISTS last_read_message_id BIGINT NULL;`
+- item1 **6/6 端点全部交付且运行期验证**(`06` 冒烟 10/10:C1-C6 + M1-M3)。
+- ⚠️ 给中枢:`02-build.sh` 已改 `mvn clean package`;另发现 **main 工作树 `chat/e2e/*.sh` 曾为 CRLF**(`set -euo pipefail\r` → `_restart` 静默 no-op,服务未起),现已规整为 LF(`.gitattributes *.sh eol=lf` 覆盖 `autocrlf=true`,后续 checkout 安全)。若再遇 `_restart` 无输出/不起服务,先查 `\r`。
+- 阻塞:无。**item1 焦点(解锁 S4)已收口**。下一步:item2(B4 生产者+outbox 同事务写 message / B5 Kafka DefaultErrorHandler+DLQ)、item3(其余服务接 chat-common Result + §3 真实 HTTP 翻转,翻前 STATUS 通知 S2/S4)。
+
+### 2026-06-27 · ✅ P4 item0 鉴权闭环验收:E2E 邮箱登录 01→04 全绿(13/13)
+- 完成:常驻 WSL 会话内**实跑验收通过**。worktree `feat/chat-backend-p4`(from main `db84e48`)。干净重建(rm projecta-e2e/chat → fresh rsync → `mvn clean package`,8 模块 BUILD SUCCESS)+ 重启隔离栈,跑 `04-smoke`(已改 D14 邮箱 + refresh)**PASS=13 FAIL=0**:
+  - T1/T2 网关挡无 token/无效 token → 401;T3 actuator 200;T4 直连业务服务 → 401;T5/T6 RTC 内部令牌;
+  - **T7 邮箱注册 code=0**(BCrypt + `verify:email`);**T8 邮箱登录拿 access token**(userId=`2070816390297817088`);**T8b `LoginResponse.userId` 非空(bug 已修,运行期确认)**;
+  - T9 带 token 经网关 → 非401(网关注入 X-User-Id);T10 越权 → 403;T11 伪造 X-User-Id 被剥离;**T12 refresh 换新 access code=0**。
+- **根因澄清:** 上轮 Auth 的 `ModelAndViewDefiningException` ClassNotFound = **陈旧增量胖 jar**(`02-build` 用 `package` 非 `clean` + rsync `--exclude target` 保留旧 target → 半胖 jar),**非 P3 源码缺陷**。已把 `02-build.sh` 改 `mvn clean package` 杜绝。
+- 产出物:`chat/e2e/04-smoke-test.sh`(D14 邮箱 + T12 refresh)、`chat/e2e/02-build.sh`(clean package)。
+- 交接 → 中枢/S2:**统一鉴权闭环已端到端实证绿**(邮箱登录→token→经网关访问 chat→拒直连→拒伪造头→refresh)。S2 可放心接真实邮箱登录;跨 agent+chat 全栈 E2E 可在此基础上跑(agent enforce 已由 S1 翻)。
+- 阻塞:无。下一步:item1 客户端 API(解锁 S4)。
 
 ### 2026-06-27 · ✅ P3 鉴权闭环(chat 侧):邮箱登录 D14 + 统一 HS256 JWT + refresh(已并入 main)+ 交接 S2
 - 完成:Auth 一次性收口,**commit `04ec462` 已并入 main(`5e0dda1` merge,main=`cff5131`)**;full reactor build green(8 模块)。
@@ -416,6 +476,15 @@
 ---
 
 ## S4 · chat 前端(owns chat-frontend/)
+
+### 2026-06-27 · P4 真实数据接入:客户端 read API + 鉴权全链路切真实(分支 feat/chat-frontend-p4)
+- 背景:S3 `P4 item1`(commit `bd27c9e`)交付 5 客户端端点 + B8 定形(`?token=&userUuid=`),E2E `06` 7/7 绿;本轮按**「同签名一处切」把已交付的接真实,未交付的续 Mock**。
+- 完成:① **真实 HTTP 客户端 `api/http.ts`**:一处持有 base-URL 解析(`VITE_API_BASE` 选真实分支 + 前缀:绝对 URL 直连 / 非绝对走 dev proxy 免 CORS)、`Authorization: Bearer`(**只带 token、绝不带 userId**,身份由网关注 X-User-Id)、**D4 包络解包**(`{code,data,…}`,code∈{0,200} 成功)、**HTTP 状态→中文文案映射**(400/401/403/404/409/422/429/503;**兼容空体**——网关级 401/403 无包络体)、**401→refresh→重放**(并发 401 合并为单次 `POST /user/refresh`,失败即 signOut)。② **真实 Api 分支 `api/real.ts`**(同 `Api` 签名,一处切):auth `sendMail/login/loginCode/register/refresh`(§7.1)+ **会话列表 / 历史分页 / 好友 / 标记已读**(item1;wire→domain 映射:`SessionType 1单2群`、id 全 string、历史 `message_id DESC`→渲染升序、游标 `{items,nextCursor,hasMore}`、markRead 不传 `lastReadMessageId`=最新)+ **B8 真实 WS transport**(`?token=&userUuid=`,token/userUuid 取自 auth store);`me()/userMap()` 由会话派生(+好友缓存)。③ **未交付续 Mock**:`sendMessage`(写侧待 S3 item2 B4 outbox,旧端点请求/响应形未定→**不盲接**)、好友申请 applies/respond、助手 SSE(agent/S1 域)→ realApi 内部委托 mockApi。④ **seam `api/index.ts`**:`api = isMock ? mockApi : realApi`,**默认仍 Mock**(`VITE_API_BASE` 空)→ CI build/verify 与后端解耦。⑤ **dev proxy 改进**:vite.config 用 `loadEnv` 让 `VITE_GATEWAY` 可由 `.env*` 配(proxy 在 Node 侧、`import.meta.env` 不可达);并 **strip `Origin` 头**(见下「发现」①)。
+- 产出物:`chat-frontend/src/api/{http.ts,real.ts}`(新)、改 `chat-frontend/src/api/index.ts`、`chat-frontend/vite.config.ts`。分支 `feat/chat-frontend-p4`。
+- 关键决策:**先接已交付、未交付续 Mock**(读侧 + 鉴权切真实;写侧/applies/助手暂留 Mock,合「不返工」);auth 错误**按上下文翻译**(登录屏 401/403/400→「邮箱或密码不正确」而非「会话过期」;读写侧 403 仍「没有权限」);默认 Mock 不变(离线可跑、门绿、可发布形态不变)。
+- 🔎 **发现(交接 S3/中枢)**:① **网关对 POST 鉴权端点(`/user/login` 等)带 `Origin` 头的跨源请求回 403**(无 Origin→401/422 正常;GET `/chat/sessions` 带 Origin→仍 401,**非全局**,疑 CSRF/CORS 仅卡 POST)。dev 已在 proxy strip Origin 规避(浏览器→网关 E2E 可跑);**线上需网关对前端源开 CORS**,否则浏览器端 POST 一律 403。② **E2E 段 `/user/sendMail` 回 500**(该环境无邮件服务)→ 前端侧拿不到验证码 → 无法注册/换 token → **authed 屏(会话/历史/好友真实数据渲染)E2E 暂无法从本机自证**;需 S3 在 E2E 播种可登账号或 dev-mode `sendMail` 返码,或 S3 在常驻 WSL 会话内跑前后端联调。
+- 阻塞/待:authed 屏真实数据渲染验证(待可登账号);**WS 推送 E2E**(连接→推送→去重→ACK→重连 backfill)待 S3 item2(B4 生产者→Kafka→推送)落 + 可登会话;`sendMessage` 真实化待 item2 旧端点翻 chat-common Result。
+- 验证:**build(`tsc -b && vite build`)绿 + verify:ui 绿(47 文件)**。**Live `:10110`(S3 E2E 网关在运行)探测**:`/chat/sessions`、`/contact/friends` 无 token→真实 401(裸体无包络);`/user/login` 坏凭据(无 Origin)→401。**浏览器真实模式 E2E**(临时 `.env.local`:`VITE_API_BASE=1` + proxy→`:10110`,跑后即删、gitignored,**默认 Mock 不变**):① **确证真实非 Mock**——`test@lingxi.app/123456`(Mock 规则本会登入跳首页)在真实下→打到 `:10110`→401→停 `/auth` 显 `role=alert`「邮箱或密码不正确」;② proxy strip Origin 后 login 403→401、文案正确;③ network 确认 `real.ts/http.ts` 已 bundle、POST 经 `/api/v1/user/login` 走真实。注:本机 dev 慢、screenshot 偶超时,以文本快照 + network 状态码为准。
 
 ### 2026-06-27 · auth 对齐 D14 邮箱登录模型 + 鉴权门 + 会话持久化(分支 feat/chat-frontend-p3)
 - 完成:① **D14 auth seam(契约+mock 同签名,P2 一处切真实)**:`sendMail{email}` / `login{email,password}` / `loginCode{email,code}`(免密)/ `register{email,password,code}` / `refresh{refreshToken}` → `AuthSession{userId(string),userName,avatar,token,refreshToken}`(`03-contracts §7.1`,**邮箱身份、无手机号/短信**);mock 校验邮箱格式 + 密码≥6 + 6 位码(短密码/坏码→错误态),会话保 ME 身份(IM「我」零扰动)。② **auth store**(zustand + localStorage `lingxi.auth` 持久化 + 启动恢复)+ mutation(`useSendMail/useLogin/useLoginCode/useRegister`,成功即 signIn)。③ **AuthPage 重写(D14)**:邮箱+密码 / 邮箱验证码(免密)两种登录 + 邮箱码注册,**无手机号**;发送验证码(60s 冷却 + 「已发送到 {email}」提示)、加载态(请稍候/发送中)、错误态(`role=alert`)、成功跳转;沿用 DESIGN.md account-first + 段控 + trust strip。④ **鉴权门(D2)**:`RequireAuth` 无会话→`/auth`、`RedirectIfAuthed` 已登→`/`;Settings「退出登录」清会话→`/auth`。
