@@ -133,12 +133,44 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         String kafkaJSON = JSON.toJSONString(kafkaMsgVO);
         log.info("发送Kafka消息: {}", kafkaJSON);
 
-        kafkaOutboxService.saveAndSend(
+        // B4: 同一本地事务写 message + outbox(提交后才发 Kafka);message 字段映射须与离线投影一致
+        Message message = buildMessageEntity(sendMsgRequest, messageId, createdAt);
+        kafkaOutboxService.persistMessageAndOutbox(
+                message,
                 messageId,
                 ConfigEnum.KAFKA_TOPICS.getValue(),
                 sendMsgRequest.getSessionId().toString(),
                 kafkaJSON
         );
+    }
+
+    /**
+     * B4: 由发送请求构建 message 行,字段映射与离线消费者投影保持一致
+     * (content=body.content, replyId=body.replyId, senderId=sendUserId),使两侧幂等写入同一行。
+     */
+    private Message buildMessageEntity(SendMsgRequest request, Long messageId, Date createdAt) {
+        Message message = new Message();
+        message.setMessageId(messageId);
+        message.setSenderId(request.getSendUserId());
+        message.setSessionId(request.getSessionId());
+        message.setType(request.getType());
+        message.setSessionType(request.getSessionType());
+        com.alibaba.fastjson.JSONObject body = parseBody(request.getBody());
+        if (body != null) {
+            message.setContent(body.getString("content"));
+            message.setReplyId(body.getLong("replyId"));
+        }
+        message.setCreatedAt(createdAt);
+        message.setUpdatedAt(createdAt);
+        return message;
+    }
+
+    private com.alibaba.fastjson.JSONObject parseBody(Object body) {
+        if (body == null) {
+            return null;
+        }
+        Object json = JSON.toJSON(body);
+        return json instanceof com.alibaba.fastjson.JSONObject ? (com.alibaba.fastjson.JSONObject) json : null;
     }
 
     private void sendRealTimeMessage(SendMsgRequest sendMsgRequest, AppMessage appMessage) {
@@ -162,9 +194,10 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
             Request request = buildRealtimeRequest(routeEntry.getKey(), copyAppMessageForReceivers(appMessage, routeEntry.getValue()));
             executeHttpRequest(request);
         } catch (Exception e) {
+            // M8: 实时推送 best-effort——消息已在事务内持久化(B4),推送失败不回滚、不抛错;
+            // 清理失效路由,接收方改由离线拉取/重连补投兜底。
             routeMap.forEach(this::removeInvalidRoutes);
-            log.error("发送单聊消息失败: {}", e.getMessage());
-            throw new ServiceException("发送单聊消息失败");
+            log.error("发送单聊实时消息失败(消息已持久化,转离线/补偿): {}", e.getMessage());
         }
     }
 
