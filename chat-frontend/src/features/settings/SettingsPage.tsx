@@ -14,10 +14,12 @@ import {
 } from "@infinitechat/design-system";
 
 import {api} from "@/api";
+import {useAuthStore} from "@/store/auth";
 import {Page, SignalStrip} from "@/features/_shared/Page";
 
 export function SettingsPage() {
   const navigate = useNavigate();
+  const signOut = useAuthStore((s) => s.signOut);
   const {theme, toggleTheme} = useTheme();
   const me = api.me();
   const [notify, setNotify] = useState(true);
@@ -25,7 +27,20 @@ export function SettingsPage() {
   const [receipts, setReceipts] = useState(true);
 
   return (
-    <Page eyebrow="设置" title="偏好" aside={<AccountPanel name={me.name} id={me.id} onSignOut={() => navigate("/auth")} />}>
+    <Page
+      eyebrow="设置"
+      title="偏好"
+      aside={
+        <AccountPanel
+          name={me.name}
+          id={me.id}
+          onSignOut={() => {
+            signOut();
+            navigate("/auth", {replace: true});
+          }}
+        />
+      }
+    >
       <SignalStrip
         items={[
           {label: "主题", value: theme === "dark" ? "深色" : "浅色"},
