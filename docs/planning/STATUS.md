@@ -184,6 +184,15 @@
 
 ## S2 · agent 前端(owns agent-frontend/)
 
+### 2026-06-27 · 登记 dev seed 账户 #1(17614797418/asdf1476)+ 交接 S3 落库
+- 完成:① 用户要求登记一个 dev seed 账户给 agent-frontend 登录页用 — 我侧的 user 表是 S3 (chat-backend) 库,不能直接 INSERT,改为**写交接文档**:新增 `docs/planning/dev-seed-accounts.md`,包含 ① 账户清单(`userId=100000000000000001` snowflake-safe 固定 id, `17614797418/asdf1476`, role=user)② BCrypt hash(`$2b$10$RBa8.AaiZu5gp2E7NIqO4ubM6Zhza.n8RZeBX2Ag1th2nOciRd.SW`,Python bcrypt 算 + 验证 True;与 chat-backend `BCryptPasswordEncoder` 同算法、互认 `$2a`/`$2b`)③ 幂等 INSERT 模板(user + user_balance,带 `ON DUPLICATE KEY UPDATE` 不覆盖已有数据)④ 三种 seed 时机方案让 S3 选(SchemaInitializer 末尾 / Flyway migration / 独立脚本,推荐脚本风格与 `chat/e2e/01-setup-infra.sh` 一致)。② 用 4 个真实端口探测后端:**只有 :10110 在响应**(E2E 网关),:10010/:18080/:8082 全死 — 即便账户 seed 了,本地启动也需要先把 chat 网关或 chat Auth 起起来才能登。③ 发现 **dev proxy 设计缺口**(`vite.config.ts` 默认指 :18080/agent,但 `/api/v1/user/login` 是 chat Auth 端点 — proxy 打到 agent 上是 404)— 写在文档 §7,给出 A/B 两个选项(长期=网关 vs 临时=多路径 proxy)。
+- 产出物:`docs/planning/dev-seed-accounts.md`(新增,7 节;无代码改动)。
+- 关键决策:**不擅自 INSERT 到 chat 的 user 表**(S3 领地、跨流);改为产出"账号清单 + hash + SQL + 落地方案"让 S3 自己执行。**userId 用固定值 `100000000000000001`** 而非运行时 snowflake 生成 → 跨环境(prod/E2E/本地)可复现,避免每次 seed 拿到不同 id。
+- 阻塞:无(账户登记完成、文档落定;真正能在登录页用,等 S3 seed + dev proxy 缺口任一方案落地)。
+- 交接 → **S3**:① 按文档 §4 选定方式把 §3 的两段 SQL 跑到 `InfiniteChat`(prod)与 `InfiniteChat_e2e`(E2E)库;② **修 `LoginResponse.userId = null`**(我侧已从 JWT sub 兜底,但修了更干净 — 已在上一轮交接里说过)。③ 后续如要加更多 dev/test 账户,按文档 §5 流程追加。
+- 交接 → **HUB**:仲裁文档 §7 的 dev proxy 方案 — 短期是否让我先做"B(多路径 proxy)" 让用户能在不起网关情况下登;长期等 S3 网关稳定后切 A。需要中枢拍。
+- 待中枢确认:**dev proxy 方案 A/B 二选一**(见上)。
+
 ### 2026-06-27 · P1b 单元 1+2 · 复跑 5 大门 + 品牌通刷收尾 + a11y;登录壳 + token 管线 + Authorization 注入
 - **从新 main(863af6b)起 `feat/agent-frontend-p1b` 分支并 push origin(HTTPS)**;ds 根级 alias 已自动指向 `packages/design-system`,源 tsc/build 绿。
 - **单元 1(cba028b)**:① 修 `.prettierrc.json` 加 `endOfLine: auto`(根因:Windows checkout CRLF + 项目无 `.gitattributes`,导致 41 文件 prettier 失配,实际无格式差异)。② 上一轮品牌通刷遗漏的最后几处面向用户英文全部清干净:`ModelPicker/ModelPickerMobile` 的 `Reasoning effort`/`Choose model`/`Model` aria 译为中文;`SessionInsightPanel` 重写(`本次对话`/`对话总结`/`逐轮回顾`/`第 N 轮` + ds `<EmptyState>`,turn status 映射 zh);`SessionList` 全译(`我的对话`/`共 X 条对话` 等 + 空态友好文案);`IngestionPanel` 中文化(panel title `知识入库`、操作按钮、状态串、job status 映射);`MemoryPanel` 中文化 + 新增 `MEMORY_TYPE_LABELS`(wire enum→ 中文标签)+ `memoryStatusLabel`;`ModelConfigPanel` 中文化(每个 label/placeholder/button/status,后端原始错误串不再透传)。③ **a11y(L14)**:`AnimatedWorkspaceView` 接 `useReducedMotion()`,reduced-motion 用户立即降级到 instant cross-fade;`styles.css` 加全局 `@media (prefers-reduced-motion: reduce)` 兜底所有 CSS animation/transition。④ ds `<EmptyState>` 用上(SessionInsightPanel 空 turn 态)。**5 大门全绿** + preview eval 验过 `englishLeak: []`。
