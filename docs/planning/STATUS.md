@@ -20,6 +20,16 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-27 · P3 集成(鉴权代码闭环)+ E2E 验收受限 + 下轮=解锁 S4
+- **本轮 P3 数字(git 核实)**:S3 `04ec462` 邮箱登录(D14)+HS256 统一 JWT(chat-common)+/refresh+删 SMS;S1 `a68b2a7` enforce-identity=true+删 body userId+退役 admin token;S2 `4f1da78` agent-frontend D14 登录模型;S4 `53a2800` chat-frontend D14 登录+auth gate(Mock)。🎉 **统一鉴权代码层闭环**。
+- **已集成**:四条 p3 并入 `main = cff5131`(无冲突,已 push);`feat/agent-frontend-p3` 空(S2 提交落在 chat-frontend-p3,已随之并入)。
+- **E2E 验收(中枢实跑,部分成功)**:✅ 合并后 7 服务+chat-common **BUILD SUCCESS**(编译验证闭环可集成);✅ AuthenticationService 起来健康(200)。⚠️ **全栈鉴权 E2E 未能从 Windows→WSL 桥稳定跑通**——网关冷启动/进程生命周期跨桥调用不持久(每次 `wsl.exe` 调用退出即拆,网关反复 000;logback 关停噪音)。**结论:E2E 应由 S3 在其常驻 WSL 会话内跑**(S3 此前 11/11 绿)。
+- 🔴 **新发现(DevOps)**:仓库 `.sh` 脚本被 **CRLF 污染**(Windows autocrlf 提交)→ `set -euo pipefail\r` 在 bash 下报 `pipefail: invalid option name`,须 `tr -d '\r'` 才能跑。**需加 `.gitattributes`:`*.sh text eol=lf`** 并重规范化既有脚本。交接 S3/中枢。
+- **包络漂移仍在**:S3 只把 Auth 接了 chat-common Result;其余 5 服务 + §3 真实 HTTP 翻转未做。
+- **用户拍板(3 问)**:① 中枢现在合→main;② 集成后中枢跑全栈鉴权 E2E(已尽力,见上,移交 S3 在会话内验);③ **下轮重心=解锁 S4(S3 出客户端 API + 浏览器 WS),数据安全 B4/B5 并行**。
+- **下一轮**:S3 先(a)更新 E2E 冒烟为邮箱登录(D14)并在会话内跑绿验收闭环 +(b)加 `.gitattributes` 修 CRLF,再(c)客户端 API+浏览器 WS(解锁 S4)+数据丢失 B4/B5;S1 转 RAG 真嵌入/可观测;S2 接通真实邮箱登录(鉴权已闭环);S4 等 S3 客户端 API,续 Mock+对齐。
+- 阻塞:无。待中枢确认:无(线上仍 defer)。
+
 ### 2026-06-27 · P2 集成 + D14 邮箱登录 + 下轮=鉴权闭环冲刺
 - **本轮 P2 数字(git 核实,均单 commit)**:S3 `043c2bb` 网关 fronts agent 路由+注入 X-User-Id/Roles(**仅此片**:未做统一 JWT/LoginResponse 修/refresh/6 服务接 chat-common);S1 `50bad45` 错误码对齐 chat-common + 真实 HTTP 状态(**enforce 仍 false**);S2 `ab5c294` model-config admin 屏(D10);S4 `9421434` 流式"灵犀"助手壳(Mock,SSE-ready)。
 - **如实评估**:🔴 **鉴权闭环本轮未闭**(网关路由有了,但 enforce 未翻、JWT 未统一、LoginResponse.userId 未修、/refresh 未做 → S2 真实登录仍接不通);**包络短暂漂移**(agent 已翻真实 HTTP,chat 仍 200+code,待 S3 把 chat-common Result 接进 6 服务收口,S2 已 {0,200} 双兼容兜底)。瓶颈持续在 S3 关键路径(每轮一薄片)。
@@ -312,6 +322,20 @@
 ---
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
+
+### 2026-06-27 · ✅ P3 鉴权闭环(chat 侧):邮箱登录 D14 + 统一 HS256 JWT + refresh(已并入 main)+ 交接 S2
+- 完成:Auth 一次性收口,**commit `04ec462` 已并入 main(`5e0dda1` merge,main=`cff5131`)**;full reactor build green(8 模块)。
+  - **D14 邮箱登录**:`register{email,password,code}` / `login{email,password}` / `loginCode{email,code}`(免密);**删手机号/短信**(dysmsapi + SMS DTO/路径全删);`sendMail{email}` 写 `verify:email:{email}` + 校验后删 key(防重放);端点统一到 `/api/v1/user/*`(check/sendMail/uploadUrl 从 `/common/*` 迁出)。
+  - **统一 JWT**:Auth 改用 chat-common `JwtUtil` 签 HS256 access(30m)+ refresh(7d),单源 `JWT_SECRET_KEY`(网关验签算法无关,兼容存量)。
+  - **修 `LoginResponse.userId`**:返回 sub 的 string id;新增 `refreshToken`。新增 `POST /api/v1/user/refresh{refreshToken}`(验 isRefresh→签新 access+轮换 refresh)。
+  - **包络/身份归一**:Auth 接 chat-common `Result`(成功 code=0)+ 真实 HTTP 状态(`GlobalExceptionHandler` ResponseEntity)+ `RequestContext`/`IdentityHeaders`;jackson `non_null`。网关白名单加 `/api/v1/user/sendMail`+`/check`。
+- **交接 → S2(接真实邮箱登录):** 端点已就绪(均经网关 `:10010`,免登录白名单):
+  - `POST /api/v1/user/register` ← `{email,password,code}`;`POST /api/v1/user/login` ← `{email,password}`;`POST /api/v1/user/loginCode` ← `{email,code}`;`POST /api/v1/user/sendMail` ← `{email}`;`POST /api/v1/user/refresh` ← `{refreshToken}`。
+  - 登录/注册返回 `LoginResponse{userId(string,已修非空),userName,avatar,...,token,refreshToken}`;**成功 code=0**(你已 {0,200} 双兼容)。可去掉 JWT sub 兜底、直接用 `userId`;`refresh` 壳直接通。**无手机号输入**(phone 字段保留可空、不参与鉴权)。
+- **交接 → S1:** 网关 front agent 路由 + 注入 X-User-Id/Roles 已在 main → S1 已翻 enforce(见 S1 `125` 行)。✅ 闭合。
+- **运行验证(诚实记录):** 代码已合并 + 全量编译绿;**本地 E2E 邮箱登录冒烟未跑绿**——首跑 Auth 命中 **JDK21 + Spring Boot 2.6 WebMVC 胖 jar 的 `ModelAndViewDefiningException` ClassNotFound**(在 DispatcherServlet 异常处理路径,**无 com.lou 应用栈帧 → 属 Spring/loader 基础设施层,非 register 业务代码**;jar 内 spring-webmvc-5.3.23 + chat-common 均在);随后多轮重启 + 跨会话重启致 E2E 栈不稳(网关/Auth 间歇 000)。**判断:这是 E2E 运行期/打包(JDK21 胖 jar)环境问题,非 P3 源码缺陷。**
+- 交接 → 中枢(item 5 全栈 E2E):建议**干净整栈重起**后跑(stop 全部 → `mvn clean package` 全量 → 03 起全部 → 等就绪 → `chat/e2e/05-email-login-smoke.sh` + 全栈鉴权场景)。若 Auth 仍 `ModelAndViewDefiningException`,候选解:① 用解包方式运行 Auth(`java -cp BOOT-INF/classes:BOOT-INF/lib/*`,绕开 SB2.6 嵌套 jar loader 在 JDK21 的惰性加载坑);② 或后续把 chat 服务 spring-boot-loader/启动方式与 JDK21 对齐。`05-email-login-smoke.sh` 已随 p3 入库,可直接复用。
+- 待中枢确认:① item 5 全栈 E2E 由中枢主跑(我配合);② item 4(其余 5 服务接 chat-common Result/真实 HTTP)是否本轮继续,还是 E2E 闭环验证后再做。
 
 ### 2026-06-27 · ✅ unit1a 网关 front agent + 注入 X-User-Id/Roles(交接 S1:可翻 enforce)
 - 完成:worktree `E:/jhw/proj-chat-p2`(分支 `feat/chat-backend-p2`,从 main `e182a0c`),**已 push**(commit `043c2bb`,GateWay+chat-common build green)。
