@@ -14,7 +14,10 @@ import com.lou.contactservice.data.DeleteFriend.DeleteFriendRequest;
 import com.lou.contactservice.data.DeleteFriend.DeleteFriendResponse;
 import com.lou.contactservice.data.FriendDetail.FriendDetailRequest;
 import com.lou.contactservice.data.FriendDetail.FriendDetailResponse;
+import com.lou.contactservice.data.FriendList.FriendListItem;
 import com.lou.contactservice.data.ModifyApply.ModifyApplyResponse;
+import com.lou.contactservice.common.CursorCodec;
+import com.lou.common.api.PageResult;
 import com.lou.contactservice.data.SearchUser.SearchUserRequest;
 import com.lou.contactservice.data.SearchUser.SearchUserResponse;
 import com.lou.contactservice.data.dto.push.NewSessionNotification;
@@ -35,7 +38,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * @author Lou
@@ -157,6 +163,64 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend>
                 .setStatus(populateFriendStatus(request.getUserUuid(), request.getFriendUuid()));
 
         return response;
+    }
+
+    @Override
+    public PageResult<FriendListItem> listFriends(Long userId, Integer status, String cursor, int limit) {
+        // 解码不透明游标 -> 末条 friend.id(keyset,非 LIKE 全表扫)。
+        Long cursorId = CursorCodec.decode(cursor);
+
+        // 多取一条用于判定 hasMore。
+        QueryWrapper<Friend> wrapper = new QueryWrapper<>();
+        wrapper.eq("user_id", userId)
+                .eq("status", status);
+        if (cursorId != null) {
+            // 降序 keyset:取 id 严格小于游标的下一页。
+            wrapper.lt("id", cursorId);
+        }
+        wrapper.orderByDesc("id")
+                .last("LIMIT " + (limit + 1));
+
+        List<Friend> rows = this.list(wrapper);
+        if (rows == null || rows.isEmpty()) {
+            return PageResult.empty();
+        }
+
+        boolean hasMore = rows.size() > limit;
+        List<Friend> page = hasMore ? rows.subList(0, limit) : rows;
+
+        // 批量取对方用户资料,避免 N+1。
+        List<Long> friendUserIds = page.stream()
+                .map(Friend::getFriendId)
+                .collect(Collectors.toList());
+        Map<Long, User> userMap = new HashMap<>();
+        if (!friendUserIds.isEmpty()) {
+            List<User> users = userService.listByIds(friendUserIds);
+            for (User u : users) {
+                userMap.put(u.getUserId(), u);
+            }
+        }
+
+        List<FriendListItem> items = new ArrayList<>(page.size());
+        for (Friend f : page) {
+            User u = userMap.get(f.getFriendId());
+            FriendListItem item = new FriendListItem()
+                    .setFriendId(String.valueOf(f.getFriendId()))
+                    .setStatus(f.getStatus());
+            if (u != null) {
+                item.setNickname(u.getUserName())
+                        .setAvatar(u.getAvatar())
+                        .setSignature(u.getSignature());
+            }
+            items.add(item);
+        }
+
+        // nextCursor = 本页末条 friend.id 的不透明编码;无更多则为 null。
+        String nextCursor = hasMore
+                ? CursorCodec.encode(page.get(page.size() - 1).getId())
+                : null;
+
+        return PageResult.of(items, nextCursor, hasMore);
     }
 
     // getUserDetails

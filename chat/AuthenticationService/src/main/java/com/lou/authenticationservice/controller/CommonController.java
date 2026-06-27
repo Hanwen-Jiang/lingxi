@@ -1,8 +1,11 @@
 package com.lou.authenticationservice.controller;
 
 import com.lou.common.api.Result;
+import com.lou.common.security.RequestContext;
 import com.lou.authenticationservice.data.common.SendMail.MailRequest;
 import com.lou.authenticationservice.data.common.SendMail.MailResponse;
+import com.lou.authenticationservice.data.common.media.MediaUploadRequest;
+import com.lou.authenticationservice.data.common.media.MediaUploadResponse;
 import com.lou.authenticationservice.data.common.uploadUrl.UploadUrlResponse;
 import com.lou.authenticationservice.data.common.uploadUrl.UploadUrlRequest;
 
@@ -70,6 +73,16 @@ public class CommonController {
         UploadUrlResponse response = commonService.uploadUrl(request);
 
         return Result.ok(response);
+    }
+
+    /**
+     * 媒体上传预签名(M11):需登录(网关注入 X-User-Id)。对象键由服务端按当前用户隔离生成,
+     * 客户端只给原始文件名(取扩展名)+ contentType。返回直传 URL + 上传后用于消息的 CDN URL。
+     */
+    @PostMapping("/media/upload-url")
+    public Result<MediaUploadResponse> getMediaUploadUrl(@RequestBody @Valid MediaUploadRequest request) {
+        String userId = RequestContext.requireUserId();
+        return Result.ok(commonService.mediaUploadUrl(userId, request));
     }
 
 }

@@ -15,8 +15,10 @@ rsync -a --delete \
   --exclude target --exclude .git --exclude .idea --exclude 'e2e/e2e.env' \
   "$SRC"/ "$E2E_SRC"/
 
-echo "== 打包(系统 mvn，跳测试；首次需联网拉依赖) =="
+echo "== 打包(系统 mvn,clean 防陈旧胖 jar,跳测试;首次需联网拉依赖) =="
 cd "$E2E_SRC"
-mvn -B -DskipTests package
+# 必须 clean:rsync --exclude target 会保留旧 target,增量 package 可能产出"半胖"jar
+# (曾导致 Auth 运行期 NoClassDefFound: ModelAndViewDefiningException)。clean 杜绝此坑。
+mvn -B -DskipTests clean package
 
 echo "== 构建完成。示例 jar：$E2E_SRC/GateWay/target/GateWay-0.0.1-SNAPSHOT.jar =="
