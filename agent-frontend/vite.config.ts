@@ -14,10 +14,13 @@ declare const __dirname: string;
 // load time, so we can use a plain relative join without importing node:path.
 const designSystemRoot = `${__dirname.replace(/\\/g, "/")}/../packages/design-system`;
 
-// Dev-only target for the /api proxy. Defaults to the agent backend's D1 port
-// (18080). Override with VITE_API_PROXY_TARGET when the agent runs elsewhere
-// (e.g. http://127.0.0.1:10010 for the legacy port, or the unified gateway).
-const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:18080";
+// Dev-only target for the /api proxy. Defaults to the chat gateway (D1 port
+// 10010) because, per 03-contracts.md §6, that's the single front door — the
+// gateway routes `/api/v1/**` to chat services, `/api/agent|memory|rag/**` to
+// agent (:18080), and verifies JWT in one place. Override with
+// VITE_API_PROXY_TARGET to talk to agent directly (`http://127.0.0.1:18080`)
+// when developing without the gateway up.
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:10010";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
