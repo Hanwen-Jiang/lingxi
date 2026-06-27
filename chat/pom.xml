@@ -10,6 +10,7 @@
     <packaging>pom</packaging>
 
     <modules>
+        <module>chat-common</module>
         <module>AuthenticationService</module>
         <module>GateWay</module>
         <module>RealTimeCommunicationService</module>
