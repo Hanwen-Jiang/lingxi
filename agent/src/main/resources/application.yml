@@ -159,13 +159,10 @@ memory:
     min-confidence: 0.55
 
 agent:
-  # 入网关身份(D2/D3/B1)。enforce 默认 false:网关尚未 front agent 时保持可直连、回退 body userId(不破现状);
-  # S3 网关加 /api/agent|memory|rag 路由并验签后翻 true,缺失/非法 X-User-Id 的非公开直连一律 401(拒绕过)。
+  # 入网关身份(D2/D3/B1)。enforce 默认 true(P3 鉴权闭环):agent 已置于统一网关之后,缺失/非法 X-User-Id 的
+  # 非公开直连一律 401(拒绕过)。本地无网关联调时设 AGENT_GATEWAY_ENFORCE_IDENTITY=false 并自带可信 X-User-Id。
   gateway:
-    enforce-identity: ${AGENT_GATEWAY_ENFORCE_IDENTITY:false}
-  # 管理员令牌:保护 /chat/model-config(P0 过渡回退;P1 已优先认可网关注入的 admin 角色)。留空且无 admin 角色时端点 fail-closed。
-  admin:
-    token: ${AGENT_ADMIN_TOKEN:}
+    enforce-identity: ${AGENT_GATEWAY_ENFORCE_IDENTITY:true}
   # CORS 白名单(F03/M1):精确 origin,禁用 "*";默认仅本地前端;生产用 env 注入真实域名。
   cors:
     allowed-origins: ${AGENT_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5180}

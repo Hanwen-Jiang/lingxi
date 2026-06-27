@@ -34,15 +34,15 @@ public class AutoChatController {
     @PostMapping
     public BaseResponse<AutoChatResponse> chat(@Valid @RequestBody ChatRequest request,
                                                @CurrentUser AuthPrincipal principal) {
-        // 网关身份优先(B1):覆盖请求体 userId,贯通到自动路由各子链;过渡期回退 body。
-        request.setUserId(principal.resolveUserId(request.getUserId()));
+        // 网关身份(B1):userId 取自网关注入身份,贯通到自动路由各子链(不再回退 body)。
+        request.setUserId(principal.requireUserId());
         return ResultUtils.success(autoChatRouterService.chat(request));
     }
 
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<StreamChatEvent>> stream(@Valid @RequestBody ChatRequest request,
                                                          @CurrentUser AuthPrincipal principal) {
-        request.setUserId(principal.resolveUserId(request.getUserId()));
+        request.setUserId(principal.requireUserId());
         AutoRouteDecision decision = autoChatRouterService.decide(request);
         String requestId = UUID.randomUUID().toString();
         AtomicReference<StringBuilder> answer = new AtomicReference<>(new StringBuilder());

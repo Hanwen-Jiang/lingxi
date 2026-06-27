@@ -1,30 +1,40 @@
 package com.lou.infinitechatagent.security;
 
+import com.lou.infinitechatagent.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 class AuthPrincipalTest {
 
     @Test
-    void anonymous_isNotPresent_andFallsBackToBodyUserId() {
+    void anonymous_requireUserId_throws401() {
         AuthPrincipal anon = AuthPrincipal.anonymous();
         assertThat(anon.isPresent()).isFalse();
         assertThat(anon.isAdmin()).isFalse();
-        // 网关身份缺失时回退请求体 userId(expand 相)
-        assertThat(anon.resolveUserId(42L)).isEqualTo(42L);
-        assertThat(anon.resolveUserId(null)).isNull();
+        BusinessException ex = catchThrowableOfType(anon::requireUserId, BusinessException.class);
+        assertThat(ex).isNotNull();
+        assertThat(ex.getCode()).isEqualTo(40100); // UNAUTHENTICATED
     }
 
     @Test
-    void present_principalWinsOverBodyUserId() {
+    void present_requireUserId_returnsGatewayUserId() {
         AuthPrincipal principal = AuthPrincipal.of("1234567890123", 1234567890123L, Set.of("user"));
         assertThat(principal.isPresent()).isTrue();
-        // 网关身份在场:忽略请求体 userId(IDOR 闭环)
-        assertThat(principal.resolveUserId(42L)).isEqualTo(1234567890123L);
-        assertThat(principal.isAdmin()).isFalse();
+        assertThat(principal.requireUserId()).isEqualTo(1234567890123L);
+    }
+
+    @Test
+    void requireSelf_allowsSelfAndNullTarget_forbidsOther() {
+        AuthPrincipal principal = AuthPrincipal.of("100", 100L, Set.of("user"));
+        assertThat(principal.requireSelf(100L)).isEqualTo(100L);
+        assertThat(principal.requireSelf(null)).isEqualTo(100L);
+        BusinessException ex = catchThrowableOfType(() -> principal.requireSelf(999L), BusinessException.class);
+        assertThat(ex).isNotNull();
+        assertThat(ex.getCode()).isEqualTo(40300); // FORBIDDEN
     }
 
     @Test

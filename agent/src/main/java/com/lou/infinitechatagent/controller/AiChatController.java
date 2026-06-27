@@ -37,8 +37,8 @@ public class AiChatController {
     @PostMapping("/chat")
     public BaseResponse<ChatResponse> chat(@Valid @RequestBody ChatRequest chatRequest,
                                            @CurrentUser AuthPrincipal principal) {
-        // 网关身份优先(B1);未入网关时回退请求体 userId(过渡)。
-        Long userId = principal.resolveUserId(chatRequest.getUserId());
+        // 网关身份(B1):userId 取自网关注入身份(不再回退 body)。
+        Long userId = principal.requireUserId();
         MonitorContextHolder.setContext(MonitorContext.builder().userId(userId).sessionId(chatRequest.getSessionId()).build());
         try {
             String answer = aiChat.chat(chatRequest.getSessionId(), chatRequest.getPrompt());
@@ -74,7 +74,7 @@ public class AiChatController {
     @PostMapping(value = "/streamChat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<StreamChatEvent>> streamChat(@Valid @RequestBody ChatRequest chatRequest,
                                                              @CurrentUser AuthPrincipal principal) {
-        Long userId = principal.resolveUserId(chatRequest.getUserId());
+        Long userId = principal.requireUserId();
         MonitorContext context = MonitorContext.builder()
                 .userId(userId)
                 .sessionId(chatRequest.getSessionId())

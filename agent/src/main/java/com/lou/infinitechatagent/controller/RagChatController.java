@@ -30,8 +30,8 @@ public class RagChatController {
     @PostMapping("/chat")
     public BaseResponse<RagQueryResponse> chatWithCitations(@Valid @RequestBody ChatRequest chatRequest,
                                                             @CurrentUser AuthPrincipal principal) {
-        // 网关身份优先(B1):监控/历史记到主体名下;过渡期回退 body userId。
-        Long userId = principal.resolveUserId(chatRequest.getUserId());
+        // 网关身份(B1):userId 取自网关注入身份(不再回退 body)。
+        Long userId = principal.requireUserId();
         MonitorContextHolder.setContext(MonitorContext.builder()
                 .userId(userId)
                 .sessionId(chatRequest.getSessionId())

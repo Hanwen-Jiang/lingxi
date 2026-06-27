@@ -1,17 +1,20 @@
 package com.lou.infinitechatagent.security;
 
+import com.lou.infinitechatagent.common.ErrorCode;
+import com.lou.infinitechatagent.exception.BusinessException;
+
 import java.util.Set;
 
 /**
  * 当前请求主体。由 {@link GatewayIdentityFilter} 从统一网关注入的可信请求头解析:
  * <ul>
  *   <li>{@code X-User-Id}:string 化 snowflake(D5);在持久化边界转内部 {@code Long}。</li>
- *   <li>{@code X-User-Roles}:逗号分隔角色声明(含 {@code admin})。<b>该头名为 S1 提案,待 S3 网关确认。</b></li>
+ *   <li>{@code X-User-Roles}:逗号分隔角色声明(含 {@code admin})。</li>
  * </ul>
  *
- * <p>expand/contract:网关上线前(`agent.gateway.enforce-identity=false`)主体可能为
- * {@link #anonymous()},调用方暂回退请求体里的 userId;网关上线并 enforce 后,主体恒存在、
- * body userId 被忽略并最终移除(contract 相)。
+ * <p><b>contract 相(P3,{@code enforce-identity=true}):</b> userId 只来自网关注入头——
+ * {@link #requireUserId()} 缺失即 401、{@link #requireSelf} 越权即 403;<b>不再回退请求体/参数里的 userId</b>。
+ * 客户端永不自带 {@code X-User-Id}/{@code X-User-Roles}(网关剥离伪造值)。
  */
 public record AuthPrincipal(String userId, Long userIdLong, Set<String> roles, boolean authenticated) {
 
@@ -33,10 +36,25 @@ public record AuthPrincipal(String userId, Long userIdLong, Set<String> roles, b
     }
 
     /**
-     * 解析 userId 的便捷方法:主体存在则用主体(网关身份),否则回退给定的 body/param 值(过渡)。
-     * 网关 enforce 后 body 永不被用到。
+     * 当前主体的内部 userId(Long);缺失即 401(契约:下游用户态缺失即拒)。
+     * enforce-identity=true 下由 {@link GatewayIdentityFilter} 保证恒在;此兜底覆盖 enforce=false 的本地逃生路径。
      */
-    public Long resolveUserId(Long fallbackBodyUserId) {
-        return isPresent() ? userIdLong : fallbackBodyUserId;
+    public Long requireUserId() {
+        if (!isPresent()) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        return userIdLong;
+    }
+
+    /**
+     * 校验路径/参数里的目标 userId 必须等于当前主体,否则 403(requireSelf 语义);返回主体 userId。
+     * 用于仍在 URL 携带 userId 的端点(如 /memory/user/{userId}):只能访问自己的资源。
+     */
+    public Long requireSelf(Long targetUserId) {
+        Long self = requireUserId();
+        if (targetUserId != null && !self.equals(targetUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "不可访问他人资源");
+        }
+        return self;
     }
 }

@@ -15,21 +15,20 @@ import com.lou.infinitechatagent.security.AuthPrincipal;
 import com.lou.infinitechatagent.security.CurrentUser;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.List;
 
+/**
+ * 会话历史 + 运行时模型配置。<b>contract 相(P3):</b> userId 取自网关注入身份(不再收 param/body userId)。
+ * {@code /model-config} 为 admin-only(D10):<b>仅认网关注入的 admin 角色</b>;P0 的 {@code X-Admin-Token} 已退役。
+ */
 @Slf4j
 @RestController
 @RequestMapping("/chat")
@@ -38,40 +37,29 @@ public class ChatHistoryController {
     @Resource
     private ChatHistoryService chatHistoryService;
 
-    /**
-     * 管理员令牌(P0 过渡防护,B3/G09)。留空 = /model-config 端点关闭(fail-closed)。
-     * P1 将由网关注入身份 + admin 角色取代本机制。
-     */
-    @Value("${agent.admin.token:}")
-    private String adminToken;
-
-    // 会话端点 userId 经 principal.resolveUserId 解析(网关身份优先、param/body 回退,B1)。
     @GetMapping("/sessions")
     public BaseResponse<List<ChatSessionSummary>> sessions(@CurrentUser AuthPrincipal principal,
-                                                           @RequestParam(required = false) Long userId,
                                                            @RequestParam(defaultValue = "40") int limit) {
-        return ResultUtils.success(chatHistoryService.listSessions(principal.resolveUserId(userId), limit));
+        return ResultUtils.success(chatHistoryService.listSessions(principal.requireUserId(), limit));
     }
 
     @GetMapping("/sessions/{sessionId}")
     public BaseResponse<ChatSessionDetail> session(@CurrentUser AuthPrincipal principal,
-                                                   @PathVariable Long sessionId,
-                                                   @RequestParam(required = false) Long userId) {
-        return ResultUtils.success(chatHistoryService.getSession(principal.resolveUserId(userId), sessionId));
+                                                   @PathVariable Long sessionId) {
+        return ResultUtils.success(chatHistoryService.getSession(principal.requireUserId(), sessionId));
     }
 
     @PostMapping("/sessions")
     public BaseResponse<ChatSessionSummary> createSession(@CurrentUser AuthPrincipal principal,
                                                           @RequestBody ChatSessionCreateRequest request) {
-        request.setUserId(principal.resolveUserId(request.getUserId()));
+        request.setUserId(principal.requireUserId());
         return ResultUtils.success(chatHistoryService.createSession(request));
     }
 
     @PostMapping("/sessions/{sessionId}/summarize")
     public BaseResponse<ChatSessionSummary> summarize(@CurrentUser AuthPrincipal principal,
-                                                      @PathVariable Long sessionId,
-                                                      @RequestParam(required = false) Long userId) {
-        return ResultUtils.success(chatHistoryService.summarize(principal.resolveUserId(userId), sessionId));
+                                                      @PathVariable Long sessionId) {
+        return ResultUtils.success(chatHistoryService.summarize(principal.requireUserId(), sessionId));
     }
 
     @GetMapping("/model-status")
@@ -80,19 +68,19 @@ public class ChatHistoryController {
     }
 
     /**
-     * 运行时改全局 LLM provider/baseURL/model 等。高危端点(SSRF + 密钥外泄面):
+     * 运行时改全局 LLM provider/baseURL/model 等(高危:SSRF + 密钥外泄面)。
      * <ul>
-     *   <li>需管理员令牌(header {@code X-Admin-Token});未配置令牌则端点 fail-closed 关闭。</li>
-     *   <li>不接受来自请求体的原始 {@code apiKey};运行时密钥仅来自服务端环境配置。</li>
+     *   <li><b>admin-only</b>:仅认网关注入的 admin 角色(X-User-Roles 含 admin),否则 403。</li>
+     *   <li>不接受请求体里的原始 {@code apiKey};运行时密钥仅来自服务端环境配置。</li>
      *   <li>变更落审计日志。</li>
      * </ul>
      */
     @PostMapping("/model-config")
-    public BaseResponse<ModelStatusResponse> updateModelConfig(
-            @RequestBody ModelConfigRequest request,
-            @CurrentUser AuthPrincipal principal,
-            @RequestHeader(value = "X-Admin-Token", required = false) String adminTokenHeader) {
-        requireAdmin(principal, adminTokenHeader);
+    public BaseResponse<ModelStatusResponse> updateModelConfig(@CurrentUser AuthPrincipal principal,
+                                                               @RequestBody ModelConfigRequest request) {
+        if (!principal.isAdmin()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "需要 admin 角色");
+        }
         if (request != null && request.getApiKey() != null) {
             log.warn("[model-config] 忽略请求体携带的 apiKey(出于安全不接受原始密钥)");
             request.setApiKey(null);
@@ -106,30 +94,5 @@ public class ChatHistoryController {
     @GetMapping("/models")
     public BaseResponse<ModelListResponse> models() {
         return ResultUtils.success(chatHistoryService.listModels());
-    }
-
-    private void requireAdmin(AuthPrincipal principal, String providedToken) {
-        // P1:认可统一网关注入的 admin 角色声明(X-User-Roles 含 admin)。
-        if (principal != null && principal.isAdmin()) {
-            return;
-        }
-        // 过渡回退(网关身份上线前):X-Admin-Token;网关 enforce 后移除本回退。
-        if (StringUtils.hasText(adminToken) && constantTimeEquals(adminToken, providedToken)) {
-            return;
-        }
-        if (!StringUtils.hasText(adminToken)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN_ERROR,
-                    "需要 admin 角色;过渡令牌 AGENT_ADMIN_TOKEN 亦未配置(端点 fail-closed)");
-        }
-        throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "需要 admin 角色或管理员令牌(请求头 X-Admin-Token)");
-    }
-
-    private static boolean constantTimeEquals(String expected, String actual) {
-        if (actual == null) {
-            return false;
-        }
-        return MessageDigest.isEqual(
-                expected.getBytes(StandardCharsets.UTF_8),
-                actual.getBytes(StandardCharsets.UTF_8));
     }
 }

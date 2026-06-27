@@ -29,9 +29,9 @@ import java.util.Set;
  *   <li>enforce 开启时,缺失/非法 {@code X-User-Id} 的【非公开】请求直接 401 —— 挡住绕过网关的直连(IDOR 闭环)。</li>
  * </ul>
  *
- * <p><b>expand/contract:</b> {@code agent.gateway.enforce-identity} 默认 <b>false</b>(网关尚未 front agent 时,
- * 保持可直连、回退 body userId,不破现状);S3 网关上线 + 加 {@code /api/agent|memory|rag} 路由后翻 <b>true</b>,
- * 完成"拒直连 + 只信网关身份"。{@code X-User-Roles} 头名为 S1 提案,待 S3 网关确认。
+ * <p><b>P3 鉴权闭环:</b> {@code agent.gateway.enforce-identity} 默认 <b>true</b>——agent 已置于统一网关之后
+ * (S3 网关 {@code /api/agent|memory|rag} 路由 + 注入 X-User-Id 已在 main),缺失/非法身份的非公开直连一律 401,
+ * 只信网关身份(body/param userId 回退已移除)。本地无网关联调设 {@code AGENT_GATEWAY_ENFORCE_IDENTITY=false} 并自带 X-User-Id。
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 100)
@@ -48,7 +48,7 @@ public class GatewayIdentityFilter extends OncePerRequestFilter {
 
     private final boolean enforce;
 
-    public GatewayIdentityFilter(@Value("${agent.gateway.enforce-identity:false}") boolean enforce) {
+    public GatewayIdentityFilter(@Value("${agent.gateway.enforce-identity:true}") boolean enforce) {
         this.enforce = enforce;
     }
 

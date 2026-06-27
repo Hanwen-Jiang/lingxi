@@ -30,8 +30,8 @@ public class AdaptiveRagController {
     @PostMapping("/chat")
     public BaseResponse<AdaptiveRagResponse> chat(@Valid @RequestBody AdaptiveRagRequest request,
                                                   @CurrentUser AuthPrincipal principal) {
-        // 网关身份优先(B1):覆盖请求体 userId,贯通到自适应 RAG 编排/记忆;过渡期回退 body。
-        request.setUserId(principal.resolveUserId(request.getUserId()));
+        // 网关身份(B1):userId 取自网关注入身份,贯通到自适应 RAG 编排/记忆(不再回退 body)。
+        request.setUserId(principal.requireUserId());
         MonitorContextHolder.setContext(MonitorContext.builder()
                 .userId(request.getUserId())
                 .sessionId(request.getSessionId())

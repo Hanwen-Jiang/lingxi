@@ -48,18 +48,17 @@ public class AgentController {
 
     @GetMapping("/tools/audit")
     public BaseResponse<List<ToolAuditRecord>> toolAudit(@CurrentUser AuthPrincipal principal,
-                                                         @RequestParam(required = false) Long userId,
                                                          @RequestParam(required = false) Long sessionId,
                                                          @RequestParam(defaultValue = "20") int limit) {
-        // 按主体限权(B1):网关身份在场则只查自己的审计,忽略传入 userId。
-        return ResultUtils.success(toolGovernanceService.listAuditRecords(principal.resolveUserId(userId), sessionId, limit));
+        // 按主体限权(B1):只查当前网关身份自己的审计记录。
+        return ResultUtils.success(toolGovernanceService.listAuditRecords(principal.requireUserId(), sessionId, limit));
     }
 
     @PostMapping("/chat")
     public BaseResponse<AgentResponse> chat(@Valid @RequestBody AgentRequest request,
                                             @CurrentUser AuthPrincipal principal) {
-        // 网关身份优先(B1):覆盖请求体 userId,使其贯通到 ReAct 编排/记忆/审计深层;过渡期回退 body。
-        request.setUserId(principal.resolveUserId(request.getUserId()));
+        // 网关身份(B1):userId 取自网关注入身份,贯通到 ReAct 编排/记忆/审计深层(不再回退 body)。
+        request.setUserId(principal.requireUserId());
         MonitorContextHolder.setContext(MonitorContext.builder()
                 .userId(request.getUserId())
                 .sessionId(request.getSessionId())
