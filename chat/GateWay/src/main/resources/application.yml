@@ -87,3 +87,9 @@ spring:
           uri: lb://ContactService
           predicates:
             - Path=/api/v1/contact/**
+        # agent 服务(纳入统一网关 + 验签 + 注入 X-User-Id/Roles;非白名单;03-contracts §6)
+        # agent 是 Spring Boot 3 / context-path=/api,直连其 18080,网关保留前缀转发
+        - id: agent-backend
+          uri: ${AGENT_GATEWAY_URI:http://localhost:18080}
+          predicates:
+            - Path=/api/agent/**,/api/memory/**,/api/rag/**

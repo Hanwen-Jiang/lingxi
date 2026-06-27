@@ -95,7 +95,7 @@ public class NettyConsistentHashLoadBalancer implements ReactorServiceInstanceLo
         if (token == null || token.trim().isEmpty()) {
             token = headers.getFirst(HttpHeaders.AUTHORIZATION);
         }
-        String subject = GatewayJwtUtil.parseSubject(token);
+        String subject = com.lou.common.security.JwtUtil.parseSubject(token);
         if (subject != null && !subject.trim().isEmpty()) {
             return subject;
         }
