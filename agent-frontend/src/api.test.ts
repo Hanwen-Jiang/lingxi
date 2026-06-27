@@ -68,4 +68,67 @@ describe("createApiClient.listSessions", () => {
     await expect(api.listSessions(1)).rejects.toBeInstanceOf(ApiError);
     await expect(api.listSessions(1)).rejects.toMatchObject({status: 503, message: "unavailable"});
   });
+
+  it("accepts the contract envelope where success code is 0", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(mockResponse({ok: true, status: 200, json: {code: 0, data: [session], message: "ok"}}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const api = createApiClient("/api");
+    const result = await api.listSessions(1);
+    expect(result).toEqual([session]);
+  });
+});
+
+describe("createApiClient auth wiring", () => {
+  it("injects Authorization: Bearer when getAccessToken returns a token", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(mockResponse({ok: true, status: 200, json: {code: 0, data: [], message: "ok"}}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const api = createApiClient("/api", {getAccessToken: () => "abc.def.ghi"});
+    await api.listSessions(1);
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer abc.def.ghi");
+  });
+
+  it("omits Authorization when there is no token", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(mockResponse({ok: true, status: 200, json: {code: 0, data: [], message: "ok"}}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const api = createApiClient("/api", {getAccessToken: () => null});
+    await api.listSessions(1);
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+
+  it("triggers onUnauthorized on HTTP 401 and throws ApiError", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse({ok: false, status: 401, json: {message: "expired"}}));
+    vi.stubGlobal("fetch", fetchMock);
+    const onUnauthorized = vi.fn();
+
+    const api = createApiClient("/api", {onUnauthorized});
+
+    await expect(api.listSessions(1)).rejects.toBeInstanceOf(ApiError);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("triggers onUnauthorized on body code 40100 even when HTTP is 200", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(mockResponse({ok: true, status: 200, json: {code: 40100, data: null, message: "expired"}}));
+    vi.stubGlobal("fetch", fetchMock);
+    const onUnauthorized = vi.fn();
+
+    const api = createApiClient("/api", {onUnauthorized});
+
+    await expect(api.listSessions(1)).rejects.toBeInstanceOf(ApiError);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
 });

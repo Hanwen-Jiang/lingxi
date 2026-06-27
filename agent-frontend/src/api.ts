@@ -10,6 +10,8 @@ import type {
   ChatSessionSummary,
   DocumentIngestJobResponse,
   HealthResponse,
+  LoginRequest,
+  LoginResponse,
   MemoryItem,
   MemoryType,
   ModelConfigRequest,
@@ -46,6 +48,14 @@ function trimBase(baseUrl: string) {
   return baseUrl.replace(/\/+$/, "");
 }
 
+function extractEnvelopeMessage(body: unknown): string | null {
+  if (typeof body === "object" && body && "message" in body) {
+    const message = (body as {message?: unknown}).message;
+    return typeof message === "string" ? message : null;
+  }
+  return null;
+}
+
 export function parseSsePayload(chunk: string) {
   const events: StreamChatEvent[] = [];
   const blocks = chunk.split(/\n\n/);
@@ -74,12 +84,35 @@ export function parseSsePayload(chunk: string) {
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
-export function createApiClient(apiBase: string) {
+export type ApiClientOptions = {
+  // Called for every request to inject Authorization. Return null/undefined to
+  // send no Authorization header (e.g. for the login/health endpoints).
+  getAccessToken?: () => string | null | undefined;
+  // Called when the backend signals an authenticated request failed identity
+  // verification (HTTP 401 OR the per-contract 40100 code). The auth layer
+  // wires this to clear the session and redirect to /auth. Don't throw here —
+  // we still throw the ApiError so the caller can show a banner.
+  onUnauthorized?: () => void;
+};
+
+// Per docs/planning/03-contracts.md §2 — the success code is `0`. We were
+// originally written against the legacy `200` shape, so for the expand/
+// contract window (S1/S3 翻 envelope) we accept either. Either reduces to
+// "data is the meaningful payload, message is for surfacing if non-zero".
+const ENVELOPE_SUCCESS_CODES = new Set([0, 200]);
+const UNAUTHENTICATED_CODES = new Set([40100]);
+
+export function createApiClient(apiBase: string, options: ApiClientOptions = {}) {
   const baseUrl = trimBase(apiBase);
+
+  function authHeaders(): Record<string, string> {
+    const token = options.getAccessToken?.();
+    return token ? {Authorization: `Bearer ${token}`} : {};
+  }
 
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${baseUrl}${path}`, {
-      headers: {"Content-Type": "application/json", ...(init?.headers ?? {})},
+      headers: {"Content-Type": "application/json", ...authHeaders(), ...(init?.headers ?? {})},
       ...init,
     });
 
@@ -88,20 +121,32 @@ export function createApiClient(apiBase: string) {
       ? ((await response.json()) as BaseResponse<T> | T)
       : await response.text();
 
-    if (!response.ok) {
-      const message =
-        typeof body === "object" && body && "message" in body
-          ? String((body as BaseResponse<T>).message)
-          : `HTTP ${response.status}`;
+    // Real HTTP status takes precedence (per contract §3: stop "always-200 +
+    // body code"). 401 means re-auth no matter what the body says.
+    if (response.status === 401) {
+      options.onUnauthorized?.();
+      throw new ApiError(extractEnvelopeMessage(body) ?? "登录已失效,请重新登录。", {
+        status: 401,
+        code: typeof body === "object" && body && "code" in body ? Number((body as BaseResponse<T>).code) : undefined,
+      });
+    }
 
-      throw new ApiError(message, {status: response.status});
+    if (!response.ok) {
+      throw new ApiError(extractEnvelopeMessage(body) ?? `HTTP ${response.status}`, {status: response.status});
     }
 
     if (typeof body === "object" && body && "code" in body && "data" in body) {
       const wrapped = body as BaseResponse<T>;
 
-      if (wrapped.code !== 200) {
-        throw new ApiError(wrapped.message || "Request failed", {code: wrapped.code});
+      // Body-code-level unauthenticated (still surfaces as 401 in §3's mapping,
+      // but for the legacy "always-200" servers we tolerate it via this check).
+      if (UNAUTHENTICATED_CODES.has(wrapped.code)) {
+        options.onUnauthorized?.();
+        throw new ApiError(wrapped.message || "登录已失效,请重新登录。", {code: wrapped.code, status: 401});
+      }
+
+      if (!ENVELOPE_SUCCESS_CODES.has(wrapped.code)) {
+        throw new ApiError(wrapped.message || "请求失败,请稍后再试。", {code: wrapped.code});
       }
 
       return wrapped.data;
@@ -112,6 +157,14 @@ export function createApiClient(apiBase: string) {
 
   return {
     baseUrl,
+    // chat-backend Auth (per 03-contracts.md §7 + §6 routing).
+    login: (payload: LoginRequest) =>
+      request<LoginResponse>("/v1/user/login", {method: "POST", body: JSON.stringify(payload)}),
+    // S3 still owes this endpoint — call site treats it as best-effort. When it
+    // 404s (current state) we treat the access token as non-refreshable and
+    // require re-login on expiry.
+    refresh: (refreshToken: string) =>
+      request<LoginResponse>("/v1/user/refresh", {method: "POST", body: JSON.stringify({refreshToken})}),
     health: () => request<HealthResponse>("/actuator/health", {method: "GET"}),
     modelStatus: () => request<ModelStatusResponse>("/chat/model-status", {method: "GET"}),
     listModels: () => request<ModelListResponse>("/chat/models", {method: "GET"}),
@@ -169,15 +222,23 @@ export function createApiClient(apiBase: string) {
       const formData = new FormData();
       formData.append("file", file);
 
+      // Multipart upload — do NOT set Content-Type, let the browser do the
+      // boundary. Still inject Authorization so the request authenticates.
       const response = await fetch(`${baseUrl}/rag/documents/upload`, {
         method: "POST",
+        headers: authHeaders(),
         body: formData,
       });
 
+      if (response.status === 401) {
+        options.onUnauthorized?.();
+        throw new ApiError("登录已失效,请重新登录。", {status: 401});
+      }
+
       const body = (await response.json()) as BaseResponse<DocumentIngestJobResponse>;
 
-      if (!response.ok || body.code !== 200) {
-        throw new ApiError(body.message || `HTTP ${response.status}`, {
+      if (!response.ok || !ENVELOPE_SUCCESS_CODES.has(body.code)) {
+        throw new ApiError(body.message || `上传失败,请稍后再试。`, {
           code: body.code,
           status: response.status,
         });
@@ -207,13 +268,17 @@ export function createApiClient(apiBase: string) {
     streamChat: async (payload: ChatRequest, onEvent: (event: StreamChatEvent) => void, signal?: AbortSignal) => {
       const response = await fetch(`${baseUrl}/streamChat`, {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: {"Content-Type": "application/json", ...authHeaders()},
         body: JSON.stringify(payload),
         signal,
       });
 
+      if (response.status === 401) {
+        options.onUnauthorized?.();
+        throw new ApiError("登录已失效,请重新登录。", {status: 401});
+      }
       if (!response.ok || !response.body) {
-        throw new ApiError(`Stream failed with HTTP ${response.status}`, {status: response.status});
+        throw new ApiError(`连接灵犀失败,请稍后再试。`, {status: response.status});
       }
 
       const reader = response.body.getReader();
@@ -238,13 +303,17 @@ export function createApiClient(apiBase: string) {
     autoStreamChat: async (payload: ChatRequest, onEvent: (event: StreamChatEvent) => void, signal?: AbortSignal) => {
       const response = await fetch(`${baseUrl}/chat/auto/stream`, {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: {"Content-Type": "application/json", ...authHeaders()},
         body: JSON.stringify(payload),
         signal,
       });
 
+      if (response.status === 401) {
+        options.onUnauthorized?.();
+        throw new ApiError("登录已失效,请重新登录。", {status: 401});
+      }
       if (!response.ok || !response.body) {
-        throw new ApiError(`Auto stream failed with HTTP ${response.status}`, {status: response.status});
+        throw new ApiError(`连接灵犀失败,请稍后再试。`, {status: response.status});
       }
 
       const reader = response.body.getReader();
