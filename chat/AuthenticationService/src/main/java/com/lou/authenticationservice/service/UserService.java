@@ -5,6 +5,7 @@ import com.lou.authenticationservice.data.user.login.LoginRequest;
 import com.lou.authenticationservice.data.user.login.LoginResponse;
 import com.lou.authenticationservice.data.user.loginCode.LoginCodeRequest;
 import com.lou.authenticationservice.data.user.loginCode.LoginCodeResponse;
+import com.lou.authenticationservice.data.user.refresh.RefreshRequest;
 import com.lou.authenticationservice.data.user.register.RegisterRequest;
 import com.lou.authenticationservice.data.user.register.RegisterResponse;
 import com.lou.authenticationservice.data.user.updateAvatar.UpdateAvatarRequest;
@@ -29,6 +30,8 @@ public interface UserService extends IService<User> {
     LoginResponse login(LoginRequest request);
 
     LoginCodeResponse loginCode(LoginCodeRequest request);
+
+    LoginResponse refresh(RefreshRequest request);
 
     UpdateAvatarResponse updateAvatar(String id,UpdateAvatarRequest request);
 

@@ -19,8 +19,9 @@ public class Interceptors implements WebMvcConfigurer {
                         "/api/v1/user/register",
                         "/api/v1/user/login",
                         "/api/v1/user/loginCode",
-                        "/api/v1/user/common/sendMail",
-                        "/api/v1/user/common/check",
+                        "/api/v1/user/refresh",
+                        "/api/v1/user/sendMail",
+                        "/api/v1/user/check",
                         "/actuator/**",
                         "/error");
     }

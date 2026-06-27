@@ -3,8 +3,6 @@ package com.lou.authenticationservice.service.impl;
 import com.lou.authenticationservice.constants.config.OSSConstant;
 import com.lou.authenticationservice.data.common.SendMail.MailRequest;
 import com.lou.authenticationservice.data.common.SendMail.MailResponse;
-import com.lou.authenticationservice.data.common.sms.SMSRequest;
-import com.lou.authenticationservice.data.common.sms.SMSResponse;
 import com.lou.authenticationservice.data.common.uploadUrl.UploadUrlRequest;
 import com.lou.authenticationservice.data.common.uploadUrl.UploadUrlResponse;
 import com.lou.authenticationservice.service.CommonService;
@@ -20,11 +18,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
 
-import static com.lou.authenticationservice.constants.user.registerConstant.REGISTER_CODE;
+import static com.lou.authenticationservice.constants.user.registerConstant.VERIFY_EMAIL;
 
 /**
  * @ClassName CommonServiceImpl
- * @Description TODO
+ * @Description 邮件验证码 / 上传地址等通用能力
  * @Author Lou
  * @Date 2025/5/30 17:37
  */
@@ -41,15 +39,6 @@ public class CommonServiceImpl implements CommonService {
     private OSSUtils ossUtils;
 
     private final ResendMailClient mailClient;
-
-    @Override
-    public SMSResponse sendSms(SMSRequest request) {
-        String phone = request.getPhone();
-        String code = RandomNumUtil.getRandomNum();
-
-        redisTemplate.opsForValue().set(REGISTER_CODE + phone, code, 5, TimeUnit.MINUTES);
-        return new SMSResponse();
-    }
 
     @Override
     public UploadUrlResponse uploadUrl(UploadUrlRequest request) throws Exception {
@@ -73,10 +62,10 @@ public class CommonServiceImpl implements CommonService {
     @Override
     public MailResponse sendMailCode(MailRequest request) {
         String email = request.getEmail();
-        String phone = request.getPhone();
         String code = RandomNumUtil.getRandomNum();
 
-        redisTemplate.opsForValue().set(REGISTER_CODE + phone, code, 5, TimeUnit.MINUTES);
+        // 验证码 Redis key: verify:email:{email}
+        redisTemplate.opsForValue().set(VERIFY_EMAIL + email, code, 5, TimeUnit.MINUTES);
 
         sendMail(email, "【测试系统】验证码",
                 "您的验证码是：" + code + "，5分钟内有效。");

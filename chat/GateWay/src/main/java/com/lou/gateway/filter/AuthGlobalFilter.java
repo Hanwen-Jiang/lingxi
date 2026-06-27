@@ -40,8 +40,8 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             "/api/v1/user/login",
             "/api/v1/user/loginCode",
             "/api/v1/user/refresh",            // 刷新令牌:自带 refresh token,不需 access
-            "/api/v1/user/common/sendMail",
-            "/api/v1/user/common/check",
+            "/api/v1/user/sendMail",           // 邮箱验证码(D14 §7.1)
+            "/api/v1/user/check",              // 校验邮箱验证码(D14 §7.1,免登录)
             "/api/v1/netty",                   // WebSocket 握手,由 Netty 端校验 JWT(§8)
             "/actuator"
     );
