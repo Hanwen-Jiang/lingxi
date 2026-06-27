@@ -1,15 +1,16 @@
 package com.lou.authenticationservice.controller;
 
-import com.lou.authenticationservice.common.Result;
+import com.lou.common.api.Result;
+import com.lou.common.security.RequestContext;
 import com.lou.authenticationservice.data.user.login.LoginRequest;
 import com.lou.authenticationservice.data.user.login.LoginResponse;
 import com.lou.authenticationservice.data.user.loginCode.LoginCodeRequest;
 import com.lou.authenticationservice.data.user.loginCode.LoginCodeResponse;
+import com.lou.authenticationservice.data.user.refresh.RefreshRequest;
 import com.lou.authenticationservice.data.user.register.RegisterRequest;
 import com.lou.authenticationservice.data.user.register.RegisterResponse;
 import com.lou.authenticationservice.data.user.updateAvatar.UpdateAvatarRequest;
 import com.lou.authenticationservice.data.user.updateAvatar.UpdateAvatarResponse;
-import com.lou.authenticationservice.conf.UserContext;
 import com.lou.authenticationservice.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,29 +34,36 @@ public class UserController {
     private UserService userService;
 
     @PostMapping("/register")
-    public Result<RegisterResponse> register(@RequestBody RegisterRequest request) {
+    public Result<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
         RegisterResponse response = userService.register(request);
 
         return Result.ok(response);
     }
 
     @PostMapping("/login")
-    public Result<LoginResponse> register(@RequestBody LoginRequest request) {
+    public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         LoginResponse response = userService.login(request);
 
         return Result.ok(response);
     }
 
     @PostMapping("/loginCode")
-    public Result<LoginCodeResponse> register(@RequestBody LoginCodeRequest request) {
+    public Result<LoginCodeResponse> loginCode(@Valid @RequestBody LoginCodeRequest request) {
         LoginCodeResponse response = userService.loginCode(request);
+
+        return Result.ok(response);
+    }
+
+    @PostMapping("/refresh")
+    public Result<LoginResponse> refresh(@Valid @RequestBody RefreshRequest request) {
+        LoginResponse response = userService.refresh(request);
 
         return Result.ok(response);
     }
 
     @PatchMapping("/avatar")
     public Result<UpdateAvatarResponse> updateAvatar(@Valid @RequestBody UpdateAvatarRequest request) {
-        String id = String.valueOf(UserContext.get());
+        String id = RequestContext.requireUserId();
 
         UpdateAvatarResponse response = userService.updateAvatar(id, request);
 

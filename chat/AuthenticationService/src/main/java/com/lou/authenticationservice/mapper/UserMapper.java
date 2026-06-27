@@ -1,5 +1,6 @@
 package com.lou.authenticationservice.mapper;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.lou.authenticationservice.model.User;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
@@ -11,8 +12,11 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 */
 public interface UserMapper extends BaseMapper<User> {
 
+    /** 按 email 查询单个用户(D14:用户标识切换为邮箱)。 */
+    default User selectByEmail(String email) {
+        QueryWrapper<User> wrapper = new QueryWrapper<>();
+        wrapper.eq("email", email).last("limit 1");
+        return this.selectOne(wrapper);
+    }
+
 }
-
-
-
-

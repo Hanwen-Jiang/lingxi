@@ -20,4 +20,5 @@ public class LoginResponse {
     private Integer gender;
     private Integer status;
     private String token;
+    private String refreshToken;
 }

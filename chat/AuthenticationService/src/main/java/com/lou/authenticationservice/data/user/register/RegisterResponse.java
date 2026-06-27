@@ -5,7 +5,7 @@ import lombok.experimental.Accessors;
 
 /**
  * @ClassName RegisterResponse
- * @Description TODO
+ * @Description 注册结果(D14:返回 email)
  * @Author Lou
  * @Date 2025/5/30 15:32
  */
@@ -13,5 +13,5 @@ import lombok.experimental.Accessors;
 @Data
 @Accessors(chain = true)
 public class RegisterResponse {
-    private String phone;
+    private String email;
 }

@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: AuthenticationService
+  jackson:
+    default-property-inclusion: non_null
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/InfiniteChat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC}
