@@ -1,0 +1,16 @@
+# Normalize line endings. Shell scripts MUST be LF or they break under bash/WSL
+# (`set -euo pipefail\r` → "pipefail: invalid option name").
+* text=auto
+*.sh text eol=lf
+*.bash text eol=lf
+*.mjs text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary (no eol conversion)
+*.jar binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.pdf binary
+*.tar.gz binary
