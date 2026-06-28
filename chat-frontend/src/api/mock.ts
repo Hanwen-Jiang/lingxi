@@ -257,6 +257,29 @@ export const mockApi: Api = {
     return {message: saved};
   },
 
+  async uploadMedia(file) {
+    // Simulate the presign + PUT round-trip; the object URL stands in for the CDN
+    // fileUrl so the image actually renders against the mock.
+    await delay(360);
+    const fileUrl = typeof URL !== "undefined" && URL.createObjectURL ? URL.createObjectURL(file) : "";
+    return {fileUrl, objectKey: `mock/${nextId()}`, contentType: file.type || "image/*"};
+  },
+
+  async sendImageMessage(sessionId, fileUrl): Promise<SendResult> {
+    await delay(220);
+    const saved: Message = {
+      id: nextId(),
+      sessionId,
+      senderId: ME.id,
+      kind: "image",
+      content: fileUrl,
+      createdAt: now() || T0,
+      delivery: "sent",
+    };
+    messages[sessionId] = [...(messages[sessionId] ?? []), saved];
+    return {message: saved};
+  },
+
   streamAssistant(_sessionId, content, onEvent) {
     // SSE-shaped mock: a thinking latency, then char-by-char deltas, then done.
     // P2 swaps this for a parser over the real `/api/agent/chat` SSE stream.

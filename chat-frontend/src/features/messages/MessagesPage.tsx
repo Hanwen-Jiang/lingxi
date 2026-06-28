@@ -17,8 +17,14 @@ import {
 } from "@infinitechat/design-system";
 
 import {api} from "@/api";
-import {useAssistantStream, useConversations, useMessages, useSendMessage} from "@/api/queries";
-import type {Conversation} from "@/api/types";
+import {
+  useAssistantStream,
+  useConversations,
+  useMessages,
+  useSendImage,
+  useSendMessage,
+} from "@/api/queries";
+import type {Conversation, Message} from "@/api/types";
 import {useUiStore} from "@/store/ui";
 import {formatRelative} from "@/lib/format";
 import {Composer, MessageBubble} from "./parts";
@@ -154,6 +160,7 @@ function ChatColumn({sessionId, className}: {sessionId?: string; className?: str
 
   const {data, isLoading, isError, refetch} = useMessages(sessionId);
   const send = useSendMessage(sessionId ?? "");
+  const image = useSendImage(sessionId ?? "");
   const assistant = useAssistantStream(sessionId ?? "");
   const isAssistant = conv?.kind === "assistant";
 
@@ -202,6 +209,14 @@ function ChatColumn({sessionId, className}: {sessionId?: string; className?: str
     setDraft(sessionId, "");
   }
 
+  function retry(m: Message) {
+    if (m.kind === "image") {
+      if (m.clientTempId) image.retry(m.clientTempId);
+    } else {
+      submit(m.content);
+    }
+  }
+
   return (
     <section className={cn("min-w-0 flex-1 flex-col", className)}>
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-separator px-4">
@@ -247,7 +262,7 @@ function ChatColumn({sessionId, className}: {sessionId?: string; className?: str
               senderName={users[m.senderId]?.name ?? ""}
               isGroup={conv?.kind === "group"}
               showAvatar={m.senderId !== items[i - 1]?.senderId}
-              onRetry={() => submit(m.content)}
+              onRetry={() => retry(m)}
             />
           ))
         )}
@@ -259,6 +274,7 @@ function ChatColumn({sessionId, className}: {sessionId?: string; className?: str
         onSubmit={() => submit(draft)}
         streaming={isAssistant && assistant.streaming}
         onStop={assistant.stop}
+        onPickImage={isAssistant ? undefined : (file) => image.send(file)}
       />
     </section>
   );

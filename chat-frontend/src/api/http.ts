@@ -156,6 +156,28 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
   return (env ? (env.data as T) : (text ? (JSON.parse(text) as T) : (undefined as T)));
 }
 
+/**
+ * Upload bytes to a presigned object-storage URL (M11). This bypasses the API
+ * envelope/Authorization entirely — `uploadUrl` is an absolute, pre-authorized
+ * URL to the object store; the only required header is the exact `Content-Type`
+ * the presign was issued for. Throws `ApiError` (status) on a non-2xx response.
+ */
+export async function uploadToPresignedUrl(
+  method: string,
+  uploadUrl: string,
+  file: Blob,
+  contentType: string,
+): Promise<void> {
+  const res = await fetch(uploadUrl, {
+    method: method || "PUT",
+    headers: {"Content-Type": contentType},
+    body: file,
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, "文件上传失败,请稍后重试");
+  }
+}
+
 // --- Session mapping + refresh ------------------------------------------------
 /** Raw LoginResponse (§7.1 · D14). All ids are string (D5). */
 export interface LoginResponseRaw {

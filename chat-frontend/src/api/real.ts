@@ -4,13 +4,14 @@
 // B8 WS handshake). Write-side (sendMessage → S3 item2 outbox), friend applies,
 // and the assistant SSE (agent/S1) are NOT yet contract-closed here, so they
 // delegate to the mock until delivered — "先接已交付的,未交付的续 Mock".
-import type {Api, ListMessagesOptions, SendResult} from "./contract";
+import type {Api, ListMessagesOptions, SendResult, UploadedMedia} from "./contract";
 import {mockApi} from "./mock";
 import {
   ApiError,
   type LoginResponseRaw,
   mapSession,
   request,
+  uploadToPresignedUrl,
   wsOrigin,
 } from "./http";
 import type {
@@ -39,6 +40,15 @@ const userCache: Record<Id, User> = {};
 function remember(u: User): void {
   if (u.id) userCache[u.id] = u;
 }
+
+// Send needs sessionType (1 single / 2 group) and, for a single chat, the peer's
+// userId as `receiveUserId` — neither of which the session-list item carries. We
+// learn both as the user browses: type from the session list, peer from any
+// inbound message in a single thread (senderId !== me). 交接 S3: exposing
+// `peerUserId` on SessionListItem would make single-chat send robust from a cold
+// open (a brand-new single thread with no peer message yet can't be derived).
+const sessionTypeById: Record<Id, number> = {};
+const sessionPeerById: Record<Id, Id> = {};
 
 // --- Wire → domain mappers ----------------------------------------------------
 interface SessionListItemRaw {
@@ -69,17 +79,20 @@ interface FriendListItemRaw {
   status?: number | null;
 }
 
-// Message content type → client kind. Best-effort until a real message is
-// observed against a seeded account; isolated here so it's a one-line fix.
+// Backend message-type codes (MessageRcvTypeEnum / SessionType). Sending uses the
+// inverse: text→TEXT, image→PICTURE. Only TEXT+PICTURE round-trip realtime today.
+const MSG_TYPE = {TEXT: 1, PICTURE: 2, FILE: 3, VIDEO: 4, RED_PACKET: 5} as const;
+const SESSION_TYPE = {SINGLE: 1, GROUP: 2} as const;
+
+// Message content type → client kind. Mirrors MessageRcvTypeEnum (server-side).
 function mapMessageKind(type: number): MessageKind {
   switch (type) {
-    case 2:
+    case MSG_TYPE.PICTURE:
       return "image";
-    case 3:
+    case MSG_TYPE.RED_PACKET:
       return "redpacket";
-    case 99:
-      return "system";
     default:
+      // TEXT + (FILE/VIDEO/EMOTICON not yet modeled client-side) render as text.
       return "text";
   }
 }
@@ -100,6 +113,7 @@ function mapMessage(r: MessageItemRaw): Message {
 }
 
 function mapConversation(r: SessionListItemRaw): Conversation {
+  if (r.sessionId) sessionTypeById[String(r.sessionId)] = r.type ?? SESSION_TYPE.SINGLE;
   const kind: ConversationKind = r.type === 2 ? "group" : "single";
   let lastMessage: Message | undefined;
   if (r.lastMessage && typeof r.lastMessage === "object") {
@@ -156,6 +170,68 @@ function authError(err: unknown, opts: {badCreds?: string; conflict?: string} = 
     return new Error(err.message);
   }
   return err instanceof Error ? err : new Error("请求失败,请稍后重试");
+}
+
+// --- Send wire shapes ---------------------------------------------------------
+interface SendMsgResponseRaw {
+  sessionId: string;
+  sessionType?: number;
+  type?: number;
+  messageId: string; // serialized as string by the gateway's ToStringSerializer
+  body?: unknown;
+  createdAt?: string;
+}
+
+interface MediaUploadRaw {
+  uploadUrl: string;
+  fileUrl: string;
+  objectKey: string;
+  method?: string;
+  contentType?: string;
+  expiresInSec?: number;
+  maxSizeBytes?: number;
+}
+
+/**
+ * POST /api/v1/chat/session. Ids ride as JSON strings (snowflakes exceed JS's
+ * safe-int range; the gateway coerces string→Long, so precision is preserved).
+ * `sendUserId` MUST equal the authenticated subject (server enforces 403). For a
+ * single chat the backend needs `receiveUserId` (the peer); we supply the peer
+ * learned from the thread (sessionPeerById) — see note above.
+ */
+async function postSend(sessionId: Id, type: number, body: unknown): Promise<SendMsgResponseRaw> {
+  const me = useAuthStore.getState().session?.userId;
+  if (!me) throw new ApiError(401, "登录已过期,请重新登录");
+  const sessionType = sessionTypeById[String(sessionId)] ?? SESSION_TYPE.SINGLE;
+  const payload: Record<string, unknown> = {
+    sessionId: String(sessionId),
+    sendUserId: me,
+    sessionType,
+    type,
+    body,
+  };
+  if (sessionType === SESSION_TYPE.SINGLE) {
+    const peer = sessionPeerById[String(sessionId)];
+    if (!peer) throw new ApiError(400, "无法确定接收方,请打开会话后重试");
+    payload.receiveUserId = peer;
+  }
+  return request<SendMsgResponseRaw>("/api/v1/chat/session", {method: "POST", body: payload});
+}
+
+/** Build the reconciled domain Message from a send response (real messageId) +
+ *  the locally-known content. We keep client time for `createdAt` so the bubble
+ *  doesn't jump on reconcile (the server returns a TZ-less "yyyy-MM-dd HH:mm:ss"). */
+function reconciledMessage(res: SendMsgResponseRaw, sessionId: Id, kind: MessageKind, content: string): Message {
+  const me = useAuthStore.getState().session?.userId ?? "";
+  return {
+    id: String(res.messageId),
+    sessionId: String(sessionId),
+    senderId: me,
+    kind,
+    content,
+    createdAt: Date.now(),
+    delivery: "sent",
+  };
 }
 
 // --- Real Api ----------------------------------------------------------------
@@ -248,6 +324,11 @@ export const realApi: Api = {
     // Backend keysets message_id DESC (newest first); the thread renders ascending
     // (oldest→newest), so reverse this page for display.
     const items = (page?.items ?? []).map(mapMessage).reverse();
+    // Learn the single-chat peer for the send path: any sender that isn't me.
+    const me = useAuthStore.getState().session?.userId;
+    for (const m of items) {
+      if (m.senderId && m.senderId !== me) sessionPeerById[String(sessionId)] = m.senderId;
+    }
     return {items, nextCursor: page?.nextCursor ?? undefined, hasMore: page?.hasMore ?? false};
   },
 
@@ -281,12 +362,29 @@ export const realApi: Api = {
     });
   },
 
-  // --- Not yet contract-closed → delegate to the mock (续 Mock) ---
-  // sendMessage: write path flips with S3 item2 (B4 producer+outbox) — legacy
-  // endpoint's request/response shape isn't confirmed, so don't wire it blind.
-  sendMessage(sessionId: Id, content: string): Promise<SendResult> {
-    return mockApi.sendMessage(sessionId, content);
+  // --- Send (POST /api/v1/chat/session — chat-common Result, P5 item2/3) ---
+  async sendMessage(sessionId: Id, content: string): Promise<SendResult> {
+    const res = await postSend(sessionId, MSG_TYPE.TEXT, {content});
+    return {message: reconciledMessage(res, sessionId, "text", content)};
   },
+
+  // --- Media (M11: presigned PUT → embed fileUrl in an image message) ---
+  async uploadMedia(file: File): Promise<UploadedMedia> {
+    const contentType = file.type || "application/octet-stream";
+    const presign = await request<MediaUploadRaw>("/api/v1/user/media/upload-url", {
+      method: "POST",
+      body: {fileName: file.name, contentType, size: file.size},
+    });
+    await uploadToPresignedUrl(presign.method || "PUT", presign.uploadUrl, file, presign.contentType || contentType);
+    return {fileUrl: presign.fileUrl, objectKey: presign.objectKey, contentType: presign.contentType || contentType};
+  },
+
+  async sendImageMessage(sessionId: Id, fileUrl: string, size?: number): Promise<SendResult> {
+    const res = await postSend(sessionId, MSG_TYPE.PICTURE, {url: fileUrl, size});
+    return {message: reconciledMessage(res, sessionId, "image", fileUrl)};
+  },
+
+  // --- Not yet contract-closed → delegate to the mock (续 Mock) ---
   // Friend applies: not in item1 handoff.
   listApplies() {
     return mockApi.listApplies();

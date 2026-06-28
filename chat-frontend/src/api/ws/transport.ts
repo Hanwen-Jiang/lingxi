@@ -3,7 +3,7 @@
 // A WsTransport is a minimal WebSocket-like surface so the WsClient logic
 // (reconnect/heartbeat/ack/dedup) is identical for the Mock transport and the
 // real browser WebSocket. The wire frame is the backend's `MessageDTO`.
-import type {Message, PushEvent} from "../types";
+import type {Message, MessageKind, PushEvent} from "../types";
 
 export interface WsTransport {
   send(data: string): void;
@@ -48,11 +48,44 @@ export function decodeFrame(data: string): WireFrame | null {
   }
 }
 
+function kindFromType(type: number | undefined): MessageKind {
+  if (type === 2) return "image";
+  if (type === 5) return "redpacket";
+  return "text";
+}
+
+/**
+ * Normalize a pushed message into the domain `Message`. Tolerant of two shapes:
+ * the Mock emits a full domain Message; the real RTC push (model `TextMessage`/
+ * `PictureMessage`) carries `{messageId, sessionId, sendUserId?, type, createdAt,
+ * body:{content}|{size,url}}`. All ids are coerced to string so cache writes/keys
+ * match (the RTC sessionId is already a string; messageId rides as a string).
+ */
+export function normalizePushedMessage(raw: unknown): Message | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const sessionId = r.sessionId != null ? String(r.sessionId) : "";
+  if (!sessionId) return null;
+  const id = r.messageId != null ? String(r.messageId) : r.id != null ? String(r.id) : "";
+  const senderId = r.sendUserId != null ? String(r.sendUserId) : r.senderId != null ? String(r.senderId) : "";
+  const type = typeof r.type === "number" ? r.type : undefined;
+  const kind: MessageKind = typeof r.kind === "string" ? (r.kind as MessageKind) : kindFromType(type);
+  const body = (r.body && typeof r.body === "object" ? (r.body as Record<string, unknown>) : undefined);
+  let content = typeof r.content === "string" ? r.content : undefined;
+  if (content === undefined && body) {
+    content = kind === "image" ? String(body.url ?? "") : String(body.content ?? "");
+  }
+  const createdAt = typeof r.createdAt === "number" ? r.createdAt : Date.now();
+  return {id, sessionId, senderId, kind, content: content ?? "", createdAt, delivery: "delivered"};
+}
+
 /** Map an inbound push frame to a normalized PushEvent for the cache layer. */
 export function frameToPushEvent(frame: WireFrame): PushEvent | null {
   switch (frame.type) {
-    case PUSH.MESSAGE:
-      return {type: "message", message: frame.data as Message};
+    case PUSH.MESSAGE: {
+      const message = normalizePushedMessage(frame.data);
+      return message ? {type: "message", message} : null;
+    }
     case PUSH.NEW_SESSION:
     case PUSH.NEW_GROUP_SESSION:
       return {type: "new-session", sessionId: String((frame.data as {sessionId?: string})?.sessionId ?? "")};

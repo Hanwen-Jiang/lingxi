@@ -23,6 +23,14 @@ export interface ListMessagesOptions {
   limit?: number;
 }
 
+/** A file uploaded to object storage via the M11 presigned-PUT flow. `fileUrl` is
+ *  the CDN URL embedded into the outgoing message body (03-contracts 媒体上传契约). */
+export interface UploadedMedia {
+  fileUrl: string;
+  objectKey: string;
+  contentType: string;
+}
+
 export interface Api {
   /** Current user (from the auth session; mock returns a fixed user). */
   me(): User;
@@ -48,8 +56,15 @@ export interface Api {
   /** Accept or reject a friend application. Accept adds the applicant to friends. */
   respondApply(applyId: Id, accept: boolean): Promise<void>;
 
-  sendMessage(sessionId: Id, content: string): Promise<SendResult>; // POST /chat/session
+  sendMessage(sessionId: Id, content: string): Promise<SendResult>; // POST /chat/session (text)
   markRead(sessionId: Id): Promise<void>; // M10
+
+  /** Upload a file to object storage (M11): POST /api/v1/user/media/upload-url for
+   *  a presigned PUT, then PUT the bytes. Returns the CDN `fileUrl` to embed. */
+  uploadMedia(file: File): Promise<UploadedMedia>;
+  /** Send an image message (type=2 PICTURE). `fileUrl` is a previously uploaded
+   *  media URL; body = {url, size}. POST /chat/session. */
+  sendImageMessage(sessionId: Id, fileUrl: string, size?: number): Promise<SendResult>; // POST /chat/session (image)
 
   /** Stream the 灵犀 assistant reply (Mock now; P2 = SSE `/api/agent/chat`). Emits
    *  AssistantStreamEvents; returns an abort function. */
