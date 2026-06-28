@@ -139,6 +139,13 @@
             <version>1.1.0-beta7</version>
         </dependency>
 
+        <!-- F01:工具确认挑战令牌存储用 StringRedisTemplate(spring.data.redis.* 自动装配,Lettuce 懒连接;
+             Redis 不可用时运行期异常被捕获、降级进程内内存存储)。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>

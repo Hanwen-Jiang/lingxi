@@ -1,4 +1,5 @@
 package com.lou.infinitechatagent.chat.dto;
+import com.lou.infinitechatagent.common.json.SnowflakeId;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,10 +14,13 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ChatTurnSummary {
 
+    @SnowflakeId
     private Long id;
 
+    @SnowflakeId
     private Long userId;
 
+    @SnowflakeId
     private Long sessionId;
 
     private String mode;
