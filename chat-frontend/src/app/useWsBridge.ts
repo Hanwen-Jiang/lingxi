@@ -3,6 +3,7 @@ import {useEffect} from "react";
 import {useQueryClient} from "@tanstack/react-query";
 
 import {api} from "@/api";
+import type {Message, Page} from "@/api/types";
 import {WsClient} from "@/api/ws/WsClient";
 import {useUiStore} from "@/store/ui";
 
@@ -23,10 +24,20 @@ export function useWsBridge() {
       onState: setConnection,
       onPush: (e) => {
         switch (e.type) {
-          case "message":
-            qc.invalidateQueries({queryKey: ["messages", e.message.sessionId]});
+          case "message": {
+            // Write the pushed message straight into the thread cache (dedup by
+            // id) rather than a full refetch — the push carries the full payload
+            // (incl. an image's url, which a history refetch would not), and it's
+            // cheaper. The conversation list still refetches for preview/unread.
+            const m = e.message;
+            qc.setQueryData<Page<Message>>(["messages", m.sessionId], (old) => {
+              if (!old) return undefined; // thread not loaded yet — list refetch covers it
+              if (m.id && old.items.some((x) => x.id === m.id)) return old;
+              return {...old, items: [...old.items, m]};
+            });
             qc.invalidateQueries({queryKey: ["conversations"]});
             break;
+          }
           case "new-session":
             qc.invalidateQueries({queryKey: ["conversations"]});
             break;

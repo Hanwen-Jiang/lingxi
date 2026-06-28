@@ -190,3 +190,88 @@ export function useSendMessage(sessionId: string) {
     },
   });
 }
+
+// Files awaiting (or recovering from a failed) image send, keyed by the bubble's
+// clientTempId — lets a failed image bubble retry the full upload+send pipeline
+// (the File can't live in the query cache).
+const pendingImages = new Map<string, File>();
+
+/**
+ * Optimistic image send (M11). Renders the picked image immediately from a local
+ * object URL, uploads it to object storage (presigned PUT), then sends a PICTURE
+ * message and reconciles to the server message. The blob URL is revoked on
+ * success; kept on failure so the failed bubble still previews for retry.
+ */
+export function useSendImage(sessionId: string) {
+  const qc = useQueryClient();
+  const me = api.me();
+  const key = ["messages", sessionId] as const;
+
+  const mutation = useMutation({
+    mutationFn: async (input: {file: File}) => {
+      const media = await api.uploadMedia(input.file);
+      return api.sendImageMessage(sessionId, media.fileUrl, input.file.size);
+    },
+    onMutate: async ({file}): Promise<{tempId: string; previewUrl: string}> => {
+      await qc.cancelQueries({queryKey: key});
+      const tempId = newTempId();
+      pendingImages.set(tempId, file);
+      const previewUrl = URL.createObjectURL(file);
+      const optimistic: Message = {
+        id: tempId,
+        clientTempId: tempId,
+        sessionId,
+        senderId: me.id,
+        kind: "image",
+        content: previewUrl,
+        createdAt: Date.now(),
+        delivery: "sending",
+      };
+      qc.setQueryData<Page<Message>>(key, (old) =>
+        old ? {...old, items: [...old.items, optimistic]} : {items: [optimistic]},
+      );
+      return {tempId, previewUrl};
+    },
+    onSuccess: (res, _input, ctx) => {
+      qc.setQueryData<Page<Message>>(key, (old) => {
+        if (!old) return {items: [res.message]};
+        const items = old.items.filter((m) => m.clientTempId !== ctx.tempId);
+        if (!items.some((m) => m.id === res.message.id)) items.push(res.message);
+        return {...old, items};
+      });
+      pendingImages.delete(ctx.tempId);
+      URL.revokeObjectURL(ctx.previewUrl);
+      qc.invalidateQueries({queryKey: ["conversations"]});
+    },
+    onError: (_err, _input, ctx) => {
+      qc.setQueryData<Page<Message>>(key, (old) =>
+        old
+          ? {
+              ...old,
+              items: old.items.map((m) =>
+                m.clientTempId === ctx?.tempId ? {...m, delivery: "failed" as const} : m,
+              ),
+            }
+          : old,
+      );
+    },
+  });
+
+  const send = useCallback((file: File) => mutation.mutate({file}), [mutation]);
+
+  /** Retry a failed image bubble: drop the failed bubble and re-run the pipeline. */
+  const retry = useCallback(
+    (clientTempId: string) => {
+      const file = pendingImages.get(clientTempId);
+      if (!file) return;
+      pendingImages.delete(clientTempId);
+      qc.setQueryData<Page<Message>>(key, (old) =>
+        old ? {...old, items: old.items.filter((m) => m.clientTempId !== clientTempId)} : old,
+      );
+      mutation.mutate({file});
+    },
+    [qc, key, mutation],
+  );
+
+  return {send, retry};
+}

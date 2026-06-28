@@ -2,7 +2,7 @@
 // /assistant 灵犀 surface, so streaming bubbles + composer behave identically.
 import {memo, useRef} from "react";
 
-import {Send, Square} from "lucide-react";
+import {ImagePlus, Send, Square} from "lucide-react";
 
 import {Avatar, Button, cn, DeliveryTick} from "@infinitechat/design-system";
 
@@ -74,28 +74,47 @@ function MessageBubbleImpl({
         {isGroup && !mine && showAvatar ? (
           <span className="mb-0.5 px-1 text-[0.6875rem] text-muted">{senderName}</span>
         ) : null}
-        <div
-          className={cn(
-            "rounded-2xl px-3.5 py-2 text-sm leading-relaxed",
-            mine
-              ? "rounded-br-md bg-[var(--lx-accent)] text-white"
-              : "rounded-bl-md bg-surface text-foreground",
-          )}
-        >
-          {message.streaming && !message.content ? (
-            <ThinkingDots />
-          ) : (
-            <>
-              {message.content}
-              {message.streaming ? (
-                <span
-                  aria-hidden="true"
-                  className="ml-0.5 inline-block h-3.5 w-px translate-y-[2px] animate-pulse bg-current align-baseline"
-                />
-              ) : null}
-            </>
-          )}
-        </div>
+        {message.kind === "image" ? (
+          <a
+            href={message.content}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              "block overflow-hidden rounded-2xl border border-separator",
+              mine ? "rounded-br-md" : "rounded-bl-md",
+              message.delivery === "sending" && "opacity-70",
+            )}
+          >
+            <img
+              src={message.content}
+              alt="图片消息"
+              className="max-h-60 max-w-[16rem] object-cover"
+            />
+          </a>
+        ) : (
+          <div
+            className={cn(
+              "rounded-2xl px-3.5 py-2 text-sm leading-relaxed",
+              mine
+                ? "rounded-br-md bg-[var(--lx-accent)] text-white"
+                : "rounded-bl-md bg-surface text-foreground",
+            )}
+          >
+            {message.streaming && !message.content ? (
+              <ThinkingDots />
+            ) : (
+              <>
+                {message.content}
+                {message.streaming ? (
+                  <span
+                    aria-hidden="true"
+                    className="ml-0.5 inline-block h-3.5 w-px translate-y-[2px] animate-pulse bg-current align-baseline"
+                  />
+                ) : null}
+              </>
+            )}
+          </div>
+        )}
         {!message.streaming ? (
           <div className="mt-0.5 flex items-center gap-1 px-1 text-[0.625rem] text-muted">
             <span className="tabular-nums">{formatClock(message.createdAt)}</span>
@@ -113,6 +132,7 @@ export function Composer({
   onSubmit,
   streaming = false,
   onStop,
+  onPickImage,
   placeholder = "输入消息,Enter 发送 · Shift+Enter 换行",
 }: {
   value: string;
@@ -120,12 +140,40 @@ export function Composer({
   onSubmit: () => void;
   streaming?: boolean;
   onStop?: () => void;
+  /** When provided, shows an attach-image button; called with the picked file. */
+  onPickImage?: (file: File) => void;
   placeholder?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   return (
     <div className="shrink-0 border-t border-separator p-3">
       <div className="flex items-end gap-2 rounded-2xl border border-separator bg-surface px-3 py-2 focus-within:border-[color-mix(in_oklch,var(--lx-accent)_45%,var(--separator))]">
+        {onPickImage ? (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onPickImage(file);
+                e.target.value = ""; // allow re-picking the same file
+              }}
+            />
+            <Button
+              size="sm"
+              iconOnly
+              variant="ghost"
+              aria-label="发送图片"
+              disabled={streaming}
+              onClick={() => fileRef.current?.click()}
+            >
+              <ImagePlus className="size-4" />
+            </Button>
+          </>
+        ) : null}
         <textarea
           ref={ref}
           rows={1}
