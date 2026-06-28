@@ -69,6 +69,62 @@ describe("useChat.sendPrompt", () => {
   });
 });
 
+// SSE §9 (03-contracts.md, live since S1 P5): wire envelope is {type, ...}
+// with `v` (schema version) and `buffered:true` on routes that send a single
+// frame. Older clients must tolerate unknown `type` values silently so the
+// backend can add event kinds without coordinated client rollouts.
+describe("useChat — SSE §9 schema conformance", () => {
+  it("tolerates unknown event types without throwing or polluting the assistant bubble", async () => {
+    // Send an event sequence that mixes a known delta with two events the
+    // current client doesn't recognize (a forward-compat tool_call frame and
+    // a future citation frame). The hook must skip them silently and still
+    // render the known text.
+    const autoStreamChat = vi.fn(async (_payload: unknown, onEvent: (event: StreamChatEvent) => void) => {
+      onEvent({type: "start", v: 1, requestId: "req-1", route: "direct", forced: false});
+      onEvent({type: "tool_call", v: 1} as StreamChatEvent);
+      onEvent({type: "delta", v: 1, text: "hello "});
+      onEvent({type: "citation_delta", v: 1} as StreamChatEvent);
+      onEvent({type: "delta", v: 1, text: "world"});
+      onEvent({type: "done", v: 1});
+    });
+    const api = {autoStreamChat} as unknown as ApiClient;
+
+    const {result} = renderHook(() => useChat({api, userId: "1", sessionId: "1", onSettled: vi.fn()}));
+    act(() => result.current.setPrompt("hi"));
+    await act(async () => {
+      await result.current.sendPrompt();
+    });
+
+    const assistant = result.current.messages.find((m) => m.role === "assistant");
+    expect(assistant?.content).toBe("hello world");
+    expect(assistant?.status).toBe("complete");
+    expect(result.current.status).toBe("ready");
+  });
+
+  it("accepts a buffered:true single-frame stream as a normal complete answer", async () => {
+    // agent / adaptive-RAG routes mark `buffered:true` to flag "the whole
+    // answer arrives in one delta" — useChat must treat that exactly like
+    // a multi-frame stream and finalize the bubble at done.
+    const autoStreamChat = vi.fn(async (_payload: unknown, onEvent: (event: StreamChatEvent) => void) => {
+      onEvent({type: "start", v: 1, requestId: "req-1", route: "agent", forced: true, buffered: true});
+      onEvent({type: "delta", v: 1, text: "全部答案一帧到位。", buffered: true});
+      onEvent({type: "done", v: 1, buffered: true});
+    });
+    const api = {autoStreamChat} as unknown as ApiClient;
+
+    const {result} = renderHook(() => useChat({api, userId: "1", sessionId: "1", onSettled: vi.fn()}));
+    act(() => result.current.setPrompt("ask agent"));
+    await act(async () => {
+      await result.current.sendPrompt();
+    });
+
+    const assistant = result.current.messages.find((m) => m.role === "assistant");
+    expect(assistant?.content).toBe("全部答案一帧到位。");
+    expect(assistant?.status).toBe("complete");
+    expect(assistant?.requestId).toBe("req-1");
+  });
+});
+
 // M3 — non-auto modes dispatch to distinct backend endpoints and answer in a
 // single (non-streamed) frame. Each mock returns that endpoint's DTO shape.
 function makeRoutingApi() {

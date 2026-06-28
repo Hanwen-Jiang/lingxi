@@ -90,8 +90,19 @@ export type AutoChatResponse = {
   errorMessage?: string;
 };
 
+// SSE event envelope (03-contracts.md §9, live since S1 P5). The string
+// fallback on `type` is the explicit "tolerate unknown" affordance — when
+// the backend introduces a new event kind (e.g. tool/citation deltas), older
+// clients must silently ignore it rather than tear down the stream. `v` is
+// the schema version (currently 1; bump and the client should still parse
+// known fields and skip the rest). `buffered:true` marks a "non-streaming
+// streaming" route — agent and adaptive-RAG currently send the whole answer
+// in one delta, so the UI must accept a single-frame response as a normal
+// stream rather than treating it as a partial.
 export type StreamChatEvent = {
   type: "start" | "delta" | "usage" | "done" | "error" | string;
+  v?: number;
+  buffered?: boolean;
   requestId?: string;
   sessionId?: string;
   text?: string;

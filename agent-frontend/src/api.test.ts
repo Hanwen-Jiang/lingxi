@@ -1,6 +1,6 @@
 import {afterEach, describe, expect, it, vi} from "vitest";
 
-import {ApiError, createApiClient} from "./api";
+import {ApiError, createApiClient, parseSsePayload} from "./api";
 import type {ChatSessionSummary} from "./types";
 
 type MockResponseInit = {
@@ -281,5 +281,35 @@ describe("createApiClient refresh-on-401 pipeline", () => {
     await expect(api.listSessions("1")).rejects.toBeInstanceOf(ApiError);
     expect(fetchMock).toHaveBeenCalledTimes(3); // original + refresh + ONE retry
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+});
+
+// SSE §9 (03-contracts.md). The frame envelope is {type, ...} JSON; the
+// parser must surface v / buffered / unknown-type fields unchanged so the
+// hook can decide what to do with them.
+describe("parseSsePayload — SSE §9 envelope", () => {
+  it("preserves v and buffered fields when present", () => {
+    const chunk = `data: ${JSON.stringify({type: "delta", v: 1, buffered: true, text: "hi"})}\n\n`;
+    const {events, tail} = parseSsePayload(chunk);
+    expect(tail).toBe("");
+    expect(events).toEqual([{type: "delta", v: 1, buffered: true, text: "hi"}]);
+  });
+
+  it("passes through unknown event types without translating them to delta", () => {
+    // Forward-compat: backend may add tool_call / citation_delta / etc.;
+    // the parser must surface the raw event so the hook can ignore it
+    // explicitly. Coercing to delta would corrupt the assistant content.
+    const chunk = `data: ${JSON.stringify({type: "tool_call", v: 1, name: "x"})}\n\n`;
+    const {events} = parseSsePayload(chunk);
+    expect(events).toEqual([{type: "tool_call", v: 1, name: "x"}]);
+  });
+
+  it("falls back to a synthetic delta only for unparseable payloads", () => {
+    // Defensive: a bare non-JSON line (e.g. a raw token) keeps the assistant
+    // bubble rendering rather than killing the stream. This is intentionally
+    // distinct from the unknown-type case above.
+    const chunk = "data: raw-token\n\n";
+    const {events} = parseSsePayload(chunk);
+    expect(events).toEqual([{type: "delta", text: "raw-token"}]);
   });
 });
