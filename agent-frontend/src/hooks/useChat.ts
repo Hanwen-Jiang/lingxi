@@ -24,10 +24,10 @@ export function useChat({
   onSettled,
 }: {
   api: ApiClient;
-  userId: number;
-  sessionId: number;
+  userId: string;
+  sessionId: string;
   mode?: ChatModeId;
-  onSettled: (sessionId: number) => void;
+  onSettled: (sessionId: string) => void;
 }) {
   const [messages, setMessages] = useState<WorkspaceMessage[]>([]);
   const [prompt, setPrompt] = useState("");

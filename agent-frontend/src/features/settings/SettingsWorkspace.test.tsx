@@ -32,8 +32,8 @@ function renderWorkspace(isAdmin: boolean) {
         configured: true,
         message: "Configured",
       }}
-      sessionId={1}
-      userId={1}
+      sessionId={"1"}
+      userId={"1"}
       onBack={vi.fn()}
       onCheckHealth={vi.fn()}
       onJob={vi.fn()}

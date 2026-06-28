@@ -29,7 +29,7 @@ export function ChatHeader({
   onRefreshSessions,
   onSelectSession,
 }: {
-  activeSessionId: number;
+  activeSessionId: string;
   activeMode: ChatMode;
   health: "checking" | "up" | "down";
   modelStatus: ModelStatusResponse | null;
@@ -43,7 +43,7 @@ export function ChatHeader({
   onOpenSettings: () => void;
   onQueryChange: (value: string) => void;
   onRefreshSessions: () => void;
-  onSelectSession: (sessionId: number) => void;
+  onSelectSession: (sessionId: string) => void;
 }) {
   return (
     <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-separator bg-background px-4 md:px-6">
@@ -103,14 +103,14 @@ function MobileSessionSheet({
   onRefresh,
   onSelect,
 }: {
-  activeSessionId: number;
+  activeSessionId: string;
   query: string;
   sessions: ChatSessionSummary[];
   totalSessions: number;
   onNewSession: () => void;
   onQueryChange: (value: string) => void;
   onRefresh: () => void;
-  onSelect: (sessionId: number) => void;
+  onSelect: (sessionId: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const isMobileNav = useMediaQuery(MOBILE_NAV_QUERY);
@@ -119,7 +119,7 @@ function MobileSessionSheet({
     setIsOpen(false);
   }, [onNewSession]);
   const handleSelect = useCallback(
-    (sessionId: number) => {
+    (sessionId: string) => {
       onSelect(sessionId);
       setIsOpen(false);
     },

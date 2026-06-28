@@ -14,9 +14,9 @@ export function useSessions({
   chat,
 }: {
   api: ApiClient;
-  userId: number;
-  sessionId: number;
-  setSessionId: (id: number) => void;
+  userId: string;
+  sessionId: string;
+  setSessionId: (id: string) => void;
   chat: Pick<ReturnType<typeof useChat>, "setMessages" | "setPrompt" | "setLastRouteResult">;
 }) {
   // Stable useState setters from the chat hook — depend on these (not the
@@ -47,7 +47,7 @@ export function useSessions({
   }, [api, sessionId, userId]);
 
   const loadSession = useCallback(
-    async (targetSessionId: number) => {
+    async (targetSessionId: string) => {
       const detail = await api.getSession(userId, targetSessionId);
       setSelectedSession(detail.session);
       setSessionId(detail.session.sessionId);
@@ -70,7 +70,12 @@ export function useSessions({
   );
 
   async function startNewSession() {
-    const nextSessionId = Date.now();
+    // D5 — session ids on the wire are string-encoded snowflakes; the server
+    // is the only minter once we go through /chat/sessions, but for the very
+    // first proposal we keep using a time-derived string so a brand-new client
+    // can show a placeholder before the response lands. The server's response
+    // overwrites this with its real snowflake.
+    const nextSessionId = String(Date.now());
     const session = await api.createSession({
       userId,
       sessionId: nextSessionId,
@@ -89,7 +94,7 @@ export function useSessions({
   // Sync a SPECIFIC session (the one active when a prompt was sent), so a
   // post-stream refresh targets the originally-sent session even if the user
   // has since switched away.
-  async function syncSession(targetSessionId: number) {
+  async function syncSession(targetSessionId: string) {
     await refreshSessions();
     await loadSession(targetSessionId);
   }

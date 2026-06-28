@@ -24,28 +24,16 @@ import {SessionList} from "./features/sessions/SessionList";
 import {SettingsWorkspace} from "./features/settings/SettingsWorkspace";
 import {GlobalSidebar} from "./features/sidebar/GlobalSidebar";
 
-// Resolve the starting session id. A valid finite number persisted in storage
+// Resolve the starting session id. A non-empty string persisted in storage
 // is restored (and reported as `restored: true` so the init effect can reopen
-// that conversation); otherwise we mint a fresh id. Storage access is guarded
-// inside readStorage, so this never throws.
-function resolveInitialSession(): {id: number; restored: boolean} {
+// that conversation); otherwise we mint a fresh time-derived placeholder.
+// Storage access is guarded inside readStorage, so this never throws. Per D5
+// (live since S1 P5 / S3 P5), session ids on the wire are string-encoded
+// snowflakes — we keep the persisted value as-is rather than parsing it.
+function resolveInitialSession(): {id: string; restored: boolean} {
   const stored = readStorage(STORAGE_KEYS.lastSessionId);
-  if (stored !== null) {
-    const parsed = Number(stored);
-    if (Number.isFinite(parsed)) return {id: parsed, restored: true};
-  }
-  return {id: Date.now(), restored: false};
-}
-
-// Per D5, contract §5, user/session ids are string-encoded snowflakes on the
-// wire. The hooks currently still expect number — that's an expand/contract
-// step S1/S3 will翻 across the stack; until then we coerce at the auth edge.
-// A non-numeric snowflake (e.g. "9007199…") would lose precision, but the
-// alternative — flipping the whole id type today — is the breaking change the
-// plan defers until S1/S3 翻 D5. The fallback keeps the legacy fixture working.
-function userIdToNumber(id: string): number {
-  const n = Number(id);
-  return Number.isFinite(n) && n > 0 ? n : 1;
+  if (stored && stored.length > 0) return {id: stored, restored: true};
+  return {id: String(Date.now()), restored: false};
 }
 
 export function App() {
@@ -218,15 +206,7 @@ export function App() {
   // ships the `roles` claim in real tokens; never enable in prod builds.
   const isAdmin = computeIsAdmin(auth.user) || import.meta.env.VITE_DEV_ASSUME_ADMIN === "true";
 
-  return (
-    <Workspace
-      api={api}
-      apiBase={apiBase}
-      isAdmin={isAdmin}
-      userId={userIdToNumber(auth.user.id)}
-      onLogout={auth.logout}
-    />
-  );
+  return <Workspace api={api} apiBase={apiBase} isAdmin={isAdmin} userId={auth.user.id} onLogout={auth.logout} />;
 }
 
 function Workspace({
@@ -239,7 +219,7 @@ function Workspace({
   api: ReturnType<typeof createApiClient>;
   apiBase: string;
   isAdmin: boolean;
-  userId: number;
+  userId: string;
   onLogout: () => void;
 }) {
   const [initialSession] = useState(resolveInitialSession);
@@ -286,7 +266,7 @@ function Workspace({
   }, [initialSession, checkHealth, refreshSessions, loadSession]);
 
   useEffect(() => {
-    writeStorage(STORAGE_KEYS.lastSessionId, String(sessionId));
+    writeStorage(STORAGE_KEYS.lastSessionId, sessionId);
   }, [sessionId]);
 
   return (

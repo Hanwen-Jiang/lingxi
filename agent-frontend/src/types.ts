@@ -61,14 +61,18 @@ export type LoginResponse = {
   refreshToken?: string;
 };
 
+// D5 (live since S1 P5 / S3 P5): all id fields in JSON are string-encoded
+// snowflakes — see 03-contracts.md §5. Inputs sent to the backend follow the
+// same shape; the server tolerates either during the expand/contract window
+// but new code on this side standardizes on string everywhere.
 export type ChatRequest = {
-  userId: number;
-  sessionId: number;
+  userId: string;
+  sessionId: string;
   prompt: string;
 };
 
 export type ChatResponse = {
-  sessionId: number;
+  sessionId: string;
   answer: string;
 };
 
@@ -89,7 +93,7 @@ export type AutoChatResponse = {
 export type StreamChatEvent = {
   type: "start" | "delta" | "usage" | "done" | "error" | string;
   requestId?: string;
-  sessionId?: number;
+  sessionId?: string;
   text?: string;
   code?: number;
   message?: string;
@@ -206,8 +210,8 @@ export type MemoryType =
 
 export type MemoryItem = {
   memoryId: string;
-  userId: number;
-  sessionId?: number;
+  userId: string;
+  sessionId?: string;
   memoryType?: MemoryType;
   content?: string;
   summary?: string;
@@ -220,8 +224,8 @@ export type MemoryItem = {
 };
 
 export type ChatSessionSummary = {
-  userId: number;
-  sessionId: number;
+  userId: string;
+  sessionId: string;
   title: string;
   mode: ChatModeId | string;
   summary?: string;
@@ -233,9 +237,9 @@ export type ChatSessionSummary = {
 };
 
 export type ChatTurnSummary = {
-  id: number;
-  userId: number;
-  sessionId: number;
+  id: string;
+  userId: string;
+  sessionId: string;
   mode: ChatModeId | string;
   prompt: string;
   answer?: string;
@@ -253,8 +257,8 @@ export type ChatSessionDetail = {
 };
 
 export type ChatSessionCreateRequest = {
-  userId: number;
-  sessionId?: number;
+  userId: string;
+  sessionId?: string;
   mode?: ChatModeId | string;
   title?: string;
 };

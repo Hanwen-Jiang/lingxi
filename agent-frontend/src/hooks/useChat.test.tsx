@@ -21,7 +21,7 @@ describe("useChat.sendPrompt", () => {
     const api = makeApi();
     const onSettled = vi.fn();
 
-    const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, onSettled}));
+    const {result} = renderHook(() => useChat({api, userId: "1", sessionId: "1", onSettled}));
 
     act(() => {
       result.current.setPrompt("hello there");
@@ -47,14 +47,14 @@ describe("useChat.sendPrompt", () => {
     act(() => {
       vi.advanceTimersByTime(500);
     });
-    expect(onSettled).toHaveBeenCalledWith(1);
+    expect(onSettled).toHaveBeenCalledWith("1");
 
     vi.useRealTimers();
   });
 
   it("clears the prompt and exposes stopStream", async () => {
     const api = makeApi();
-    const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, onSettled: vi.fn()}));
+    const {result} = renderHook(() => useChat({api, userId: "1", sessionId: "1", onSettled: vi.fn()}));
 
     act(() => {
       result.current.setPrompt("ask something");
@@ -76,7 +76,7 @@ function makeRoutingApi() {
     autoStreamChat: vi.fn(async (_payload: unknown, onEvent: (event: StreamChatEvent) => void) => {
       onEvent({type: "delta", text: "stream"});
     }),
-    chat: vi.fn(async () => ({sessionId: 1, answer: "direct-answer"})),
+    chat: vi.fn(async () => ({sessionId: "1", answer: "direct-answer"})),
     agentChat: vi.fn(async () => ({answer: "agent-answer", strategy: "react", reactTrace: [{step: 1}]})),
     ragChat: vi.fn(async () => ({answer: "rag-answer", hit: true, citations: [{index: 0, snippet: "doc"}]})),
     adaptiveRagChat: vi.fn(async () => ({answer: "adaptive-answer", strategy: "multi-hop", rounds: 2})),
@@ -94,7 +94,7 @@ describe("useChat.sendPrompt · mode routing (M3)", () => {
 
   it.each(cases)("routes $mode to $method and renders one complete frame", async ({mode, method, answer}) => {
     const api = makeRoutingApi();
-    const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode, onSettled: vi.fn()}));
+    const {result} = renderHook(() => useChat({api, userId: "1", sessionId: "1", mode, onSettled: vi.fn()}));
 
     act(() => {
       result.current.setPrompt("question");
@@ -118,7 +118,7 @@ describe("useChat.sendPrompt · mode routing (M3)", () => {
 
   it("attaches citations and a tool trace for the agent/rag modes", async () => {
     const api = makeRoutingApi();
-    const rag = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "rag", onSettled: vi.fn()}));
+    const rag = renderHook(() => useChat({api, userId: "1", sessionId: "1", mode: "rag", onSettled: vi.fn()}));
     act(() => rag.result.current.setPrompt("q"));
     await act(async () => {
       await rag.result.current.sendPrompt();
@@ -126,7 +126,7 @@ describe("useChat.sendPrompt · mode routing (M3)", () => {
     const ragAssistant = rag.result.current.messages.find((message) => message.role === "assistant");
     expect(ragAssistant?.citations?.[0]?.snippet).toBe("doc");
 
-    const agent = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "agent", onSettled: vi.fn()}));
+    const agent = renderHook(() => useChat({api, userId: "1", sessionId: "1", mode: "agent", onSettled: vi.fn()}));
     act(() => agent.result.current.setPrompt("q"));
     await act(async () => {
       await agent.result.current.sendPrompt();
@@ -143,7 +143,7 @@ describe("useChat.sendPrompt · mode routing (M3)", () => {
         throw new Error("boom");
       }),
     } as unknown as ApiClient;
-    const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "rag", onSettled: vi.fn()}));
+    const {result} = renderHook(() => useChat({api, userId: "1", sessionId: "1", mode: "rag", onSettled: vi.fn()}));
     act(() => result.current.setPrompt("q"));
     await act(async () => {
       await result.current.sendPrompt();
@@ -173,7 +173,7 @@ describe("useChat.confirmTurn (M4 / F01)", () => {
       .mockResolvedValueOnce({answer: "搜索完成", strategy: "react"});
     const api = {autoStreamChat: vi.fn(), agentChat} as unknown as ApiClient;
 
-    const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "agent", onSettled: vi.fn()}));
+    const {result} = renderHook(() => useChat({api, userId: "1", sessionId: "1", mode: "agent", onSettled: vi.fn()}));
     act(() => result.current.setPrompt("查一下天气"));
     await act(async () => {
       await result.current.sendPrompt();
@@ -216,7 +216,7 @@ describe("useChat.confirmTurn (M4 / F01)", () => {
       })
       .mockResolvedValueOnce({answer: "all done"});
     const api = {autoStreamChat: vi.fn(), agentChat} as unknown as ApiClient;
-    const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "agent", onSettled: vi.fn()}));
+    const {result} = renderHook(() => useChat({api, userId: "1", sessionId: "1", mode: "agent", onSettled: vi.fn()}));
     act(() => result.current.setPrompt("go"));
     await act(async () => {
       await result.current.sendPrompt();
@@ -249,7 +249,7 @@ describe("useChat.confirmTurn (M4 / F01)", () => {
       .fn()
       .mockResolvedValueOnce({answer: "no challenge", toolGovernance: {pendingTools: [{name: "a"}]}});
     const api = {autoStreamChat: vi.fn(), agentChat} as unknown as ApiClient;
-    const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "agent", onSettled: vi.fn()}));
+    const {result} = renderHook(() => useChat({api, userId: "1", sessionId: "1", mode: "agent", onSettled: vi.fn()}));
     act(() => result.current.setPrompt("go"));
     await act(async () => {
       await result.current.sendPrompt();
@@ -271,7 +271,7 @@ describe("useChat.confirmTurn (M4 / F01)", () => {
       toolGovernance: {confirmationRequired: true, challengeToken: "cancel-me", pendingTools: [{name: "x"}]},
     });
     const api = {autoStreamChat: vi.fn(), agentChat} as unknown as ApiClient;
-    const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "agent", onSettled: vi.fn()}));
+    const {result} = renderHook(() => useChat({api, userId: "1", sessionId: "1", mode: "agent", onSettled: vi.fn()}));
     act(() => result.current.setPrompt("ask"));
     await act(async () => {
       await result.current.sendPrompt();
@@ -289,7 +289,7 @@ describe("useChat.confirmTurn (M4 / F01)", () => {
 
   it("is a no-op when no turn is awaiting confirmation", async () => {
     const api = {autoStreamChat: vi.fn(), agentChat: vi.fn()} as unknown as ApiClient;
-    const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "agent", onSettled: vi.fn()}));
+    const {result} = renderHook(() => useChat({api, userId: "1", sessionId: "1", mode: "agent", onSettled: vi.fn()}));
     await act(async () => {
       await result.current.confirmTurn("missing", true);
     });

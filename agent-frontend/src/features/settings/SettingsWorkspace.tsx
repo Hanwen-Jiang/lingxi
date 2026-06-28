@@ -40,8 +40,8 @@ export function SettingsWorkspace({
   jobs: DocumentIngestJobResponse[];
   memoryItems: MemoryItem[];
   modelStatus: ModelStatusResponse | null;
-  sessionId: number;
-  userId: number;
+  sessionId: string;
+  userId: string;
   onBack: () => void;
   onCheckHealth: () => void;
   onJob: (job: DocumentIngestJobResponse) => void;
@@ -122,8 +122,8 @@ function SettingsPanel({
   healthMessage: string;
   isAdmin: boolean;
   modelStatus: ModelStatusResponse | null;
-  sessionId: number;
-  userId: number;
+  sessionId: string;
+  userId: string;
   onModelStatus: (status: ModelStatusResponse) => void;
 }) {
   return (

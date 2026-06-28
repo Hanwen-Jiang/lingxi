@@ -19,14 +19,14 @@ export function SessionList({
   onRefresh,
   onSelect,
 }: {
-  activeSessionId: number;
+  activeSessionId: string;
   query: string;
   sessions: ChatSessionSummary[];
   totalSessions: number;
   onNewSession: () => void;
   onQueryChange: (value: string) => void;
   onRefresh: () => void;
-  onSelect: (sessionId: number) => void;
+  onSelect: (sessionId: string) => void;
 }) {
   return (
     <aside className="hidden min-h-0 min-w-0 border-r border-separator bg-surface-secondary/60 lg:flex lg:flex-col">
@@ -54,14 +54,14 @@ export function SessionListContent({
   onRefresh,
   onSelect,
 }: {
-  activeSessionId: number;
+  activeSessionId: string;
   query: string;
   sessions: ChatSessionSummary[];
   totalSessions: number;
   onNewSession: () => void;
   onQueryChange: (value: string) => void;
   onRefresh: () => void;
-  onSelect: (sessionId: number) => void;
+  onSelect: (sessionId: string) => void;
 }) {
   return (
     <>
@@ -124,9 +124,10 @@ export function SessionListContent({
               if (keys === "all") return;
 
               const [key] = Array.from(keys);
-              const sessionId = Number(key);
-
-              if (Number.isFinite(sessionId)) onSelect(sessionId);
+              // D5: session ids are string-encoded snowflakes; pass the key
+              // through verbatim. (React-Aria yields strings or numbers; we
+              // normalize to string to match the wire shape.)
+              if (key !== undefined && key !== null) onSelect(String(key));
             }}
           >
             {(session) => (

@@ -262,14 +262,14 @@ export function createApiClient(apiBase: string, options: ApiClientOptions = {})
         method: "POST",
         body: JSON.stringify(payload),
       }),
-    listSessions: (userId: number, limit = 40) =>
+    listSessions: (userId: string, limit = 40) =>
       request<ChatSessionSummary[]>(
         `/chat/sessions?userId=${encodeURIComponent(userId)}&limit=${encodeURIComponent(limit)}`,
         {
           method: "GET",
         },
       ),
-    getSession: (userId: number, sessionId: number) =>
+    getSession: (userId: string, sessionId: string) =>
       request<ChatSessionDetail>(
         `/chat/sessions/${encodeURIComponent(sessionId)}?userId=${encodeURIComponent(userId)}`,
         {method: "GET"},
@@ -279,7 +279,7 @@ export function createApiClient(apiBase: string, options: ApiClientOptions = {})
         method: "POST",
         body: JSON.stringify(payload),
       }),
-    summarizeSession: (userId: number, sessionId: number) =>
+    summarizeSession: (userId: string, sessionId: string) =>
       request<ChatSessionSummary>(
         `/chat/sessions/${encodeURIComponent(sessionId)}/summarize?userId=${encodeURIComponent(userId)}`,
         {method: "POST"},
@@ -345,19 +345,19 @@ export function createApiClient(apiBase: string, options: ApiClientOptions = {})
         method: "GET",
       }),
     writeMemory: (payload: {
-      userId: number;
-      sessionId: number;
+      userId: string;
+      sessionId: string;
       memoryType: MemoryType;
       content: string;
       summary?: string;
       confidence?: number;
       source?: string;
     }) => request<MemoryItem>("/memory/write", {method: "POST", body: JSON.stringify(payload)}),
-    listUserMemories: (userId: number, limit = 20, memoryType?: MemoryType) => {
+    listUserMemories: (userId: string, limit = 20, memoryType?: MemoryType) => {
       const params = new URLSearchParams({limit: String(limit)});
       if (memoryType) params.set("memoryType", memoryType);
 
-      return request<MemoryItem[]>(`/memory/user/${userId}?${params.toString()}`, {method: "GET"});
+      return request<MemoryItem[]>(`/memory/user/${encodeURIComponent(userId)}?${params.toString()}`, {method: "GET"});
     },
     streamChat: async (payload: ChatRequest, onEvent: (event: StreamChatEvent) => void, signal?: AbortSignal) => {
       const response = await fetch(`${baseUrl}/streamChat`, {
