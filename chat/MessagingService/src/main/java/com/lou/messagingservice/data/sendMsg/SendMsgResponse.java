@@ -14,7 +14,8 @@ public class SendMsgResponse {
 
     private Integer type;
 
-    private Long messageId;
+    /** D5:JSON 内 id 一律 string 化。 */
+    private String messageId;
 
     private Object body;
 

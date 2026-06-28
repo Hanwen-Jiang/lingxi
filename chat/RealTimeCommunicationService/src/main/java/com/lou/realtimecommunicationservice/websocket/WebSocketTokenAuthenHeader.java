@@ -30,14 +30,19 @@ public class WebSocketTokenAuthenHeader extends ChannelInboundHandlerAdapter {
 
             // 浏览器 WebSocket 无法设置自定义握手头，故 token/userUuid 既可来自握手头，
             // 也可来自 URL 查询参数 ?token=&userUuid=。优先级：头存在用头，否则取 query。
-            Map<String, List<String>> queryParams =
-                    new QueryStringDecoder(request.uri()).parameters();
+            QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
+            Map<String, List<String>> queryParams = decoder.parameters();
 
             String userUuid = resolve(request.headers().get("userUuid"), queryParams, "userUuid");
             String token = resolve(request.headers().get("token"), queryParams, "token");
 
             NettyUtils.setAttr(ctx.channel(), NettyUtils.TOKEN, token);
             NettyUtils.setAttr(ctx.channel(), NettyUtils.UID, userUuid);
+
+            // B8 关键：剥离 query,改写为裸路径。否则下游 WebSocketServerProtocolHandler 用
+            // 完整 uri("/api/v1/netty?token=...")与配置路径("/api/v1/netty")比较不相等 → 不升级握手,
+            // 浏览器/带 query 的连接会静默挂起。原生端走握手头(无 query)不受影响。
+            request.setUri(decoder.path());
 
             ctx.pipeline().remove(this);
             ctx.fireChannelRead(request);
