@@ -14,6 +14,9 @@ public class SessionListItem {
     /** 会话类型:1 单聊,2 群聊 */
     private Integer type;
 
+    /** 单聊对方 userId(string,群聊为 null)。S4 冷开单聊用它作 receiveUserId 发首条。 */
+    private String peerUserId;
+
     /** 展示名:单聊取对方 user_name,群聊取 session.name */
     private String name;
 

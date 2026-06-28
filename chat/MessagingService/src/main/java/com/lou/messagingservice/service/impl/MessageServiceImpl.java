@@ -157,7 +157,13 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         message.setSessionType(request.getSessionType());
         com.alibaba.fastjson.JSONObject body = parseBody(request.getBody());
         if (body != null) {
-            message.setContent(body.getString("content"));
+            String content = body.getString("content");
+            // 媒体消息(图/文件/视频)body 形如 {url,size} 无 content;把 url 落 content,
+            // 否则 message.content=null,刷新拉历史时图片丢失(S4 按 content=图片 url 渲染)。
+            if (content == null) {
+                content = body.getString("url");
+            }
+            message.setContent(content);
             message.setReplyId(body.getLong("replyId"));
         }
         message.setCreatedAt(createdAt);

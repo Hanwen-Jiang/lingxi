@@ -84,5 +84,21 @@ echo "[媒体上传契约]"
 mu=$(curl -s -X POST -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' -d '{"fileName":"a.jpg","contentType":"image/jpeg","size":1024}' "$GW/api/v1/user/media/upload-url")
 { [ "$(printf '%s' "$mu" | jnum code)" = "0" ] && printf '%s' "$mu" | grep -q '"objectKey":"chat/'; } && ok "媒体预签名 code=0 + 用户隔离 key" || ng "media" "code=0" "$mu"
 
+echo "[S4 缺口:会话列表带 peerUserId(冷开单聊可发)]"
+sess=$(curl -s -H "Authorization: Bearer $BT" "$GW/api/v1/chat/sessions")
+printf '%s' "$sess" | grep -oE "\{[^{}]*\"sessionId\":\"$SID\"[^{}]*\}" | grep -q "\"peerUserId\":\"$AID\"" \
+  && ok "B 的会话 $SID peerUserId=$AID(对方)" || ng "peerUserId" "$AID" "$(printf '%s' "$sess" | grep -oE "\"peerUserId\":\"[^\"]*\"" | head -1)"
+
+echo "[S4 缺口:图片消息历史持久化(url 落 content,修刷新丢图)]"
+IMGURL="https://cdn.lingxi.test/img_$STAMP.jpg"
+curl -s -X POST -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' \
+  -d "{\"sessionId\":$SID,\"sendUserId\":$AID,\"sessionType\":1,\"type\":2,\"receiveUserId\":$BID,\"body\":{\"url\":\"$IMGURL\",\"size\":2048}}" \
+  "$GW/api/v1/chat/session" >/dev/null
+sleep 1
+imgrow=$(sql "SELECT COUNT(*) FROM message WHERE session_id=$SID AND type=2 AND content='$IMGURL'")
+[ "$imgrow" = "1" ] && ok "图片消息 url 已落 message.content(刷新不丢)" || ng "图片 url 持久化" 1 "$imgrow"
+imghist=$(curl -s -H "Authorization: Bearer $BT" "$GW/api/v1/chat/session/$SID/messages?limit=10")
+printf '%s' "$imghist" | grep -q "$IMGURL" && ok "历史分页回显图片 url" || ng "图片历史回显" "含 url" "$imghist"
+
 echo "============ PASS=$P FAIL=$F ============"
 [ "$F" -eq 0 ] && echo "IM 链路 E2E 全绿 ✅" || { echo "存在失败 ❌"; exit 1; }

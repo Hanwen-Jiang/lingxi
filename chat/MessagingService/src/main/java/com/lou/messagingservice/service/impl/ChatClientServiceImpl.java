@@ -70,6 +70,8 @@ public class ChatClientServiceImpl implements ChatClientService {
                 if (peer != null) {
                     item.setName(peer.getUserName());
                     item.setAvatar(peer.getAvatar());
+                    // S4 缺口:冷开单聊需要对方 userId 作 receiveUserId 才能发首条
+                    item.setPeerUserId(String.valueOf(peer.getUserId()));
                 }
             } else {
                 item.setName(session.getName());
