@@ -20,6 +20,16 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-28 · P5 集成:IM 实时闭环 + 数据安全落地(B4/B5)+ STATUS 补录;下轮=灵犀内置助手端到端打通
+- **本轮 P5 数字(git 核实)**:四条 `feat/*-p5` 全并入 `main`(无冲突,四目录互不相交;已 push)。S1 `0d36d43`(D5 string-id `@SnowflakeId` 出参串化+Jackson 双读 + SSE §9 信封版本化 `v`/`buffered` + **F01 服务端一次性挑战令牌**);S2 `6330828`(**首次用自己分支**:M3 真实模式路由 + dev-proxy CORS shim + **真实登录 E2E 浏览器实证全绿(:10110)** + M4 工具确认壳);S3 `d2f393c`(**B4/B5/M8 数据安全:同事务 outbox + Kafka DLQ**,git 核实 `persistMessageAndOutbox`+`KafkaConsumerConfig` 落地;B8 浏览器 WS 握手真修;发消息端点翻 code=0);S4 `0f86662`(实时收发闭环:发送/图片写路径接真实 + 收消息直写缓存去重)。
+- **里程碑**:🎉 **IM 实时闭环 + 数据安全双双落地**——拖 4 轮的 B4/B5 数据丢失级修复终于进代码;live WS「发→对端实时收」端到端打通;S2 缠结(误落 chat-frontend)本轮解决。
+- **已集成**:四 merge commit 无冲突 `df6b3b2`(agent-backend)→ `da5a681`(chat-backend)→ `2f1e57b`(agent-frontend)→ `c5a4bd3`(chat-frontend);本 STATUS 补录为随后 docs 提交。
+- **STATUS 修复(本轮治理)**:S2/S3 的 P5 条目**此前从未提交**——S3 原始记录在共享工作树被 S4 `0f86662` 覆盖丢失,S2 条目仅存工作树未提交。中枢据 git 实况 + 上下文**补提交回 main**(S2 条目 + S3 三条带恢复标记)。**根因=多流共享一个工作树 + STATUS `commit -a`/checkout 互踩**。
+- **仍欠(关键)**:🔴 **S3 IM E2E 绿数字是重建条目**(07-im 11/11 / 08-ws 4/4)——代码 git 核实安全,**实绿待 S3 会话内复跑确认**;🔴 **共享工作树踩踏**(本轮再发生)→ P6 起**强制各流独立 worktree + STATUS 各写各分支、HUB union**;🟡 **灵犀内置助手未端到端**(agent 不在 chat E2E 栈,S2 流式回复半侧 + S4 内助手 + F01 确认 UX 全卡此);🟡 剩余包络收口(Contact/RTC/Offline/Moment 仍 200+code)、生产硬化、图片历史持久化 + `peerUserId` 两后端缺口。
+- **用户拍板(3 问)**:① 中枢现在合四条→main;② **下轮=灵犀内置助手端到端打通**(agent 入统一 E2E 栈,S4 接 IM 内助手流式、S2 接 F01 真确认令牌);③ 下轮做完 **S3 验收**(会话内跑 IM + 内助手全链路 E2E)。
+- **下一轮(P6)**:S3 主力(复跑确认 P5 E2E + 把 agent 纳入 chat E2E 栈 + 剩余包络收口 + 两缺口 + 生产硬化);S4 接 IM 内助手流式(§9 SSE);S2 接 F01 真挑战令牌 + D5 翻 string + 流式回复端到端;S1 配合 agent 入 E2E 栈 + F01 真 Redis/SSE 联调 + F01/限流多实例 Redis 硬化。
+- 阻塞:无。待中枢确认:无(线上仍 defer)。
+
 ### 2026-06-27 · P4 集成:鉴权 E2E 13/13 验收 + IM 前端吃真后端 + RAG 真嵌入;下轮=IM 实时闭环+数据安全
 - **本轮 P4 数字(git 核实)**:S3 ① 邮箱登录 **E2E 13/13 绿(会话内)** ② 客户端读 API(ChatClientController 会话/历史/markRead + 好友 + 媒体 + cursor 分页 + ApiExceptionHandler 包络)③ WS 握手适配 + `06-client-api-smoke.sh`;S1 RAG **真嵌入**+阈值解耦(M15/F06/F07);S2 401→refresh→retry + dev proxy;S4 接通真实客户端**读 API + auth**(`api/{http,real}.ts` 真接缝)。
 - **里程碑**:🎉 统一鉴权 **E2E 实测闭环(13/13)**;IM 前端开始消费真实后端读接口;RAG 可真语义检索。
@@ -279,6 +289,29 @@
 
 ## S2 · agent 前端(owns agent-frontend/)
 
+### 2026-06-28 · P5 · 真实登录 E2E 实证(:10110)+ M3 模式路由 + M4 工具确认壳(commits `6dcd361`、`6330828`)
+- 分支:`feat/agent-frontend-p5`(从 main `7c5352b` 起,HTTPS push,**未合 main**)。⚠️ 中途共享工作树 HEAD 被外部(疑 S4)切到 `feat/chat-frontend-p5`,已自查并切回自己分支后才提交(改动全在 `agent-frontend/`,跨分支无冲突携带)。
+- **unit 1 · 真实登录闭环 E2E(对 S3 E2E 栈 `:10110`,浏览器实证):**
+  - 探活:`:10110` 网关活着(`X-Response-Source: InfiniteChat-GateWay`,login 返 chat-common 包络 `code=0`);`:10010`/`:18080` 未起。用 `dev-seed-accounts` 的 `17614797418@example.com / asdf1476`(seed 未落,自行经 Redis DB5 预置 `verify:email:` 验证码后 `register`→`code=0` 注册;Redis 6379 需密码,取自 `~/projecta-runtime/*.env`)。
+  - **浏览器实证全绿:** 邮箱+密码登录 → token 持久化(`lingxi.auth.{access,refresh,user}`)→ 进 workspace;`loginCode` 免密登录、`/user/refresh` 续期(浏览器+curl 双证)、**完整 401→refresh→retry**(坏 token 打 `/api/v1/chat/sessions`→401 → `/refresh`→200 → 重放→200,对真实 chat 服务)、登出清 token→回登录页,均通过 `preview_eval` 实证。
+  - **🔧 修真实 dev 阻断(已提交):** 网关 CORS 仅白名单**自身 origin**(实测只有 `http://127.0.0.1:10110` 过,所有 dev origin 403)。生产 SPA 同源在网关后故不触发;dev 下浏览器 Origin=Vite host 被网关 403。`vite.config.ts` 现把代理转发的 Origin 改写为代理目标(`headers:{origin:apiProxyTarget}`),网关视作同源——惯用 dev-proxy shim,非 mock。
+  - **⚠️ 交接 S1/S3/HUB(流式聊天半侧阻塞):** agent 后端**不在 S3 chat-only E2E 栈**(`e2e.env` 无 agent 端口;`/api/agent|rag|memory` 带 token 经网关转发后 15s 超时=后端不在;`/api/chat/**` 网关**无路由**→404)。故"登录→流式回复"的回复半侧跑不通,**非前端问题**。鉴权管线本身已 live 全证(+ P4 的 13 api.test 单测)。
+  - **⚠️ 交接 S3(后端不一致,D5/契约):** `loginCode` 响应 `userId` 是**数字**(login/register 返 string,违 D5 string id)**且不返 `refreshToken`**(login/register/refresh 都返)——免密登录后无法续期。建议 S3 对齐 `loginCode` 形状到其余端点。
+- **unit 2 · M3 接 agent 死端点(模式真路由,commit `6dcd361`):**
+  - `useChat` 现按 `mode` 分发真实端点:`auto/stream`→`/chat/auto/stream`(流式,原样);`direct`&`draft`→`/chat`;`agent`→`/agent/chat`;`rag`→`/rag/chat`;`adaptive-rag`→`/rag/adaptive/chat`。非流式模式整段一帧返回(各 DTO 拍平成 `{answer,citations?,meta(route/strategy/toolTrace)}`),in-flight 显 `ChatLoader.Dots`(M14 前不假死);显式 mode 记为 forced route。
+  - **清死代码:** slash 命令原来是把字面串(如 `/agent-chat`)prepend 进 prompt 文本——现改为经 `SLASH_COMMAND_MODES` 真切 mode,prompt 文本不被污染。composer 模式 chip 反映当前 mode;actions 弹层成模式选择器(中文标签+slash)。
+  - **浏览器实证:** 切到"智能助理"→ chip 更新且 prompt 不被污染 → 发送 dispatch `POST /api/agent/chat`(非流式端点)。draft 暂无专属端点,走 `/chat`(自有 route 标签)——S1 交接。
+- **unit 3 · M4 工具确认壳(commit `6330828`,F01 未 ship→本地壳):**
+  - `lib/chat.extractPendingTools`:**S1 未定 F01 形状的唯一防御性适配缝**——从 agent 响应 `toolGovernance` 里宽松解析待确认工具列表(容忍 pendingTools/pending、name/tool/toolName 等)。无则返 `[]`,后端不发即全程惰性。
+  - `useChat.confirmTools(assistantId, selected)`:带 `confirmedTools[]`(契约字段;未来 F01 挑战令牌可并此处)重放原 agent 请求;气泡转 loader;后端再返新 pending 则重新入栈(多轮治理重现卡片)。
+  - `ToolConfirmation` 卡片(MessageTimeline):勾选(默认全选,取消即不授权)+ 确认并继续/全部跳过 + in-flight 锁。直接用 HeroUI OSS Button(非 design-system 包装器——后者被 alias 到源码、vitest 下拉入第二个 React 副本,react-aria button 不容)。
+  - 壳状态:F01 未 ship + agent 后端缺席 → 卡片无法端到端跑,行为由单测全覆盖(ToolConfirmation 3 RTL + confirmTools 3:浮现→重放/多轮重入栈/无 pending 时 no-op)。
+- 5 大门(逐轮):`tsc -b`/`eslint`/`prettier --check`/`vitest`(**66**,新增 19)/`vite build` 全 exit 0。
+- 产出物:`agent-frontend/{vite.config.ts, src/lib/constants.ts, src/hooks/useChat.ts(+test), src/App.tsx, src/features/chat/{ComposerDock,ComposerActionsPopover,MessageTimeline,ToolConfirmation(+test)}.tsx, src/lib/chat.ts, src/types.ts}`。
+- 阻塞:流式聊天 + 工具确认的**端到端实跑**待 agent 后端(S1)进入可联调栈;F01 契约待 S1。
+- 待中枢确认:无(线上仍 defer)。
+- **🛑 给 HUB(STATUS 治理告警):** 本 session 起始时 main 工作树有 S3 的一条**未提交** P5 STATUS 记录(+21 行:发消息端点翻 code=0 解锁 S4、IM 实时 WS B8 真修、B4/B5 数据安全;引用 commits `d2f393c`/`415c317`/`be1535f`)。该未提交改动在 S4 的 commit `0f86662`(chat-frontend-p5,重写了 STATUS +15 行 S4 自己的记录)时**被覆盖丢失**——origin/feat/chat-backend-p5 上也无此条(S3 当时只 commit 了代码、未 commit STATUS)。S3 **代码安全**(d2f393c 在其分支),仅 STATUS 文档条目丢失。我已凭 session 上下文**原样恢复**该条到下方 S3 小节顶部(带恢复标记),请 HUB/S3 核对。**根因=多流共享同一工作树 + STATUS 各流 `commit -a`/checkout 互踩;建议 STATUS 改由各流只在自己分支 commit 自己的条目,HUB 集成时 union 合并,杜绝未提交跨流携带。**
+
 ### 2026-06-27 · P4 单元 1 · 401→refresh→retry 自动续期 + dev proxy 改指网关
 - 完成:从新 main(db84e48)起 `feat/agent-frontend-p4` 分支并 push origin(HTTPS、未合 main)。**提交 7cca0bd**。配合 S3 P3 已 ship 的 `/v1/user/refresh`(commit `04ec462` in main)+ E2E 13/13 绿(S3 P4 item0),把"401 → 自动续期 → 重放"半侧接通。
   ① **`api.ts` refresh-retry 管线**:`ApiClientOptions` 加 `getRefreshToken`/`onRefreshed`;遇 401 时先 POST `/v1/user/refresh` 拿新 LoginResponse → `onRefreshed` 回传 → 用新 bearer 重放原请求一次;`refreshInFlight: Promise<string|null>|null` 共享,**并发 401 合并成单次 /refresh**;**重放仍 401 不再循环**(retryWithRefresh=false);兼容 `/refresh` 返 bare LoginResponse 或 envelope 包装两种形态(D4 expand/contract);**body code 40100 仍直接 onUnauthorized**(服务器已渲染 200,重放无意义)。
@@ -378,6 +411,29 @@
 ---
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
+
+> **[S2 恢复 2026-06-28 · HUB P5 集成时补提交回 main]** 以下 3 条 S3 P5 记录在 session 起始时为 main 工作树**未提交**改动,被 S4 commit `0f86662` 重写 STATUS 时覆盖丢失(S3 代码安全=`d2f393c` 在其分支,仅文档丢失)。S2 凭上下文原样恢复,HUB 已据 git 实况核对引用 commit 后补提交。**请 S3 复跑 E2E 确认绿数字。**
+
+### 2026-06-27 · ✅ P5 item3(部分)发消息端点翻 chat-common 包络——解锁 S4 真实发送(commit `d2f393c`)
+- **`POST /api/v1/chat/session` 翻 code=0:** 返回 chat-common `Result`(原为服务自有 200+code);`messageId` string 化(D5);操作人校验改用 `RequestContext`(越权抛 `ApiException FORBIDDEN`→真实 403,经既有 `ApiExceptionHandler`)。调试端点(feign/hello)保留旧 Result(最小爆破面)。E2E:`07` 发送 **code=0**、11/11;`08` 实时 4/4。
+- **🤝 交接 S4(可接真实发送):** `POST /api/v1/chat/session` body `{sessionId,sendUserId(=自己,须==X-User-Id),sessionType(1单/2群),type,receiveUserId(单聊),body:{content,replyId}}` → `{code:0,data:SendMsgResponse{sessionId(str),messageId(str),type,sessionType,body,createdAt}}`;越权 403、未认证 401。配合 item2 的浏览器 WS,**发→对端实时收**整链可真接。
+- **⚠️ 通知 S2/S4 —— 其余包络翻转待协调(item3 余下):** Contact 旧端点(申请箱/群操作)、RTC HTTP、Offline 拉取、Moment 仍是各自 200+code 包络。这些**翻 code=0/真实 HTTP 是破坏性**,建议与 S1(agent enforce/code=0)同批、**翻前再发 STATUS 点名**。S4 现状:读端点(会话/历史/好友/markRead,p4)+ 发送(本单元)已是 chat-common;离线拉取 `GET /api/v1/offline/message` 仍旧包络(过渡,B6 历史分页已可替代)。
+- 阻塞:无。下一步:item3 余下 4 处包络翻转(协调后)。
+
+### 2026-06-27 · ✅ P5 item2 IM 实时 WS 闭环 + B8 浏览器握手修复(commit `415c317`)
+- **B8 真修(p4 未竟):** `WebSocketTokenAuthenHeader` 之前只从 `?token=&userUuid=` **取**参数,却没把 query 从 URI 剥离;Netty `WebSocketServerProtocolHandler` 用**完整 uri**(`/api/v1/netty?token=...`)与配置路径(`/api/v1/netty`)比较不相等 → **从不升级握手**,浏览器/带 query 的连接静默挂起(原生端走握手头无 query 故能连)。修复:取参后 `request.setUri(decoder.path())` 改写为裸路径。**E2E 实证才发现此自 p4 起未生效的缺陷。**
+- **IM 实时闭环实证(`08-ws-realtime-smoke`,4/4):** B 用浏览器式 `?token=&userUuid=` 连上 → 路由注册 `user:session:{B}` → A 发消息 → **B 的 WS 实时收到(内容匹配)+ 帧 type=2 MESSAGE_NOTIFICATION**。链路:发送→MessagingService→Redis 路由→OkHttp→RTC Netty 推送→对端 WS,全程打通。
+- 工具:新增纯 stdlib python WS 客户端 `chat/e2e/_ws_recv.py`(环境无 websocat/ws 模块)。
+- 🤝 交接 S4:浏览器 WS 现可直连 `ws://<网关或RTC>/api/v1/netty?token=<jwt>&userUuid=<uid>`(B8 真通);收到 `type=2` 帧须回 ACK(`{"type":1,"msgUuid":...}`)。
+- 阻塞:无。下一步:item3 其余服务接 chat-common Result + 真实 HTTP 翻转(含**发消息端点翻 code=0 解锁 S4 真实发送**,翻前通知 S2/S4)。
+
+### 2026-06-27 · ✅ P5 B4/B5/M8 数据安全(拖 4 轮收口)+ IM 链路 E2E(commit `be1535f`)
+- **B4 消息持久化所有权(数据丢失级修复):** `MessageServiceImpl.sendMessage` 现经 `KafkaOutboxService.persistMessageAndOutbox`(`@Transactional`)在**同一本地事务**写 `message` + `message_outbox`——消息发送即落库,**与 Kafka 是否消费解耦**。离线消费者(OfflineDataStore)由"唯一写者"降为**幂等投影**(其原有 selectById+DuplicateKey 守卫使生产者预写成为 no-op,不产生主键毒消息)。
+- **M8:** Kafka 发布移到 `afterCommit`(消除提交前发布);`retryCount` 仅在 `@Scheduled` 重试路径自增(首发不计);单聊实时推送改 **best-effort**(消息已持久化,推送失败不再抛回请求方)。生产者按与投影一致的字段映射建行(`content=body.content`/`replyId=body.replyId`/`senderId=sendUserId`)并显式写 `created_at`(修了投影 `createAt`/`createdAt` 名字错位导致的 null)。
+- **B5 Kafka 可靠性:** OfflineDataStore 新增 `KafkaConsumerConfig`:`ErrorHandlingDeserializer(StringDeserializer)` + `DefaultErrorHandler` + `DeadLetterPublishingRecoverer`→死信主题 `thousands_word_message.DLT`(显式 `NewTopic`)+ `concurrency=3`(对齐分区)+ 每条进 DLT 的 ERROR 级告警(含累计深度)。毒消息/重试耗尽进 DLT,**不再阻塞分区**。
+- **E2E 实证(常驻 WSL,`07-im-smoke` 11/11):** 注册 A/B → 种子好友+会话 → 发送 → **message 行由生产者事务写入(content/sender 正确)+ outbox 同事务行 + created_at 非空** → 历史分页含该消息 → markRead 推进 last_read → 离线拉取返回 → 媒体预签名。回归:`04` 鉴权 13/13、`06` 客户端 API 10/10。
+- ⚠️ 给中枢:DLT 主题 `thousands_word_message.DLT` 需在线上 broker 存在(已声明 `NewTopic` 自动建,若线上关闭 auto-create 也能建);DLQ 深度真值监控(consumer lag)属 L3 可观测,本轮为日志级告警。
+- 阻塞:无。下一步:item2 IM 实时 WS 闭环、item3(其余服务接 chat-common Result + 真实 HTTP 翻转)。
 
 ### 2026-06-27 · ✅ P4 item1【解锁 S4】客户端 API 已交付并运行期验证(commit `bd27c9e`)
 - 完成:在 `feat/chat-backend-p4` 新增 5 个客户端端点(均 **chat-common `Result`/`PageResult`,成功 code=0;所有 id 字符串化;操作人取 `RequestContext` 绝不信 body;游标分页 base64 不透明;成员鉴权**)。旧端点不动(其自有 Result 保留到 item3 翻转)。
