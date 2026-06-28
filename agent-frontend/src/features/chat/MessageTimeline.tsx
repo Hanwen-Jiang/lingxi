@@ -14,9 +14,19 @@ import {EmptyState, LingxiGlyph} from "@infinitechat/design-system";
 
 import {extractTraceSteps, statusTone} from "../../lib/chat";
 import {getObjectValue} from "../../lib/format";
-import type {Citation, WorkspaceMessage} from "../../types";
+import type {Citation, PendingTool, WorkspaceMessage} from "../../types";
 
-export function MessageTimeline({messages}: {messages: WorkspaceMessage[]}) {
+import {ToolConfirmation} from "./ToolConfirmation";
+
+type ConfirmToolsHandler = (assistantId: string, selected: string[]) => void;
+
+export function MessageTimeline({
+  messages,
+  onConfirmTools,
+}: {
+  messages: WorkspaceMessage[];
+  onConfirmTools?: ConfirmToolsHandler;
+}) {
   return (
     <ChatConversation className="min-h-0 flex-1 overflow-y-auto" resize="smooth">
       <ChatConversation.Content className="mx-auto flex w-full max-w-[820px] flex-col gap-6 px-4 py-6 md:px-6">
@@ -29,7 +39,7 @@ export function MessageTimeline({messages}: {messages: WorkspaceMessage[]}) {
             />
           </div>
         ) : (
-          messages.map((message) => <MessageTurn key={message.id} message={message} />)
+          messages.map((message) => <MessageTurn key={message.id} message={message} onConfirmTools={onConfirmTools} />)
         )}
         <ChatConversation.ScrollAnchor />
       </ChatConversation.Content>
@@ -38,7 +48,12 @@ export function MessageTimeline({messages}: {messages: WorkspaceMessage[]}) {
   );
 }
 
-function MessageTurn({message}: {message: WorkspaceMessage}) {
+function readPendingTools(message: WorkspaceMessage): PendingTool[] {
+  const pending = message.meta?.pendingTools;
+  return Array.isArray(pending) ? (pending as PendingTool[]) : [];
+}
+
+function MessageTurn({message, onConfirmTools}: {message: WorkspaceMessage; onConfirmTools?: ConfirmToolsHandler}) {
   if (message.role === "user") {
     return (
       <ChatMessage.User>
@@ -62,6 +77,13 @@ function MessageTurn({message}: {message: WorkspaceMessage}) {
   // raw status strings would leak internal state to the UI (D10/D12).
   const showErrorChip = message.status === "error";
 
+  // M4 — render the tool-confirmation card while this turn holds tools and is
+  // not mid-replay. While confirming, status flips to "streaming" so the card
+  // hides and the loader shows instead.
+  const pendingTools = readPendingTools(message);
+  const showToolConfirmation = pendingTools.length > 0 && Boolean(onConfirmTools);
+  const isConfirming = message.status === "streaming";
+
   return (
     <ChatMessage.Assistant>
       <ChatMessage.Avatar show alt="灵犀" fallback="灵犀" />
@@ -83,6 +105,13 @@ function MessageTurn({message}: {message: WorkspaceMessage}) {
           )}
         </ChatMessage.Content>
         {message.citations?.length ? <CitationList citations={message.citations} /> : null}
+        {showToolConfirmation ? (
+          <ToolConfirmation
+            isConfirming={isConfirming}
+            tools={pendingTools}
+            onConfirm={(selected) => onConfirmTools?.(message.id, selected)}
+          />
+        ) : null}
         {message.meta || message.requestId ? (
           <ResponseDetails meta={message.meta} requestId={message.requestId} />
         ) : null}

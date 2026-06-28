@@ -347,7 +347,10 @@ function Workspace({
                         onRefreshSessions={() => void sessions.refreshSessions()}
                         onSelectSession={(target) => void sessions.loadSession(target)}
                       />
-                      <MessageTimeline messages={chat.messages} />
+                      <MessageTimeline
+                        messages={chat.messages}
+                        onConfirmTools={(assistantId, selected) => void chat.confirmTools(assistantId, selected)}
+                      />
                       <ComposerDock
                         activeMode={activeMode}
                         api={api}

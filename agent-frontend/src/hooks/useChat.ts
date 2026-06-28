@@ -1,7 +1,7 @@
 import {useCallback, useRef, useState} from "react";
 
 import type {ApiClient} from "../api";
-import {friendlyError, getErrorMessage, routeModeId} from "../lib/chat";
+import {extractPendingTools, friendlyError, getErrorMessage, routeModeId} from "../lib/chat";
 import {STREAMING_CHAT_MODES} from "../lib/constants";
 import {makeId} from "../lib/format";
 import type {AutoChatResponse, ChatModeId, ChatRequest, ChatStatus, Citation, WorkspaceMessage} from "../types";
@@ -35,6 +35,10 @@ export function useChat({
   const [lastRouteResult, setLastRouteResult] = useState<AutoChatResponse | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  // The original request behind each assistant turn that is holding tools for
+  // confirmation (M4), keyed by assistant message id. confirmTools replays it
+  // with the user-approved confirmedTools[].
+  const pendingPayloadsRef = useRef<Map<string, ChatRequest>>(new Map());
 
   const updateMessage = useCallback((id: string, patch: Partial<WorkspaceMessage>) => {
     setMessages((current) => current.map((message) => (message.id === id ? {...message, ...patch} : message)));
@@ -55,6 +59,7 @@ export function useChat({
       switch (activeMode) {
         case "agent": {
           const res = await api.agentChat(payload);
+          const pendingTools = extractPendingTools(res.toolGovernance);
           return {
             answer: res.answer ?? "",
             citations: res.citations,
@@ -63,6 +68,7 @@ export function useChat({
               ...(res.strategy ? {strategy: res.strategy} : {}),
               ...(res.finalAction ? {finalAction: res.finalAction} : {}),
               ...(res.reactTrace ? {toolTrace: res.reactTrace} : {}),
+              ...(pendingTools.length ? {pendingTools} : {}),
             },
           };
         }
@@ -201,6 +207,12 @@ export function useChat({
         await streamAutoMode(assistantId, payload);
       } else {
         const {answer, citations, meta} = await runSyncMode(mode, payload);
+        // If the agent is holding tools for confirmation (M4), remember the
+        // request so confirmTools can replay it with the approved subset.
+        const pendingTools = meta?.pendingTools;
+        if (Array.isArray(pendingTools) && pendingTools.length) {
+          pendingPayloadsRef.current.set(assistantId, payload);
+        }
         updateMessage(assistantId, {
           content: answer,
           status: "complete",
@@ -225,6 +237,49 @@ export function useChat({
     }
   }
 
+  // Replay the agent turn with the user-approved tools (M4). The assistant
+  // bubble flips to a loader while the confirmed call is in flight, then renders
+  // the follow-up answer. If the backend comes back asking for more tools
+  // (multi-round governance) the new pending set is stashed again so the card
+  // re-appears. confirmedTools[] is the contract field; a future F01 challenge
+  // token would ride alongside it here.
+  const confirmTools = useCallback(
+    async (assistantId: string, selected: string[]) => {
+      const payload = pendingPayloadsRef.current.get(assistantId);
+      if (!payload) return;
+
+      updateMessage(assistantId, {content: "", status: "streaming"});
+      setChatStatus("streaming");
+      try {
+        const res = await api.agentChat({...payload, confirmedTools: selected});
+        const pendingTools = extractPendingTools(res.toolGovernance);
+        if (pendingTools.length) {
+          pendingPayloadsRef.current.set(assistantId, payload);
+        } else {
+          pendingPayloadsRef.current.delete(assistantId);
+        }
+        updateMessage(assistantId, {
+          content: res.answer ?? "",
+          status: "complete",
+          ...(res.citations ? {citations: res.citations} : {}),
+          meta: {
+            route: "agent",
+            confirmedTools: selected,
+            ...(res.strategy ? {strategy: res.strategy} : {}),
+            ...(res.reactTrace ? {toolTrace: res.reactTrace} : {}),
+            ...(pendingTools.length ? {pendingTools} : {}),
+          },
+        });
+        setChatStatus("ready");
+      } catch (error) {
+        pendingPayloadsRef.current.delete(assistantId);
+        updateMessage(assistantId, {content: friendlyError(getErrorMessage(error)), status: "error"});
+        setChatStatus("error");
+      }
+    },
+    [api, updateMessage],
+  );
+
   function stopStream() {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -240,6 +295,7 @@ export function useChat({
     lastRouteResult,
     setLastRouteResult,
     sendPrompt,
+    confirmTools,
     stopStream,
   };
 }
