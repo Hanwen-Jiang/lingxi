@@ -1,4 +1,5 @@
 package com.lou.infinitechatagent.memory.dto;
+import com.lou.infinitechatagent.common.json.SnowflakeId;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,7 +14,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class MemoryItem {
     private String memoryId;
+    @SnowflakeId
     private Long userId;
+    @SnowflakeId
     private Long sessionId;
     private MemoryType memoryType;
     private String content;

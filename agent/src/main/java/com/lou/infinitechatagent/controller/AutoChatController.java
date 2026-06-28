@@ -45,6 +45,9 @@ public class AutoChatController {
         request.setUserId(principal.requireUserId());
         AutoRouteDecision decision = autoChatRouterService.decide(request);
         String requestId = UUID.randomUUID().toString();
+        // §9:真增量(逐 token)路由 buffered=null;非增量(整段一次性 delta)路由显式 buffered=true。
+        boolean tokenStreaming = autoChatRouterService.supportsTokenStreaming(decision);
+        Boolean buffered = tokenStreaming ? null : Boolean.TRUE;
         AtomicReference<StringBuilder> answer = new AtomicReference<>(new StringBuilder());
         AtomicReference<Object> toolTrace = new AtomicReference<>(java.util.Map.of(
                 "capability",
@@ -62,9 +65,10 @@ public class AutoChatController {
                 .route(decision.getRoute())
                 .forced(Boolean.TRUE.equals(decision.getForced()))
                 .reason(decision.getReason())
+                .buffered(buffered)
                 .message("auto stream started")
                 .build()));
-        Flux<ServerSentEvent<StreamChatEvent>> delta = autoChatRouterService.supportsTokenStreaming(decision)
+        Flux<ServerSentEvent<StreamChatEvent>> delta = tokenStreaming
                 ? autoChatRouterService.stream(request, decision)
                 .map(text -> {
                     answer.get().append(text);
@@ -92,6 +96,7 @@ public class AutoChatController {
                             .forced(Boolean.TRUE.equals(decision.getForced()))
                             .reason(decision.getReason())
                             .text(responseText)
+                            .buffered(Boolean.TRUE)
                             .citations(response.getCitations())
                             .toolTrace(response.getToolTrace())
                             .build()));
@@ -103,6 +108,7 @@ public class AutoChatController {
                 .route(decision.getRoute())
                 .forced(Boolean.TRUE.equals(decision.getForced()))
                 .reason(decision.getReason())
+                .buffered(buffered)
                 .citations(citations.get())
                 .toolTrace(toolTrace.get())
                 .message("auto stream completed")

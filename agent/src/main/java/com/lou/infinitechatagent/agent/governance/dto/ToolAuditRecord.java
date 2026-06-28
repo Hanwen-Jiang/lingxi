@@ -1,4 +1,5 @@
 package com.lou.infinitechatagent.agent.governance.dto;
+import com.lou.infinitechatagent.common.json.SnowflakeId;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,10 +14,13 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ToolAuditRecord {
 
+    @SnowflakeId
     private Long id;
 
+    @SnowflakeId
     private Long userId;
 
+    @SnowflakeId
     private Long sessionId;
 
     private String toolName;
