@@ -99,14 +99,14 @@ public class ToolConfirmationChallengeService {
         if (redis != null) {
             try {
                 String key = REDIS_KEY_PREFIX + token;
-                String stored = redis.opsForValue().get(key);
+                // 原子 GETDEL(Redis 6.2+):读取即删除,杜绝旧 get→delete 间的并发双消费竞态(多实例硬化)。
+                // 一次性语义:无论指纹是否匹配,token 都已被删除(防探测/重放)。
+                String stored = redis.opsForValue().getAndDelete(key);
                 if (stored == null) {
                     // Redis 里没有——可能是降级期写进了内存,继续查内存兜底。
                     return consumeInMemory(token, expected);
                 }
-                boolean match = stored.equals(expected);
-                redis.delete(key); // 一次性:无论匹配与否都消费,避免被探测/重放。
-                return match;
+                return stored.equals(expected);
             } catch (RuntimeException e) {
                 if (failClosedOnStoreError) {
                     log.error("[tool-challenge] Redis 校验失败且 fail-closed,拒绝放行: {}", e.getMessage());
