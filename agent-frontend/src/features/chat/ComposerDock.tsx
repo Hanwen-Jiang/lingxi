@@ -13,7 +13,7 @@ import {PromptInput} from "@heroui-pro/react/prompt-input";
 
 import type {ApiClient} from "../../api";
 import {getErrorMessage, routeLabel} from "../../lib/chat";
-import {COMPOSER_BUTTON_STYLE} from "../../lib/constants";
+import {COMPOSER_BUTTON_STYLE, SLASH_COMMAND_MODES} from "../../lib/constants";
 import {formatFileSize, makeId} from "../../lib/format";
 import {
   composerModelFromOption,
@@ -24,6 +24,8 @@ import {
 } from "../../lib/model";
 import type {
   AutoChatResponse,
+  ChatMode,
+  ChatModeId,
   ChatStatus,
   DocumentIngestJobResponse,
   ModelOption,
@@ -47,6 +49,7 @@ type ComposerAttachment = {
 };
 
 export function ComposerDock({
+  activeMode,
   api,
   lastRouteResult,
   modelStatus,
@@ -55,9 +58,11 @@ export function ComposerDock({
   onJob,
   onModelStatus,
   onPromptChange,
+  onSelectMode,
   onSend,
   onStop,
 }: {
+  activeMode: ChatMode;
   api: ApiClient;
   lastRouteResult: AutoChatResponse | null;
   modelStatus: ModelStatusResponse | null;
@@ -66,6 +71,7 @@ export function ComposerDock({
   onJob: (job: DocumentIngestJobResponse) => void;
   onModelStatus: (status: ModelStatusResponse) => void;
   onPromptChange: (value: string) => void;
+  onSelectMode: (mode: ChatModeId) => void;
   onSend: () => void;
   onStop: () => void;
 }) {
@@ -90,7 +96,6 @@ export function ComposerDock({
   const hasValue = prompt.trim().length > 0;
   const isRunning = status === "submitted" || status === "streaming";
   const route = lastRouteResult ? routeLabel(lastRouteResult.route) : "自动";
-  const routeMeta = lastRouteResult ? `${route}${lastRouteResult.forced ? " · 强制" : ""}` : "灵犀自动选择";
   const progressValue = status === "streaming" ? 64 : status === "submitted" ? 32 : status === "error" ? 100 : 0;
   const statusText =
     status === "streaming" ? "回复中" : status === "submitted" ? "已发送" : status === "error" ? "出错了" : "可发送";
@@ -159,12 +164,15 @@ export function ComposerDock({
     [api, currentModel, modelStatus, onModelStatus, openAiProtocol, reasoningEffort],
   );
 
-  const addCommand = useCallback(
+  // A slash command picks the chat mode (M3) — it switches the active route
+  // rather than prepending literal text to the prompt (the old decorative
+  // behavior). The prompt the user typed is left untouched.
+  const selectMode = useCallback(
     (command: string) => {
-      const nextValue = prompt.trim() ? `${command} ${prompt.replace(/^\/\S+\s*/, "")}` : `${command} `;
-      onPromptChange(nextValue);
+      const nextMode = SLASH_COMMAND_MODES[command];
+      if (nextMode) onSelectMode(nextMode);
     },
-    [onPromptChange, prompt],
+    [onSelectMode],
   );
 
   const removeAttachment = useCallback((id: string) => {
@@ -220,8 +228,8 @@ export function ComposerDock({
         <div className="composer-workflow-row">
           <Button className="composer-workflow-button" size="sm" style={COMPOSER_BUTTON_STYLE} variant="outline">
             <Route className="size-4" />
-            <span>{route}</span>
-            <span className="composer-workflow-meta">{routeMeta}</span>
+            <span>{activeMode.label}</span>
+            <span className="composer-workflow-meta">{activeMode.description}</span>
           </Button>
           <Button
             className="composer-workflow-button hidden sm:inline-flex"
@@ -235,7 +243,7 @@ export function ComposerDock({
             <span>{isLoadingModels ? "加载中" : "模型"}</span>
             <span className="composer-workflow-meta">{modelStatus?.configured ? "已连接" : "未连接"}</span>
           </Button>
-          <ComposerActionsPopover isRunning={isRunning} onCommand={addCommand} />
+          <ComposerActionsPopover isRunning={isRunning} onCommand={selectMode} />
         </div>
 
         <ChatAttachmentInput
