@@ -412,6 +412,12 @@
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
 
+### 2026-06-28 · ✅ WAVE2 生产硬化:Snowflake 按实例 + 网关生产 CORS(commit `b232203`)
+- **Snowflake 按实例(D9/M6):** `messageId` 改用 chat-common `SnowflakeIdGenerator.getInstance()`(worker/datacenter 取 `WORKER_ID`/`DATACENTER_ID` env 或 hostname 派生),替换原 Hutool `getSnowflake(1,1)`——多实例不再撞 message 主键。
+- **网关生产 CORS:** `allowedOrigins`(单 localhost:10010)→ `allowedOriginPatterns`,默认 `http://localhost:[*]`(覆盖前端 5173/5180 dev 源),`GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS` 生产可设真实源;`allowCredentials=true` 必须用 pattern。**前端可直连网关,去掉 dev-proxy strip-Origin 依赖。**
+- 验证:`07-im` 14/14(按实例 messageId 收发/落库正常);CORS 预检 `OPTIONS Origin=http://localhost:5173` → 200 + `Access-Control-Allow-Origin` 回显 + credentials。
+- **DLT 深度可观测:** B5 已有逐条 ERROR 告警 + 进程内累计计数(actionable);真值 **consumer lag gauge 属 L3**(需 Micrometer/actuator on Offline),本轮未做,留观测专项。
+
 ### 2026-06-28 · 🟡 WAVE2 J1:agent 入网关 E2E 栈——chat 侧就绪 + turnkey 工具,**阻塞于 agent jar 构建**(commit `0686c6d`)
 - **chat 侧已做(S3 owns):** 网关 `/api/agent|memory|rag` 路由已在(P1,直连 `AGENT_GATEWAY_URI` 保前缀);`e2e.env(.example)` 加 `AGENT_SERVICE_PORT=18080`/`AGENT_GATEWAY_URI`/`AGENT_GATEWAY_ENFORCE_IDENTITY=true`/`DASHSCOPE_API_KEY`(空)。
 - **turnkey 工具:** `09-agent-e2e.sh`(rsync+构建/或 `AGENT_SKIP_BUILD=1` 用现成 jar + 隔离起:MySQL→H2、Redis→内存降级、enforce 开、setsid 常驻)、`10-agent-smoke.sh`(A1 健康 / A2 直连缺 X-User-Id→401 / **A3 登录→网关带 token→X-User-Id 注入→/api/agent/tools 非401** / A4 `/api/chat/auto/stream` SSE 达 agent)。
