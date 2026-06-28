@@ -294,7 +294,12 @@ export function createApiClient(apiBase: string, options: ApiClientOptions = {})
         method: "POST",
         body: JSON.stringify(payload),
       }),
-    agentChat: (payload: ChatRequest & {debug?: boolean; confirmedTools?: string[]}) =>
+    // S1 F01 (live): high-risk tool confirmation rides on a server-issued
+    // challengeToken — the client echoes it back in `confirmationToken` to
+    // release the held turn. The legacy `confirmedTools[]` field is gone (S1
+    // ignores it now); we drop it from the type so any accidental use fails
+    // at tsc rather than silently no-op against the backend.
+    agentChat: (payload: ChatRequest & {debug?: boolean; confirmationToken?: string}) =>
       request<AgentResponse>("/agent/chat", {method: "POST", body: JSON.stringify(payload)}),
     listAgentTools: () => request<unknown[]>("/agent/tools", {method: "GET"}),
     ingestText: (payload: {fileName?: string; title?: string; content: string; sourceType?: string}) =>

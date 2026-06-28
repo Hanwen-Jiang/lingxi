@@ -349,7 +349,9 @@ function Workspace({
                       />
                       <MessageTimeline
                         messages={chat.messages}
-                        onConfirmTools={(assistantId, selected) => void chat.confirmTools(assistantId, selected)}
+                        onConfirmTurn={(assistantId, shouldRelease) =>
+                          void chat.confirmTurn(assistantId, shouldRelease)
+                        }
                       />
                       <ComposerDock
                         activeMode={activeMode}

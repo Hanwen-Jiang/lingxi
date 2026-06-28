@@ -153,20 +153,33 @@ export type AgentResponse = {
   estimatedInputTokens?: number;
   contextTruncated?: boolean;
   memoryTrace?: unknown;
-  toolGovernance?: unknown;
+  toolGovernance?: ToolGovernance;
 };
 
 // A tool the agent wants to run but is holding for human confirmation (M4).
-// The wire shape is owned by S1's F01 (tool-confirmation challenge token), which
-// is not shipped yet — lib/chat.extractPendingTools parses it defensively out of
-// `toolGovernance` so this stays the single seam to adapt when F01 lands. The
-// `name` is what we echo back in confirmedTools[]; challengeToken (when present)
-// is threaded through untouched.
+// Surfaced in the UI as informational context — "灵犀想调用以下工具" — but
+// the actual approval rides on the server-issued challengeToken, not the
+// tool list (S1 F01 fingerprints prompt+session and only honours that
+// single-use token; echoing tool names would be ignored).
 export type PendingTool = {
   name: string;
   title?: string;
   description?: string;
   args?: unknown;
+};
+
+// S1 F01 wire shape (live since 2026-06-27 P5 — see agent/docs/E2E-INTEGRATION.md
+// and STATUS S1 P6 entry). When the agent holds a turn for high-risk tool
+// confirmation, the response carries a one-shot, TTL-bounded challengeToken
+// the client must echo back in `AgentRequest.confirmationToken` to release
+// the turn. The token is fingerprinted on prompt+session+confirmedToolSet —
+// re-typing the prompt invalidates an unconsumed token. pendingTools is
+// informational only.
+export type ToolGovernance = {
+  confirmationRequired?: boolean;
+  challengeToken?: string;
+  challengeExpiresInSec?: number;
+  pendingTools?: PendingTool[];
 };
 
 export type DocumentIngestJobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | string;

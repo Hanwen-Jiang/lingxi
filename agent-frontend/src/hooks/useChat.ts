@@ -1,7 +1,7 @@
 import {useCallback, useRef, useState} from "react";
 
 import type {ApiClient} from "../api";
-import {extractPendingTools, friendlyError, getErrorMessage, routeModeId} from "../lib/chat";
+import {extractChallengeToken, extractPendingTools, friendlyError, getErrorMessage, routeModeId} from "../lib/chat";
 import {STREAMING_CHAT_MODES} from "../lib/constants";
 import {makeId} from "../lib/format";
 import type {AutoChatResponse, ChatModeId, ChatRequest, ChatStatus, Citation, WorkspaceMessage} from "../types";
@@ -35,10 +35,12 @@ export function useChat({
   const [lastRouteResult, setLastRouteResult] = useState<AutoChatResponse | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
-  // The original request behind each assistant turn that is holding tools for
-  // confirmation (M4), keyed by assistant message id. confirmTools replays it
-  // with the user-approved confirmedTools[].
-  const pendingPayloadsRef = useRef<Map<string, ChatRequest>>(new Map());
+  // Per-assistant-turn replay context for M4 (F01). Stores the original
+  // ChatRequest plus the one-shot challengeToken the server handed back — the
+  // user's confirmation just decides to release the token; the prompt and
+  // session are already fingerprinted into it.
+  type PendingTurn = {payload: ChatRequest; challengeToken: string; expiresInSec?: number};
+  const pendingPayloadsRef = useRef<Map<string, PendingTurn>>(new Map());
 
   const updateMessage = useCallback((id: string, patch: Partial<WorkspaceMessage>) => {
     setMessages((current) => current.map((message) => (message.id === id ? {...message, ...patch} : message)));
@@ -59,6 +61,7 @@ export function useChat({
       switch (activeMode) {
         case "agent": {
           const res = await api.agentChat(payload);
+          const challenge = extractChallengeToken(res.toolGovernance);
           const pendingTools = extractPendingTools(res.toolGovernance);
           return {
             answer: res.answer ?? "",
@@ -68,7 +71,10 @@ export function useChat({
               ...(res.strategy ? {strategy: res.strategy} : {}),
               ...(res.finalAction ? {finalAction: res.finalAction} : {}),
               ...(res.reactTrace ? {toolTrace: res.reactTrace} : {}),
-              ...(pendingTools.length ? {pendingTools} : {}),
+              // Only surface the confirmation card when the server actually
+              // issued a challenge — bare pendingTools without a token can't
+              // be released (F01 ignores client-supplied tool names).
+              ...(challenge ? {challenge, pendingTools} : {}),
             },
           };
         }
@@ -207,11 +213,17 @@ export function useChat({
         await streamAutoMode(assistantId, payload);
       } else {
         const {answer, citations, meta} = await runSyncMode(mode, payload);
-        // If the agent is holding tools for confirmation (M4), remember the
-        // request so confirmTools can replay it with the approved subset.
-        const pendingTools = meta?.pendingTools;
-        if (Array.isArray(pendingTools) && pendingTools.length) {
-          pendingPayloadsRef.current.set(assistantId, payload);
+        // If the agent is holding the turn for confirmation (M4 / F01), stash
+        // the original payload + the challenge token so confirmTurn can
+        // release it. No token → nothing to release, even if pendingTools
+        // is non-empty (F01 only honours the token).
+        const challenge = meta?.challenge as {challengeToken?: string; expiresInSec?: number} | undefined;
+        if (challenge?.challengeToken) {
+          pendingPayloadsRef.current.set(assistantId, {
+            payload,
+            challengeToken: challenge.challengeToken,
+            expiresInSec: challenge.expiresInSec,
+          });
         }
         updateMessage(assistantId, {
           content: answer,
@@ -237,24 +249,44 @@ export function useChat({
     }
   }
 
-  // Replay the agent turn with the user-approved tools (M4). The assistant
-  // bubble flips to a loader while the confirmed call is in flight, then renders
-  // the follow-up answer. If the backend comes back asking for more tools
-  // (multi-round governance) the new pending set is stashed again so the card
-  // re-appears. confirmedTools[] is the contract field; a future F01 challenge
-  // token would ride alongside it here.
-  const confirmTools = useCallback(
-    async (assistantId: string, selected: string[]) => {
-      const payload = pendingPayloadsRef.current.get(assistantId);
-      if (!payload) return;
+  // Release a held agent turn (M4 / F01). Echoes the server-issued
+  // challengeToken back as `confirmationToken`; the user's "确认" press just
+  // decides to release the token. Multi-round governance still works: if the
+  // backend issues a fresh token after the first round (e.g. asks about a
+  // follow-up tool), the new {payload, token} replaces the old entry and the
+  // confirmation card re-appears. The card's "全部跳过" path passes
+  // shouldRelease=false so the assistant turn ends in place without sending
+  // any token (the held turn naturally falls off TTL on the server).
+  const confirmTurn = useCallback(
+    async (assistantId: string, shouldRelease = true) => {
+      const pending = pendingPayloadsRef.current.get(assistantId);
+      if (!pending) return;
+
+      if (!shouldRelease) {
+        // User declined to release the held turn. Drop the pending state and
+        // surface a calm note in the bubble.
+        pendingPayloadsRef.current.delete(assistantId);
+        updateMessage(assistantId, {
+          content: "已取消工具调用。",
+          status: "complete",
+          meta: {route: "agent", confirmationCancelled: true},
+        });
+        setChatStatus("ready");
+        return;
+      }
 
       updateMessage(assistantId, {content: "", status: "streaming"});
       setChatStatus("streaming");
       try {
-        const res = await api.agentChat({...payload, confirmedTools: selected});
+        const res = await api.agentChat({...pending.payload, confirmationToken: pending.challengeToken});
+        const challenge = extractChallengeToken(res.toolGovernance);
         const pendingTools = extractPendingTools(res.toolGovernance);
-        if (pendingTools.length) {
-          pendingPayloadsRef.current.set(assistantId, payload);
+        if (challenge?.challengeToken) {
+          pendingPayloadsRef.current.set(assistantId, {
+            payload: pending.payload,
+            challengeToken: challenge.challengeToken,
+            expiresInSec: challenge.expiresInSec,
+          });
         } else {
           pendingPayloadsRef.current.delete(assistantId);
         }
@@ -264,10 +296,10 @@ export function useChat({
           ...(res.citations ? {citations: res.citations} : {}),
           meta: {
             route: "agent",
-            confirmedTools: selected,
+            confirmationApplied: true,
             ...(res.strategy ? {strategy: res.strategy} : {}),
             ...(res.reactTrace ? {toolTrace: res.reactTrace} : {}),
-            ...(pendingTools.length ? {pendingTools} : {}),
+            ...(challenge ? {challenge, pendingTools} : {}),
           },
         });
         setChatStatus("ready");
@@ -295,7 +327,7 @@ export function useChat({
     lastRouteResult,
     setLastRouteResult,
     sendPrompt,
-    confirmTools,
+    confirmTurn,
     stopStream,
   };
 }

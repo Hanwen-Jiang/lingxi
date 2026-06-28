@@ -18,14 +18,17 @@ import type {Citation, PendingTool, WorkspaceMessage} from "../../types";
 
 import {ToolConfirmation} from "./ToolConfirmation";
 
-type ConfirmToolsHandler = (assistantId: string, selected: string[]) => void;
+// (assistantId, shouldRelease) — shouldRelease=false means the user declined.
+// The actual approval rides on the server-issued challengeToken stored inside
+// useChat; this handler is only deciding whether to release it.
+type ConfirmTurnHandler = (assistantId: string, shouldRelease: boolean) => void;
 
 export function MessageTimeline({
   messages,
-  onConfirmTools,
+  onConfirmTurn,
 }: {
   messages: WorkspaceMessage[];
-  onConfirmTools?: ConfirmToolsHandler;
+  onConfirmTurn?: ConfirmTurnHandler;
 }) {
   return (
     <ChatConversation className="min-h-0 flex-1 overflow-y-auto" resize="smooth">
@@ -39,7 +42,7 @@ export function MessageTimeline({
             />
           </div>
         ) : (
-          messages.map((message) => <MessageTurn key={message.id} message={message} onConfirmTools={onConfirmTools} />)
+          messages.map((message) => <MessageTurn key={message.id} message={message} onConfirmTurn={onConfirmTurn} />)
         )}
         <ChatConversation.ScrollAnchor />
       </ChatConversation.Content>
@@ -53,7 +56,7 @@ function readPendingTools(message: WorkspaceMessage): PendingTool[] {
   return Array.isArray(pending) ? (pending as PendingTool[]) : [];
 }
 
-function MessageTurn({message, onConfirmTools}: {message: WorkspaceMessage; onConfirmTools?: ConfirmToolsHandler}) {
+function MessageTurn({message, onConfirmTurn}: {message: WorkspaceMessage; onConfirmTurn?: ConfirmTurnHandler}) {
   if (message.role === "user") {
     return (
       <ChatMessage.User>
@@ -77,11 +80,13 @@ function MessageTurn({message, onConfirmTools}: {message: WorkspaceMessage; onCo
   // raw status strings would leak internal state to the UI (D10/D12).
   const showErrorChip = message.status === "error";
 
-  // M4 — render the tool-confirmation card while this turn holds tools and is
-  // not mid-replay. While confirming, status flips to "streaming" so the card
-  // hides and the loader shows instead.
+  // M4 (F01) — render the tool-confirmation card while this turn holds tools.
+  // The decisive signal is the server-issued challenge token (stashed on
+  // meta.challenge by useChat); pendingTools is informational only. The card
+  // hides during the replay (status === "streaming").
   const pendingTools = readPendingTools(message);
-  const showToolConfirmation = pendingTools.length > 0 && Boolean(onConfirmTools);
+  const hasChallenge = Boolean((message.meta?.challenge as {challengeToken?: string} | undefined)?.challengeToken);
+  const showToolConfirmation = hasChallenge && Boolean(onConfirmTurn);
   const isConfirming = message.status === "streaming";
 
   return (
@@ -109,7 +114,8 @@ function MessageTurn({message, onConfirmTools}: {message: WorkspaceMessage; onCo
           <ToolConfirmation
             isConfirming={isConfirming}
             tools={pendingTools}
-            onConfirm={(selected) => onConfirmTools?.(message.id, selected)}
+            onConfirm={() => onConfirmTurn?.(message.id, true)}
+            onCancel={() => onConfirmTurn?.(message.id, false)}
           />
         ) : null}
         {message.meta || message.requestId ? (

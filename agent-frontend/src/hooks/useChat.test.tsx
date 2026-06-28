@@ -154,17 +154,23 @@ describe("useChat.sendPrompt · mode routing (M3)", () => {
   });
 });
 
-// M4 — agent turns can hold tools for confirmation; confirmTools replays the
-// request with the approved subset.
-describe("useChat.confirmTools (M4)", () => {
-  it("surfaces pending tools then replays the turn with confirmedTools[]", async () => {
+// M4 / F01 — agent turns can be held by a server-issued challengeToken;
+// confirmTurn echoes the token back in `confirmationToken` to release them.
+// The legacy `confirmedTools[]` field is gone (S1 ignores it).
+describe("useChat.confirmTurn (M4 / F01)", () => {
+  it("surfaces the held turn then releases it by echoing the challengeToken", async () => {
     const agentChat = vi
       .fn()
       .mockResolvedValueOnce({
         answer: "需要确认工具",
-        toolGovernance: {pendingTools: [{name: "web_search", description: "搜索网络"}, {name: "delete_file"}]},
+        toolGovernance: {
+          confirmationRequired: true,
+          challengeToken: "chal-abc-1",
+          challengeExpiresInSec: 60,
+          pendingTools: [{name: "web_search", description: "搜索网络"}, {name: "delete_file"}],
+        },
       })
-      .mockResolvedValueOnce({answer: "已用搜索完成", strategy: "react"});
+      .mockResolvedValueOnce({answer: "搜索完成", strategy: "react"});
     const api = {autoStreamChat: vi.fn(), agentChat} as unknown as ApiClient;
 
     const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "agent", onSettled: vi.fn()}));
@@ -174,30 +180,41 @@ describe("useChat.confirmTools (M4)", () => {
     });
 
     let assistant = result.current.messages.find((message) => message.role === "assistant");
+    // pendingTools is informational; the decisive signal is the challenge token on meta.
     expect(assistant?.meta?.pendingTools).toHaveLength(2);
+    expect((assistant?.meta?.challenge as {challengeToken: string}).challengeToken).toBe("chal-abc-1");
     expect(assistant?.status).toBe("complete");
     const assistantId = assistant!.id;
 
     await act(async () => {
-      await result.current.confirmTools(assistantId, ["web_search"]);
+      await result.current.confirmTurn(assistantId, true);
     });
 
     expect(agentChat).toHaveBeenCalledTimes(2);
+    // Replay sends confirmationToken, NOT confirmedTools[] (F01 ignores names).
     expect(agentChat).toHaveBeenLastCalledWith(
-      expect.objectContaining({confirmedTools: ["web_search"], prompt: "查一下天气"}),
+      expect.objectContaining({confirmationToken: "chal-abc-1", prompt: "查一下天气"}),
     );
+    expect(agentChat.mock.calls[1][0]).not.toHaveProperty("confirmedTools");
     assistant = result.current.messages.find((message) => message.role === "assistant");
-    expect(assistant?.content).toBe("已用搜索完成");
-    expect(assistant?.meta?.confirmedTools).toEqual(["web_search"]);
-    expect(assistant?.meta?.pendingTools).toBeUndefined();
+    expect(assistant?.content).toBe("搜索完成");
+    expect(assistant?.meta?.confirmationApplied).toBe(true);
+    expect(assistant?.meta?.challenge).toBeUndefined();
     expect(result.current.status).toBe("ready");
   });
 
-  it("re-stashes a fresh pending set for multi-round governance", async () => {
+  it("multi-round governance: a follow-up challenge re-stashes the new token", async () => {
     const agentChat = vi
       .fn()
-      .mockResolvedValueOnce({answer: "round 1", toolGovernance: {pending: [{tool: "a"}]}})
-      .mockResolvedValueOnce({answer: "round 2", toolGovernance: {pendingTools: [{name: "b"}]}});
+      .mockResolvedValueOnce({
+        answer: "round 1",
+        toolGovernance: {confirmationRequired: true, challengeToken: "tok-1", pendingTools: [{name: "a"}]},
+      })
+      .mockResolvedValueOnce({
+        answer: "round 2",
+        toolGovernance: {confirmationRequired: true, challengeToken: "tok-2", pendingTools: [{name: "b"}]},
+      })
+      .mockResolvedValueOnce({answer: "all done"});
     const api = {autoStreamChat: vi.fn(), agentChat} as unknown as ApiClient;
     const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "agent", onSettled: vi.fn()}));
     act(() => result.current.setPrompt("go"));
@@ -205,19 +222,76 @@ describe("useChat.confirmTools (M4)", () => {
       await result.current.sendPrompt();
     });
     const id = result.current.messages.find((m) => m.role === "assistant")!.id;
+
+    // Release round 1 with tok-1 → server hands back tok-2.
     await act(async () => {
-      await result.current.confirmTools(id, ["a"]);
+      await result.current.confirmTurn(id, true);
+    });
+    expect(agentChat).toHaveBeenLastCalledWith(expect.objectContaining({confirmationToken: "tok-1"}));
+    let assistant = result.current.messages.find((m) => m.role === "assistant");
+    expect((assistant?.meta?.challenge as {challengeToken: string}).challengeToken).toBe("tok-2");
+
+    // Release round 2 with tok-2 → final answer, no further challenge.
+    await act(async () => {
+      await result.current.confirmTurn(id, true);
+    });
+    expect(agentChat).toHaveBeenLastCalledWith(expect.objectContaining({confirmationToken: "tok-2"}));
+    assistant = result.current.messages.find((m) => m.role === "assistant");
+    expect(assistant?.content).toBe("all done");
+    expect(assistant?.meta?.challenge).toBeUndefined();
+  });
+
+  it("ignores a toolGovernance blob with no challengeToken (F01 contract)", async () => {
+    // pendingTools without a token used to spawn a confirmation card under the
+    // legacy confirmedTools[] flow; under F01 there is nothing to release, so
+    // we must NOT stash anything and the UI should treat the turn as complete.
+    const agentChat = vi
+      .fn()
+      .mockResolvedValueOnce({answer: "no challenge", toolGovernance: {pendingTools: [{name: "a"}]}});
+    const api = {autoStreamChat: vi.fn(), agentChat} as unknown as ApiClient;
+    const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "agent", onSettled: vi.fn()}));
+    act(() => result.current.setPrompt("go"));
+    await act(async () => {
+      await result.current.sendPrompt();
     });
     const assistant = result.current.messages.find((m) => m.role === "assistant");
-    // A second round of tools is surfaced again rather than silently swallowed.
-    expect(assistant?.meta?.pendingTools).toEqual([{name: "b"}]);
+    expect(assistant?.meta?.challenge).toBeUndefined();
+    expect(assistant?.meta?.pendingTools).toBeUndefined();
+
+    // confirmTurn must be a no-op — nothing was stashed.
+    await act(async () => {
+      await result.current.confirmTurn(assistant!.id, true);
+    });
+    expect(agentChat).toHaveBeenCalledTimes(1); // no replay
+  });
+
+  it("cancel path drops the pending token without calling agentChat again", async () => {
+    const agentChat = vi.fn().mockResolvedValueOnce({
+      answer: "需要确认工具",
+      toolGovernance: {confirmationRequired: true, challengeToken: "cancel-me", pendingTools: [{name: "x"}]},
+    });
+    const api = {autoStreamChat: vi.fn(), agentChat} as unknown as ApiClient;
+    const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "agent", onSettled: vi.fn()}));
+    act(() => result.current.setPrompt("ask"));
+    await act(async () => {
+      await result.current.sendPrompt();
+    });
+    const id = result.current.messages.find((m) => m.role === "assistant")!.id;
+
+    await act(async () => {
+      await result.current.confirmTurn(id, false);
+    });
+    expect(agentChat).toHaveBeenCalledTimes(1); // no second call
+    const assistant = result.current.messages.find((m) => m.role === "assistant");
+    expect(assistant?.content).toBe("已取消工具调用。");
+    expect(assistant?.meta?.confirmationCancelled).toBe(true);
   });
 
   it("is a no-op when no turn is awaiting confirmation", async () => {
     const api = {autoStreamChat: vi.fn(), agentChat: vi.fn()} as unknown as ApiClient;
     const {result} = renderHook(() => useChat({api, userId: 1, sessionId: 1, mode: "agent", onSettled: vi.fn()}));
     await act(async () => {
-      await result.current.confirmTools("missing", ["x"]);
+      await result.current.confirmTurn("missing", true);
     });
     expect(api.agentChat as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
