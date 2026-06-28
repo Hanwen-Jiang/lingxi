@@ -37,6 +37,17 @@ export default defineConfig({
       "/api": {
         target: apiProxyTarget,
         changeOrigin: true,
+        // The chat gateway enforces a CORS origin allowlist that only trusts
+        // its own origin — in prod the SPA is served same-origin behind the
+        // gateway (see api.ts), so CORS never engages. In dev the browser's
+        // Origin is the Vite host (e.g. http://127.0.0.1:5174), which the
+        // gateway 403s before the request reaches a controller. Rewrite the
+        // forwarded Origin to the proxy target so the gateway sees a
+        // same-origin request — the conventional dev-proxy shim for a
+        // CORS-locked backend (verified live against the S3 E2E gateway :10110,
+        // which only allows its own origin). changeOrigin rewrites Host; this
+        // aligns Origin with it.
+        headers: {origin: apiProxyTarget},
       },
     },
   },

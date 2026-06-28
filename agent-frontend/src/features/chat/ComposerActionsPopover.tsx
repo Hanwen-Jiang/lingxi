@@ -7,7 +7,14 @@ import {ListBox} from "@heroui/react/list-box";
 import {Popover} from "@heroui/react/popover";
 import {Separator} from "@heroui/react/separator";
 
-import {COMPOSER_BUTTON_STYLE, SLASH_COMMANDS} from "../../lib/constants";
+import {CHAT_MODES, COMPOSER_BUTTON_STYLE, SLASH_COMMAND_MODES, SLASH_COMMANDS} from "../../lib/constants";
+
+// Each slash command is a shortcut to a chat mode (M3); show its human label
+// next to the command so the popover reads as a mode picker.
+const COMMAND_ENTRIES = SLASH_COMMANDS.map((command) => {
+  const modeId = SLASH_COMMAND_MODES[command];
+  return {command, label: CHAT_MODES.find((candidate) => candidate.id === modeId)?.label ?? command};
+});
 
 export function ComposerActionsPopover({
   isRunning,
@@ -18,7 +25,10 @@ export function ComposerActionsPopover({
 }) {
   const [search, setSearch] = useState("");
   const normalizedSearch = search.trim().toLowerCase();
-  const filteredCommands = SLASH_COMMANDS.filter((command) => command.toLowerCase().includes(normalizedSearch));
+  const filteredCommands = COMMAND_ENTRIES.filter(
+    ({command, label}) =>
+      command.toLowerCase().includes(normalizedSearch) || label.toLowerCase().includes(normalizedSearch),
+  );
 
   return (
     <Popover>
@@ -58,11 +68,12 @@ export function ComposerActionsPopover({
               aria-label="命令列表"
               className="scrollbar max-h-[min(320px,calc(100vh-10rem))] overflow-y-auto p-2"
             >
-              {filteredCommands.map((command) => (
-                <ListBox.Item key={command} id={command} textValue={command} onAction={() => onCommand(command)}>
+              {filteredCommands.map(({command, label}) => (
+                <ListBox.Item key={command} id={command} textValue={label} onAction={() => onCommand(command)}>
                   <span className="flex min-w-0 items-center gap-2 text-sm">
                     <Code2 className="size-4 shrink-0 text-muted" />
-                    <span className="truncate">{command}</span>
+                    <span className="truncate">{label}</span>
+                    <span className="text-muted ml-auto shrink-0 text-xs">{command}</span>
                   </span>
                 </ListBox.Item>
               ))}

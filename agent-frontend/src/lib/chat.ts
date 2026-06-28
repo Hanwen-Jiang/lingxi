@@ -8,6 +8,7 @@ import type {
   ChatTurnSummary,
   DocumentIngestJobResponse,
   MessageStatus,
+  PendingTool,
   WorkspaceMessage,
 } from "../types";
 
@@ -89,6 +90,33 @@ export function extractTraceSteps(meta?: Record<string, unknown>): TraceStep[] {
   }
 
   return steps;
+}
+
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+// Pull the "tools awaiting confirmation" list out of an agent response's
+// `toolGovernance` blob (M4). This is the single adapter for S1's F01 shape,
+// which isn't finalized — we accept a handful of likely field names
+// (pendingTools/pending; name/tool/toolName; description/reason; args/arguments)
+// so the UI shell works today and only this function changes when F01 ships.
+// Returns [] when nothing needs confirming.
+export function extractPendingTools(governance: unknown): PendingTool[] {
+  const list = getObjectValue(governance, "pendingTools") ?? getObjectValue(governance, "pending");
+  if (!Array.isArray(list)) return [];
+
+  return list.reduce<PendingTool[]>((acc, item) => {
+    const name = getObjectValue(item, "name") ?? getObjectValue(item, "tool") ?? getObjectValue(item, "toolName");
+    if (typeof name !== "string" || !name) return acc;
+    acc.push({
+      name,
+      title: asOptionalString(getObjectValue(item, "title")),
+      description: asOptionalString(getObjectValue(item, "description") ?? getObjectValue(item, "reason")),
+      args: getObjectValue(item, "args") ?? getObjectValue(item, "arguments"),
+    });
+    return acc;
+  }, []);
 }
 
 export function messageFromTurn(turn: ChatTurnSummary): WorkspaceMessage[] {

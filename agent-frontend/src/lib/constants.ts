@@ -1,6 +1,6 @@
 import {type CSSProperties} from "react";
 
-import type {ChatMode, MemoryType, ReasoningEffort} from "../types";
+import type {ChatMode, ChatModeId, MemoryType, ReasoningEffort} from "../types";
 
 export const CHAT_MODES: ChatMode[] = [
   {id: "auto", label: "自动", description: "灵犀根据问题自动挑选合适的方式回答。", tone: "chat"},
@@ -11,14 +11,26 @@ export const CHAT_MODES: ChatMode[] = [
   {id: "draft", label: "起草回复", description: "灵犀帮你起草一段回复。", tone: "agent"},
 ];
 
-export const SLASH_COMMANDS = [
-  "/direct-chat",
-  "/agent-chat",
-  "/adaptive-rag",
-  "/rag-chat",
-  "/reply-draft",
-  "/streaming-chat",
-];
+// Slash commands are a fast keyboard path to pick the chat mode — each maps to
+// a real ChatModeId that useChat dispatches to a distinct backend endpoint
+// (M3). They are NOT literal text prepended to the prompt (that was the old
+// decorative behavior); selecting one switches the active mode instead.
+export const SLASH_COMMAND_MODES: Record<string, ChatModeId> = {
+  "/streaming-chat": "auto",
+  "/direct-chat": "direct",
+  "/agent-chat": "agent",
+  "/adaptive-rag": "adaptive-rag",
+  "/rag-chat": "rag",
+  "/reply-draft": "draft",
+};
+
+export const SLASH_COMMANDS = Object.keys(SLASH_COMMAND_MODES);
+
+// Only the auto router streams token-by-token over /chat/auto/stream. Every
+// other mode answers synchronously (one full frame); until S1 ships true
+// incremental streaming for them (M14), the UI shows a ChatLoader.Dots
+// placeholder while the single response is in flight.
+export const STREAMING_CHAT_MODES = new Set<ChatModeId>(["auto", "stream"]);
 
 export const MEMORY_TYPES: MemoryType[] = [
   "IMPORTANT_FACT",

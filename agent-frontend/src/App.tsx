@@ -15,6 +15,7 @@ import {useSessions} from "./hooks/useSessions";
 import {authStore, isAdmin as computeIsAdmin} from "./lib/auth";
 import {CHAT_MODES} from "./lib/constants";
 import {readStorage, STORAGE_KEYS, writeStorage} from "./lib/storage";
+import type {ChatModeId} from "./types";
 import {ChatHeader} from "./features/chat/ChatHeader";
 import {ComposerDock} from "./features/chat/ComposerDock";
 import {MessageTimeline} from "./features/chat/MessageTimeline";
@@ -244,7 +245,11 @@ function Workspace({
   const [initialSession] = useState(resolveInitialSession);
   const [sessionId, setSessionId] = useState(initialSession.id);
   const [view, setView] = useState<"chat" | "settings">("chat");
-  const activeMode = CHAT_MODES[0];
+  // The active chat mode (M3). Drives which backend endpoint useChat dispatches
+  // to; defaults to the auto router. Slash commands / the composer mode chip
+  // flip it.
+  const [mode, setMode] = useState<ChatModeId>("auto");
+  const activeMode = CHAT_MODES.find((candidate) => candidate.id === mode) ?? CHAT_MODES[0];
 
   const model = useModelConfig({api});
   const ingestion = useIngestion({api});
@@ -254,6 +259,7 @@ function Workspace({
     api,
     userId,
     sessionId,
+    mode,
     onSettled: (sentSessionId) => sessionsRef.current?.syncSession(sentSessionId),
   });
   const sessions = useSessions({api, userId, sessionId, setSessionId, chat});
@@ -341,8 +347,12 @@ function Workspace({
                         onRefreshSessions={() => void sessions.refreshSessions()}
                         onSelectSession={(target) => void sessions.loadSession(target)}
                       />
-                      <MessageTimeline messages={chat.messages} />
+                      <MessageTimeline
+                        messages={chat.messages}
+                        onConfirmTools={(assistantId, selected) => void chat.confirmTools(assistantId, selected)}
+                      />
                       <ComposerDock
+                        activeMode={activeMode}
                         api={api}
                         lastRouteResult={chat.lastRouteResult}
                         modelStatus={model.modelStatus}
@@ -351,6 +361,7 @@ function Workspace({
                         onJob={ingestion.addJob}
                         onModelStatus={model.setModelStatus}
                         onPromptChange={chat.setPrompt}
+                        onSelectMode={setMode}
                         onSend={() => void chat.sendPrompt()}
                         onStop={chat.stopStream}
                       />

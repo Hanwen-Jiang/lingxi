@@ -156,6 +156,19 @@ export type AgentResponse = {
   toolGovernance?: unknown;
 };
 
+// A tool the agent wants to run but is holding for human confirmation (M4).
+// The wire shape is owned by S1's F01 (tool-confirmation challenge token), which
+// is not shipped yet — lib/chat.extractPendingTools parses it defensively out of
+// `toolGovernance` so this stays the single seam to adapt when F01 lands. The
+// `name` is what we echo back in confirmedTools[]; challengeToken (when present)
+// is threaded through untouched.
+export type PendingTool = {
+  name: string;
+  title?: string;
+  description?: string;
+  args?: unknown;
+};
+
 export type DocumentIngestJobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | string;
 
 export type DocumentIngestJobResponse = {
