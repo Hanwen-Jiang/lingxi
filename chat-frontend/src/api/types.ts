@@ -47,16 +47,31 @@ export interface Message {
 }
 
 /**
+ * Retrieval citation (§9 — agent/RAG routes attach these to the final answer).
+ * Parsed for contract completeness; not yet rendered in the IM assistant bubble.
+ */
+export interface Citation {
+  index?: number;
+  title?: string;
+  fileName?: string;
+  snippet?: string;
+  source?: string;
+}
+
+/**
  * Assistant stream event (03-contracts §9: `{type, …}` + schema version `v`).
- * The Mock emits these; in P2 the real client parses the `/api/agent/chat` SSE
- * stream into the SAME events — so the UI never changes.
+ * The Mock emits these; the real client parses the agent SSE stream (§9) into the
+ * SAME events — so the UI never changes. `v` is optional (the wire may omit it
+ * per-event; we default it on parse). `buffered:true` flags a non-incremental
+ * route that sent the whole answer in one frame (the UI renders it as a normal
+ * stream). Unknown event types are silently ignored upstream (§9), never emitted.
  */
 export type AssistantStreamEvent =
-  | {type: "start"; v: number}
-  | {type: "delta"; v: number; text: string}
-  | {type: "usage"; v: number; tokens: number}
-  | {type: "done"; v: number}
-  | {type: "error"; v: number; message: string};
+  | {type: "start"; v?: number; buffered?: boolean}
+  | {type: "delta"; v?: number; text: string; buffered?: boolean}
+  | {type: "usage"; v?: number; tokens: number}
+  | {type: "done"; v?: number; citations?: Citation[]}
+  | {type: "error"; v?: number; message: string};
 
 export interface Conversation {
   id: Id; // sessionId
