@@ -412,7 +412,11 @@
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
 
-> **[S2 恢复 2026-06-28 · HUB P5 集成时补提交回 main]** 以下 3 条 S3 P5 记录在 session 起始时为 main 工作树**未提交**改动,被 S4 commit `0f86662` 重写 STATUS 时覆盖丢失(S3 代码安全=`d2f393c` 在其分支,仅文档丢失)。S2 凭上下文原样恢复,HUB 已据 git 实况核对引用 commit 后补提交。**请 S3 复跑 E2E 确认绿数字。**
+### 2026-06-28 · ✅ WAVE2 首件:P5 IM E2E **首手复跑确认**(对 integrated main `902335d`,覆盖 S2 恢复标记)
+- 背景:HUB P5 集成时 S3 的 3 条 P5 ledger 曾被 S4 commit `0f86662` 覆盖丢失、由 S2 据上下文恢复(代码安全=`d2f393c` 一直在分支)。HUB 要求 S3 复跑坐实"二手绿"。**本条即 S3 自己首手复跑结果,覆盖恢复标记。**
+- 方式:retire 已并入 main 的 `feat/chat-backend-p5` → 从 `main 902335d` 起 `feat/chat-backend-p5-wave2` → 对 **集成后 main 代码** 干净重建 E2E 栈(`02-build` clean,BUILD SUCCESS)+ 重启 → 常驻 WSL 实跑。
+- **绿数字(首手):** `04` 鉴权 **13/13** · `06` 客户端 API **10/10** · `07` IM/B4 **11/11** · `08` 实时 WS **4/4** = **38/38 全绿**。B4 同事务落库 / B5 DLQ / B8 浏览器 WS / 发送 code=0 / 发→对端实时收 均在 integrated main 上复现绿,非二手。
+- 阻塞:无。下一步:J1(agent 纳入 chat E2E 栈,登录→/api/agent 经网关→X-User-Id→流式)、S4 两缺口(SessionListItem.peerUserId / 图片消息历史持久化)。
 
 ### 2026-06-27 · ✅ P5 item3(部分)发消息端点翻 chat-common 包络——解锁 S4 真实发送(commit `d2f393c`)
 - **`POST /api/v1/chat/session` 翻 code=0:** 返回 chat-common `Result`(原为服务自有 200+code);`messageId` string 化(D5);操作人校验改用 `RequestContext`(越权抛 `ApiException FORBIDDEN`→真实 403,经既有 `ApiExceptionHandler`)。调试端点(feign/hello)保留旧 Result(最小爆破面)。E2E:`07` 发送 **code=0**、11/11;`08` 实时 4/4。
