@@ -97,6 +97,7 @@ public class ReActAgentOrchestrator {
                 request.getSessionId(),
                 prompt,
                 action,
+                request.getConfirmationToken(),
                 request.getConfirmedTools());
 
         if (!Boolean.TRUE.equals(governanceDecision.getAllowed())) {

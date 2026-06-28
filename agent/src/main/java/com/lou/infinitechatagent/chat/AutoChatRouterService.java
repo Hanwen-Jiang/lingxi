@@ -217,6 +217,8 @@ public class AutoChatRouterService {
         agentRequest.setSessionId(safeSessionId(request));
         agentRequest.setPrompt(draft ? draftPrompt(decision.getPrompt()) : decision.getPrompt());
         agentRequest.setDebug(true);
+        // F01:透传高风险工具确认令牌(若客户端在 /chat/auto 二次请求里带了)。
+        agentRequest.setConfirmationToken(request.getConfirmationToken());
         AgentResponse response = reActAgentOrchestrator.chat(agentRequest);
         return baseResponse(decision, requestId)
                 .answer(response.getAnswer())

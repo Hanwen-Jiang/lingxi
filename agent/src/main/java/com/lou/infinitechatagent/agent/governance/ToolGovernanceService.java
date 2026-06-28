@@ -29,6 +29,9 @@ public class ToolGovernanceService {
     @Resource
     private JdbcTemplate ragJdbcTemplate;
 
+    @Resource
+    private ToolConfirmationChallengeService challengeService;
+
     @Value("${agent.tool-governance.enabled:true}")
     private boolean governanceEnabled;
 
@@ -38,12 +41,17 @@ public class ToolGovernanceService {
     @Value("${agent.tool-governance.prompt-injection-check.enabled:true}")
     private boolean promptInjectionCheckEnabled;
 
+    /** F01:启用服务端一次性挑战令牌(默认 true)。关闭时回退遗留 {@code confirmedTools} 兼容路径。 */
+    @Value("${agent.tool-governance.challenge.enabled:true}")
+    private boolean challengeEnabled;
+
     private final InputSafetyService inputSafetyService = new InputSafetyService();
 
     public ToolGovernanceDecision evaluate(Long userId,
                                            Long sessionId,
                                            String prompt,
                                            AgentAction action,
+                                           String confirmationToken,
                                            Set<String> confirmedTools) {
         if (!governanceEnabled) {
             ToolGovernanceDecision decision = allow(action, "工具治理未启用，仅记录放行。");
@@ -90,17 +98,24 @@ public class ToolGovernanceService {
         ToolRiskLevel riskLevel = ToolRiskLevel.from(tool.getRiskLevel());
         ToolRiskLevel threshold = ToolRiskLevel.from(confirmationThreshold);
         boolean confirmationRequired = riskLevel.gte(threshold);
-        boolean confirmed = confirmedTools != null && confirmedTools.contains(tool.getName());
-        if (confirmationRequired && !confirmed) {
-            ToolGovernanceDecision decision = ToolGovernanceDecision.builder()
+        if (confirmationRequired && !isConfirmed(userId, sessionId, tool.getName(), confirmationToken, confirmedTools)) {
+            // F01:挑战令牌模式——返回服务端签发的一次性 token,客户端二次请求回传 confirmationToken 才放行。
+            String challengeToken = challengeEnabled
+                    ? challengeService.issueChallenge(userId, sessionId, tool.getName())
+                    : null;
+            ToolGovernanceDecision.ToolGovernanceDecisionBuilder builder = ToolGovernanceDecision.builder()
                     .allowed(false)
                     .confirmationRequired(true)
                     .toolName(tool.getName())
                     .actionType(tool.getActionType().name())
                     .riskLevel(tool.getRiskLevel())
                     .reason("该工具风险等级为 " + tool.getRiskLevel() + "，需要用户确认后才能执行。")
-                    .guardrailHits(List.of("CONFIRMATION_REQUIRED"))
-                    .build();
+                    .guardrailHits(List.of("CONFIRMATION_REQUIRED"));
+            if (challengeToken != null) {
+                builder.challengeToken(challengeToken)
+                        .challengeExpiresInSec(challengeService.getTtlSeconds());
+            }
+            ToolGovernanceDecision decision = builder.build();
             audit(userId, sessionId, prompt, decision);
             return decision;
         }
@@ -116,6 +131,22 @@ public class ToolGovernanceService {
                 .build();
         audit(userId, sessionId, prompt, decision);
         return decision;
+    }
+
+    /**
+     * F01:确认是否成立。
+     * <ul>
+     *   <li>challenge 模式(默认):仅当回传的 {@code confirmationToken} 经服务端校验(指纹匹配)并
+     *       <b>一次性消费</b>成功时成立——客户端无法伪造。遗留 {@code confirmedTools} 被忽略。</li>
+     *   <li>关闭 challenge:回退遗留无状态 {@code confirmedTools.contains(toolName)}(可伪造,仅兼容)。</li>
+     * </ul>
+     */
+    private boolean isConfirmed(Long userId, Long sessionId, String toolName,
+                                String confirmationToken, Set<String> confirmedTools) {
+        if (challengeEnabled) {
+            return challengeService.consume(confirmationToken, userId, sessionId, toolName);
+        }
+        return confirmedTools != null && confirmedTools.contains(toolName);
     }
 
     public List<ToolAuditRecord> listAuditRecords(Long userId, Long sessionId, int limit) {

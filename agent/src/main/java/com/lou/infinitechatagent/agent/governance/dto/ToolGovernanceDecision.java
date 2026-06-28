@@ -26,4 +26,14 @@ public class ToolGovernanceDecision {
     private String reason;
 
     private List<String> guardrailHits;
+
+    /**
+     * F01:命中高风险工具且未确认时,服务端签发的一次性确认挑战令牌。
+     * 客户端须在二次请求里回传 {@code AgentRequest.confirmationToken}(而非工具名)才放行。
+     * 已确认/无需确认/签发失败时为 {@code null}(NON_NULL 下省略)。
+     */
+    private String challengeToken;
+
+    /** challenge 令牌有效期(秒),供客户端提示/超时。 */
+    private Long challengeExpiresInSec;
 }
