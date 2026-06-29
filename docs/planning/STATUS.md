@@ -162,6 +162,16 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-29 · P7 支撑 agent 入 E2E 栈:本机实跑降级态全验 + 修就绪探针 + 包络收口配合
+- 完成:**本机 `java -jar` 把当前 main agent jar 以 E2E 降级态实跑**,把 J1 的 agent 侧行为先验一遍(不依赖网关),发现并修一个真问题。**分支 `feat/agent-backend-p7`(push origin,commit `9d1cfbf`,从新 main `37a3760` 起独立 worktree)**:
+  - **① J1 agent 侧本机实测全绿**(降级 env 对齐 S3 `09-agent-e2e.sh`:`MYSQL_URL→:3399`/`REDIS→:6399`/`PGVECTOR→:5499`/`FLYWAY_ENABLED=false`/`AGENT_GATEWAY_ENFORCE_IDENTITY=true`/无 `DASHSCOPE_API_KEY`):agent **正常起**;`db=H2 UP`(MySQL→H2 降级生效);**A2 直连无 `X-User-Id` `/api/agent/tools`→401**;**带 `X-User-Id`→200**(返 `code:0` + 工具列表 → 身份消费 + 包络 code=0 **双证 live**)。
+  - **② 修 redis 无关就绪探针(本轮唯一代码改)**:主 `/api/actuator/health` 在 Redis 降级时返 **503**(redis 指示器 DOWN 拖垮聚合)——但契约里 Redis 可选(全降级),**503 会让 200-就绪门/LB/k8s 探针把「可服务但 Redis 降级」误判为宕机**。`application.yml` 加 `management.endpoint.health.group.{readiness:ping,db; liveness:ping}`,主 `/health` 保留诚实聚合。**实测**:`/health/readiness`=200、`/health/liveness`=200、主 `/health`=503。**构建出的 P7 jar 重跑同样通过**(YAML 内置,非 env 覆盖)。
+  - **③ 包络收口(task2)**:agent **已 code=0 + 真实 HTTP**(本轮 live 复证:成功 `code:0`、未鉴权 `401`),**无 agent 侧改动**。剩余 Contact/RTC/Offline/Moment 是 chat 侧,agent 随 S3 同批节奏配合,**翻前 STATUS 点名前端**。
+- 产出物:`agent/src/main/resources/application.yml`(health 分组)、`agent/docs/E2E-INTEGRATION.md`(健康端点段 + 探针选型 + P7 实测脚注)。
+- 🤝 **交接 → S3(J1,据此跑 09/10):** ① **agent 入栈代码侧已本机验证可起 + 三鉴权行为(401/带头放行/code=0)就绪**,你拷 P7 重建的 jar 入 `~/projecta-e2e/agent/target/` 后 `AGENT_SKIP_BUILD=1 bash 09 && bash 10` 跑 A1–A4 + 内助手/F01/SSE 全链路。② **就绪门控请打 `/api/actuator/health/readiness`(降级态 200),勿用主 `/health`(Redis 降级 503)**;09/10 现打主 `/health` 仅查可达性不受影响,若加 HTTP-200 断言改打 readiness(或旧 jar 临时 env `MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE=ping,db`)。③ A3/A4(经网关注入身份 + SSE 真流式)需你在常驻 WSL 栈实跑(本机无网关);填 `DASHSCOPE_API_KEY` 验真实 delta。
+- 🤝 **交接 → S4/S2:** §4 SSE §9 schema / §5 F01 令牌形状无变更(P6 已 live);待 S3 把 agent 接进 E2E 栈后,你们端到端验流式回复 / F01 确认 UX。
+- 阻塞:无(agent 侧本机已验)。待中枢确认:① S3 跑 09/10 + 内助手全链路实绿。② CI/HUB 复跑 Mockito(限流/过滤器,本机 fork-JVM OOM 跑不了)+ F01/限流真 Redis + 网关 SSE 真路径。③ 其余包络真实 HTTP 翻转 agent 随时同批配合(翻前点名前端)。
+
 ### 2026-06-28 · P6 IM 内助手就绪:F01/限流 Redis 多实例硬化 + J1 入 E2E 栈对接清单
 - 完成:在 P5 的 F01 挑战令牌/SSE §9 基础上做多实例硬化 + 产出 agent 入 E2E 栈对接清单。**分支 `feat/agent-backend-p6`(push origin,commit `9f763ab`,从新 main `902335d` 起)**:
   - **F01 一次性消费改原子 GETDEL**:`ToolConfirmationChallengeService.consume` 原为 Redis `get`→`delete`(**非原子,并发可双消费**),改 `opsForValue().getAndDelete`(Redis 6.2+ 原子),杜绝竞态;一次性/TTL/指纹语义不变。内存兜底路径不变。

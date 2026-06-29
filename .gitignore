@@ -62,5 +62,8 @@ detached-*.log
 dist-server*.log
 vite-preview.log
 
+# ===== nested git worktrees (per-stream, P6 governance) =====
+.claude/worktrees/
+
 # ===== keep these explicitly =====
 !.claude/launch.json
