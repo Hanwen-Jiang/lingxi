@@ -1,5 +1,7 @@
 package com.lou.contactservice.data.SearchUser;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
@@ -13,6 +15,8 @@ import lombok.experimental.Accessors;
 @Data
 @Accessors(chain = true)
 public class SearchUserResponse {
+    /** D5: id 序列化为 String,避免前端 Long 精度丢失。 */
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long userUuid;
 
     private String nickname;

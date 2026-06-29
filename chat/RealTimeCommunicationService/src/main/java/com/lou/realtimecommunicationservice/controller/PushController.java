@@ -1,6 +1,6 @@
 package com.lou.realtimecommunicationservice.controller;
 
-import com.lou.realtimecommunicationservice.common.Result;
+import com.lou.common.api.Result;
 import com.lou.realtimecommunicationservice.data.ApplyFriend.FriendApplicationNotification;
 import com.lou.realtimecommunicationservice.data.PushMoment.PushMomentRequest;
 import com.lou.realtimecommunicationservice.data.PushSession.NewGroupSessionNotification;
