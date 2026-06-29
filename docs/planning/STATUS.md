@@ -171,6 +171,16 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-29 · P8 同批翻确认无 drift + 收硬化债:Mockito 本机解 OOM 全绿 + 限流可观测
+- 完成:**分支 `feat/agent-backend-p8`(push origin,commit `8ff6c27`,从新 main `f9e3812` 起独立 worktree)**。
+  - **① 包络收口(task1)= agent 零 drift,无代码改**:审计 + live 双证。控制器**只返 `BaseResponse`(成功 200+`code=0`)、零 `ResultUtils.error`/`ResponseEntity` 直返**;错误**全抛 → `GlobalExceptionHandler` `ResponseEntity.status(httpStatusForCode)` 映射真实 HTTP**(401/403/404/422/429/5xx);`ErrorCode` **全码显式映射**含 agent 域 `SENSITIVE_WORD_ERROR 71000→400`(不落 `code/100` 兜底)。item3 翻的 Contact/RTC/Offline/Moment 是 **chat 侧**,agent 无可翻;翻转窗口在线配合,**翻前点名前端**(收缩 `{0,200}→{0}`)。
+  - **② 收 Mockito OOM 债(task2)= 解了**:历史几轮因默认 G1 fork JVM 在小内存主机预留 ~1GB 虚拟地址失败而 defer 的 Mockito 测试,**本机用 SerialGC 配方跑通**。固化为 **opt-in Maven profile `low-mem-test`**(`pom.xml`,surefire argLine `-Xmx640m -XX:+UseSerialGC -XX:MaxMetaspaceSize=300m`,不改默认)。**`./mvnw -o test -Plow-mem-test` 全量 12 类 39 测试全绿**(0 失败/错误/跳过),含 `RateLimitInterceptorTest 3/3`、`GatewayIdentityFilterTest 5/5`。
+  - **③ agent 限流可观测(task3,小步)**:`RateLimitInterceptor` 放行/限流决策点加 Micrometer 计数 `agent.ratelimit.decisions`{`result=allowed|blocked` × `backend=redis|in_process`}(低基数),经 `ObjectProvider<MeterRegistry>` 注入(与既有 redis provider 同款,缺失 no-op,**不改限流逻辑**);prometheus 端点已暴露。测试加断言验计数随标签累加。
+- 产出物:`agent/pom.xml`(profile)、`agent/.../ratelimit/RateLimitInterceptor.java`(metrics)+`...Test.java`(5 参 + 计数断言)。
+- 🤝 **交接 → S3(同批翻转 + CI):** ① **agent 已 code=0/真实 HTTP 零 drift**,你翻 Contact/RTC/Offline/Moment 时**翻前 STATUS 点名 S2/S4**,我在线同批确认;② **Mockito 本机已不再卡** —— CI 内存充裕可直接 `./mvnw test`,受限主机用 `-Plow-mem-test`;③ **F01 真 Redis + 网关 SSE 真路径回归仍需你在常驻 WSL 栈实跑**(本机无 Redis/网关)。
+- 🤝 **交接 → 运维/可观测:** 新增指标 `agent_ratelimit_decisions_total{result,backend}`(prometheus),可看限流触发频率 + Redis/进程内降级占比。
+- 阻塞:无。待中枢确认:① S3 同批翻 item3(翻前点名前端);② F01 真 Redis/网关 SSE 真路径回归(S3 WSL 栈);③ DLQ consumer-lag gauge 仍是 chat 侧(S3)的 L3 债,agent 侧限流指标本轮已补。
+
 ### 2026-06-29 · P7 支撑 agent 入 E2E 栈:本机实跑降级态全验 + 修就绪探针 + 包络收口配合
 - 完成:**本机 `java -jar` 把当前 main agent jar 以 E2E 降级态实跑**,把 J1 的 agent 侧行为先验一遍(不依赖网关),发现并修一个真问题。**分支 `feat/agent-backend-p7`(push origin,commit `9d1cfbf`,从新 main `37a3760` 起独立 worktree)**:
   - **① J1 agent 侧本机实测全绿**(降级 env 对齐 S3 `09-agent-e2e.sh`:`MYSQL_URL→:3399`/`REDIS→:6399`/`PGVECTOR→:5499`/`FLYWAY_ENABLED=false`/`AGENT_GATEWAY_ENFORCE_IDENTITY=true`/无 `DASHSCOPE_API_KEY`):agent **正常起**;`db=H2 UP`(MySQL→H2 降级生效);**A2 直连无 `X-User-Id` `/api/agent/tools`→401**;**带 `X-User-Id`→200**(返 `code:0` + 工具列表 → 身份消费 + 包络 code=0 **双证 live**)。
