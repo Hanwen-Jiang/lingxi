@@ -1,0 +1,28 @@
+# P9 go-live override:给 docker 基座 compose 注入统一鉴权 env(基座 &chat_env 缺这些)。
+# 非侵入:不改 D: 只读部署配置;用 -f 叠加 + --env-file 提供变量。
+# 用法: docker compose -f <D:base> -f <this> --env-file <aug.env> up -d --no-build <chat服务+agent>
+x-p9-auth: &p9auth
+  JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+  INTERNAL_SERVICE_TOKEN: "${INTERNAL_SERVICE_TOKEN}"
+services:
+  auth:
+    environment: *p9auth
+  contact:
+    environment: *p9auth
+  messaging:
+    environment: *p9auth
+  realtime:
+    environment: *p9auth
+  offline:
+    environment: *p9auth
+  moment:
+    environment: *p9auth
+  gateway:
+    environment:
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+      INTERNAL_SERVICE_TOKEN: "${INTERNAL_SERVICE_TOKEN}"
+      AGENT_GATEWAY_URI: "${AGENT_GATEWAY_URI}"
+      GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS: "${GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS}"
+  agent:
+    environment:
+      AGENT_GATEWAY_ENFORCE_IDENTITY: "${AGENT_GATEWAY_ENFORCE_IDENTITY}"
