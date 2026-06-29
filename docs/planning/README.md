@@ -28,6 +28,8 @@
 | [`00-master-plan.md`](00-master-plan.md) | 总体规划:愿景、目标架构、统一鉴权、端口表、决策登记、路线图、协调模型 |
 | [`01-improvement-audit.md`](01-improvement-audit.md) | 综合改进清单(严重→轻微,跨三个代码项目;并纠正过期审计) |
 | [`02-branding.md`](02-branding.md) | 品牌命名表:**灵犀 / Lingxi**(产品正式名,取代 InfiniteChat),采用范围与查重清单 |
+| [`03-contracts.md`](03-contracts.md) | 跨服务契约单一事实来源:身份头/包络/错误码/分页/ID/网关路由/JWT/WS/SSE |
+| [`04-orchestration-playbook.md`](04-orchestration-playbook.md) | **编排规范**:HUB 每轮如何编排 S1–S4(分工/拓扑/model+effort 配比/prompt 模板/收口格式) |
 | [`10-agent-backend-plan.md`](10-agent-backend-plan.md) | S1 计划 |
 | [`20-agent-frontend-plan.md`](20-agent-frontend-plan.md) | S2 计划 |
 | [`30-chat-backend-plan.md`](30-chat-backend-plan.md) | S3 计划 |

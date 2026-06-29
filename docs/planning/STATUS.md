@@ -20,6 +20,17 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-28 · P6 集成:灵犀内置助手四侧 code-complete + S3 IM E2E 首手全绿;唯一阻塞 J1(agent jar);下轮=收 J1 打通内助手端到端
+- **本轮 P6/wave2 数字(git 核实)**:四条分支并入 `main`(代码目录互不相交,STATUS 自动 union,**零冲突**)。S1 `9f763ab`(F01 挑战令牌 + 限流**硬化为 Redis 多实例原子** + J1 对接文档 `agent/docs/E2E-INTEGRATION.md`);S2 `3f2648b`(**M4 切真 F01 令牌** + **D5 string id 一次翻净** + SSE §9 `v`/`buffered`/容忍未知 type);S3 `4584ae5`(**首手复跑 IM E2E 38/38 绿**=04 鉴权13+06 客户端10+07 IM/B4 11+08 实时4,随后补 S4 两缺口把 07 扩到 **14/14**;`peerUserId`/图片历史持久化;**J1 turnkey 工具 `09/10`**;生产硬化 **Snowflake 按实例 D9/M6** + 网关生产 CORS);S4 `0ffb026`(**IM 内置「灵犀」助手接真实 agent SSE §9**)。
+- **里程碑**:🎉 P6 主题(IM 内置助手)**四侧 code-complete** + S3 **首手坐实 IM E2E 全绿**(此前为恢复条目,本轮一手复现)。
+- **已集成**:merge tips `ffb06c6`(agent-backend)→ `a823092`(chat-frontend)→ `7141552`(agent-frontend)→ `a5bf143`(chat-backend);本 STATUS + 编排规范 `04-orchestration-playbook.md` 为随后 docs 提交,已 push。
+- **🟢 J1 阻塞已解(构建侧)**:HUB 按用户拍板已**成功构建当前 agent jar**——`mvnw clean package -DskipTests` **BUILD SUCCESS**,SB3.5.13 repackage 胖 jar `E:\jhw\proj\agent\target\InfiniteChat-Agent-0.0.1-SNAPSHOT.jar`(96MB;WSL 路径 `/mnt/e/jhw/proj/agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar`)。**交接 S3**:拷入 `~/projecta-e2e/agent/target/` 后 `AGENT_SKIP_BUILD=1 bash chat/e2e/09-agent-e2e.sh && bash chat/e2e/10-agent-smoke.sh` 跑 A1-A4 三断言;再跑内助手/F01/流式全链路 E2E。(jar 由当前 main agent 源构建,与 09 rsync 的源一致;无 `DASHSCOPE_API_KEY` 时 A4 验到"请求达 agent 且带 X-User-Id",填 key 验真实流式。)
+- **🟡 仍欠**:剩余包络收口(Contact/RTC/Offline/Moment→code=0/真实 HTTP,与 S1 同批翻)、CI 复跑 Mockito(本机 OOM)、DLQ consumer-lag gauge(L3 可观测)。
+- **用户拍板(3 问)**:① 现在全合 + **HUB 构建 agent jar 解 J1**;② **下轮 P7 = 打通内助手端到端 + 收 J1**;③ 下轮做完 **S3 会话内全链路 E2E 验收**(IM + 内助手)。
+- **下一轮(P7)**:HUB 投放 agent jar → S3 `AGENT_SKIP_BUILD=1 bash 09 && bash 10` 跑 3 断言 + 内助手全链路 E2E 验收;S1 配合 agent E2E 起栈(降级/健康/enforce)+ 牵头剩余包络收口;S4/S2 待 J1 通后端到端验流式回复/F01 确认 UX;详见各流 prompt。
+- **新增**:`04-orchestration-playbook.md`(编排规范:分工/拓扑/model+effort 配比/prompt 模板/收口格式);外部调度器设计在 `E:\jhw\routines`;系统学习文档在 `E:\jhw\proj-docs`。
+- 阻塞:J1 构建侧已解(jar 就绪),待 S3 拷入 E2E 栈跑 09/10 验收。待中枢确认:无(线上仍 defer)。
+
 ### 2026-06-28 · P5 集成:IM 实时闭环 + 数据安全落地(B4/B5)+ STATUS 补录;下轮=灵犀内置助手端到端打通
 - **本轮 P5 数字(git 核实)**:四条 `feat/*-p5` 全并入 `main`(无冲突,四目录互不相交;已 push)。S1 `0d36d43`(D5 string-id `@SnowflakeId` 出参串化+Jackson 双读 + SSE §9 信封版本化 `v`/`buffered` + **F01 服务端一次性挑战令牌**);S2 `6330828`(**首次用自己分支**:M3 真实模式路由 + dev-proxy CORS shim + **真实登录 E2E 浏览器实证全绿(:10110)** + M4 工具确认壳);S3 `d2f393c`(**B4/B5/M8 数据安全:同事务 outbox + Kafka DLQ**,git 核实 `persistMessageAndOutbox`+`KafkaConsumerConfig` 落地;B8 浏览器 WS 握手真修;发消息端点翻 code=0);S4 `0f86662`(实时收发闭环:发送/图片写路径接真实 + 收消息直写缓存去重)。
 - **里程碑**:🎉 **IM 实时闭环 + 数据安全双双落地**——拖 4 轮的 B4/B5 数据丢失级修复终于进代码;live WS「发→对端实时收」端到端打通;S2 缠结(误落 chat-frontend)本轮解决。
