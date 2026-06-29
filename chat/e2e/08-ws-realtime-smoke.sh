@@ -17,8 +17,9 @@ ng(){ echo "  ❌ $1  (expect=$2 got=$3)"; F=$((F+1)); }
 jstr(){ grep -oE "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/'; }
 jwt_sub(){ local p m; p=$(printf '%s' "$1" | cut -d. -f2); m=$(( ${#p} % 4 )); [ "$m" = 2 ] && p="${p}=="; [ "$m" = 3 ] && p="${p}="; printf '%s' "$p" | tr '_-' '/+' | base64 -d 2>/dev/null | sed -E 's/.*"sub":"?([^",}]*)"?.*/\1/'; }
 sql(){ $DB "$1" 2>/dev/null; }
+redis_cmd(){ redis-cli --no-auth-warning -h "${REDIS_HOST:-127.0.0.1}" -p "${REDIS_PORT:-6379}" -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} "$@"; }
 signup(){ local email="$1" login tok uid
-  redis-cli --no-auth-warning -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} set "verify:email:$email" "$CODE" EX 300 >/dev/null 2>&1
+  redis_cmd set "verify:email:$email" "$CODE" EX 300 >/dev/null 2>&1
   curl -s -X POST -H 'Content-Type: application/json' -d "{\"email\":\"$email\",\"password\":\"$PASS\",\"code\":\"$CODE\"}" "$GW/api/v1/user/register" >/dev/null
   login=$(curl -s -X POST -H 'Content-Type: application/json' -d "{\"email\":\"$email\",\"password\":\"$PASS\"}" "$GW/api/v1/user/login")
   tok=$(printf '%s' "$login" | jstr token); uid=$(printf '%s' "$login" | jstr userId)
@@ -44,7 +45,7 @@ WSOUT=$(mktemp)
 python3 "$WSCLIENT" 127.0.0.1 "$NETTY" "/api/v1/netty?token=$BT&userUuid=$BID" 18 > "$WSOUT" 2>>"$WSOUT" &
 WSPID=$!
 sleep 4
-route=$(redis-cli --no-auth-warning -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} get "user:session:$BID" 2>/dev/null)
+route=$(redis_cmd get "user:session:$BID" 2>/dev/null)
 [ -n "$route" ] && ok "握手成功 + 路由注册 user:session:$BID=$route(B8 query 鉴权通过)" || ng "WS 握手/路由" "non-empty" "empty(WS: $(head -c 200 "$WSOUT"))"
 
 echo "[A 发消息 → B 实时收到]"
