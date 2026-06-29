@@ -13,9 +13,13 @@ agent 提供这些前缀(均在 context-path `/api` 下,**转发须保留 `/api`
 | `/api/memory/**` | 四层记忆读写 | 同上 |
 | `/api/chat`、`/api/chat/auto`、`/api/chat/auto/stream` | 直连/自动路由对话(含 SSE) | 同上 |
 | `/api/streamChat` | 逐 token 流式对话(SSE) | 同上 |
-| `/api/actuator/health` | 健康检查 | **白名单(免鉴权)** |
+| `/api/actuator/health` | 健康检查(聚合) | **白名单(免鉴权)** |
+| `/api/actuator/health/readiness` | **就绪探针(Redis 无关)** | **白名单(免鉴权)** |
+| `/api/actuator/health/liveness` | 存活探针(仅 ping) | **白名单(免鉴权)** |
 
 > P3/P5 已在 main:S3 网关用 `${AGENT_GATEWAY_URI:http://localhost:18080}` 路由到 agent。E2E 只需把 `AGENT_GATEWAY_URI` 指向 E2E 段 agent 端口(见 §2)。
+>
+> ⚠️ **健康探针选型(P7 实测要点)**:Redis/PgVector/DashScope 均可选(全有降级)。**主 `/api/actuator/health` 在 Redis 降级时返 503**(诚实聚合,redis 指示器 DOWN 可见)——故**就绪门控/LB/k8s 探针请打 `/api/actuator/health/readiness`(降级态仍 200,只看 ping+db)**,否则会把「可服务但 Redis 降级」误判为宕机。09/10 脚本现打主 `/health` 仅查可达性(连得上即过),不受影响;但若加 HTTP-200 断言,请改打 `/health/readiness`。该分组随 P7 jar 内置;若用旧 jar 可临时 env 覆盖 `MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE=ping,db`。
 
 ## 2. agent 启动所需 env(S3 加进 `e2e.env` + 起 agent 服务)
 
@@ -75,3 +79,4 @@ agent 提供这些前缀(均在 context-path `/api` 下,**转发须保留 `/api`
 
 ---
 *维护:S1。P6 配套硬化:F01 Redis 原子 GETDEL、限流 Redis 令牌桶(均带进程内降级)。Redis/网关真路径需 S3 在常驻 WSL 会话内实跑确认。*
+*P7 本机实测(`java -jar` 降级态 MySQL→H2/Redis→:6399/PgVector→:5499/enforce=true/无 DASHSCOPE):agent 正常起;`db=H2 UP`;A2 直连无头 `/api/agent/tools`→**401**;带 `X-User-Id`→**200**(返 `code:0` 工具列表,身份消费+包络双证);新增就绪分组 `/health/readiness`→**200**、`/health/liveness`→**200**、主 `/health`→**503**(诚实)。网关侧 A3/A4(经网关注入/SSE 真流式)仍需 S3 在 WSL 栈实跑。*
