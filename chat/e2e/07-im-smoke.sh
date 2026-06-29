@@ -32,7 +32,8 @@ signup(){ local email="$1"
 }
 
 echo "=== IM 链路 E2E (gw=$GW) ==="
-curl -s -o /dev/null --max-time 3 "$GW/actuator/health" || { echo "网关不可达"; exit 1; }
+ready=$(status "$GW/api/v1/contact/1/applyCount")
+[ "$ready" = "401" ] || { echo "网关不可达或鉴权未就绪(got=$ready)"; exit 1; }
 sql "SELECT 1" >/dev/null || { echo "E2E 库不可达($DB_SOCK)"; exit 1; }
 
 STAMP=$(date +%H%M%S)

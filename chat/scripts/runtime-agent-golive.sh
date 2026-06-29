@@ -21,6 +21,7 @@ STAMP="$(date +%Y%m%d%H%M%S)"
 [ -f "$OVERRIDE" ] || { echo "missing override: $OVERRIDE"; exit 1; }
 [ -f "$ENV_FILE" ] || { echo "missing env file: $ENV_FILE"; exit 1; }
 [ -f "$AGENT_JAR" ] || { echo "missing agent jar: $AGENT_JAR"; exit 1; }
+set -a; . "$ENV_FILE"; set +a
 
 echo "== backup current infinitechat/agent:local -> :pre-p10-$STAMP =="
 if docker image inspect infinitechat/agent:local >/dev/null 2>&1; then
@@ -40,16 +41,17 @@ docker build -f "$DOCKERFILE" \
 echo "== recreate agent container with committed override =="
 docker compose -f "$BASE" -f "$OVERRIDE" --env-file "$ENV_FILE" up -d --no-build agent
 
-echo "== wait for agent port =="
+echo "== wait for agent readiness =="
+READY_URL="${AGENT_READY_URL:-http://127.0.0.1:${AGENT_SERVICE_PORT:-10011}/api/actuator/health/readiness}"
 for _ in $(seq 1 60); do
-  if timeout 2 bash -c "echo > /dev/tcp/127.0.0.1/${AGENT_SERVICE_PORT:-10011}" 2>/dev/null; then
-    echo "agent port ${AGENT_SERVICE_PORT:-10011} is open"
+  if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$READY_URL" 2>/dev/null)" = "200" ]; then
+    echo "agent readiness is 200: $READY_URL"
     docker ps --filter name=infinitechat-agent --format '  {{.Names}} {{.Image}} {{.Status}}'
     exit 0
   fi
   sleep 2
 done
 
-echo "agent did not open port ${AGENT_SERVICE_PORT:-10011}; log tail:"
+echo "agent readiness did not become 200: $READY_URL; log tail:"
 docker logs --tail 80 infinitechat-agent 2>&1 || true
 exit 1

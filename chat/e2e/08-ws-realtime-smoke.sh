@@ -14,6 +14,7 @@ PASS="${E2E_PASSWORD:-Test@12345}"; CODE="123456"
 P=0; F=0
 ok(){ echo "  ✅ $1"; P=$((P+1)); }
 ng(){ echo "  ❌ $1  (expect=$2 got=$3)"; F=$((F+1)); }
+status(){ curl -s -o /dev/null -w '%{http_code}' "$@"; }
 jstr(){ grep -oE "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/'; }
 jwt_sub(){ local p m; p=$(printf '%s' "$1" | cut -d. -f2); m=$(( ${#p} % 4 )); [ "$m" = 2 ] && p="${p}=="; [ "$m" = 3 ] && p="${p}="; printf '%s' "$p" | tr '_-' '/+' | base64 -d 2>/dev/null | sed -E 's/.*"sub":"?([^",}]*)"?.*/\1/'; }
 sql(){ $DB "$1" 2>/dev/null; }
@@ -28,7 +29,8 @@ signup(){ local email="$1" login tok uid
 WSCLIENT="${REPO_E2E}/_ws_recv.py"; [ -f "$WSCLIENT" ] || WSCLIENT="$(dirname "$0")/_ws_recv.py"
 command -v python3 >/dev/null || { echo "需要 python3"; exit 1; }
 echo "=== IM 实时 WS 闭环 E2E (netty=$NETTY) ==="
-curl -s -o /dev/null --max-time 3 "$GW/actuator/health" || { echo "网关不可达"; exit 1; }
+ready=$(status "$GW/api/v1/contact/1/applyCount")
+[ "$ready" = "401" ] || { echo "网关不可达或鉴权未就绪(got=$ready)"; exit 1; }
 
 STAMP=$(date +%H%M%S)
 A=( $(signup "rtA_$STAMP@lingxi.test") ); AT="${A[0]}"; AID="${A[1]}"

@@ -12,6 +12,10 @@ spring:
       httpclient:
         connect-timeout: 60000 # 连接超时时间，单位毫秒
         response-timeout: 60000 # 响应超时时间，单位毫秒
+      default-filters:
+        # 网关是唯一浏览器 CORS 边界。实际请求已由 globalcors 校验后再转发，
+        # 内部服务不应再按浏览器 Origin 做二次 CORS 判定(否则 SSE POST 会 403)。
+        - RemoveRequestHeader=Origin
       # 全局配置
       # 配置全局跨域
       globalcors:
@@ -21,8 +25,9 @@ spring:
             # 用 allowedOriginPatterns(非 allowedOrigins):allowCredentials=true 时不能用 "*" 源,
             # 但可用 pattern。默认放行任意 localhost 端口(覆盖前端 5173/5180 等 dev 源,免去
             # dev-proxy strip-Origin 依赖);生产用 GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS 设真实前端源。
-            allowedOriginPatterns:
-              - "${GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:[*]}"
+            # GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS 支持逗号分隔:
+            #   http://localhost:[*],http://127.0.0.1:[*],http://100.*:[*],https://chat.example.com
+            allowedOriginPatterns: "${GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:[*],http://127.0.0.1:[*],http://100.*:[*]}"
             allowedMethods:
               - "GET"
               - "POST"
