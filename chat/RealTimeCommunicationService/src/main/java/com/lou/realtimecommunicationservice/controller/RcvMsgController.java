@@ -1,6 +1,6 @@
 package com.lou.realtimecommunicationservice.controller;
 
-import com.lou.realtimecommunicationservice.common.Result;
+import com.lou.common.api.Result;
 import com.lou.realtimecommunicationservice.data.ReceiveMessage.ReceiveMessageRequest;
 import com.lou.realtimecommunicationservice.data.ReceiveMessage.ReceiveMessageResponse;
 import com.lou.realtimecommunicationservice.service.RcvMsgService;

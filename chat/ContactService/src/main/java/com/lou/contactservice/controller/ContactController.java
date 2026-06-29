@@ -1,8 +1,10 @@
 package com.lou.contactservice.controller;
 
+import com.lou.common.api.ApiException;
+import com.lou.common.api.CommonError;
 import com.lou.common.api.PageResult;
+import com.lou.common.api.Result;
 import com.lou.common.security.RequestContext;
-import com.lou.contactservice.common.Result;
 import com.lou.contactservice.config.UserContext;
 import com.lou.contactservice.data.AddFriend.AddFriendRequest;
 import com.lou.contactservice.data.FriendList.FriendListItem;
@@ -70,12 +72,14 @@ public class ContactController {
     private GroupAdminService groupAdminService;
 
     /**
-     * 校验请求中代表"操作人本人"的ID与网关注入的可信用户ID一致。
-     * 当 UserContext 为空（内部调用）时跳过校验，返回 true。
+     * 校验请求中代表"操作人本人"的ID与网关注入的可信用户ID一致；不一致即越权,
+     * 抛 ApiException(FORBIDDEN) -> 403。当 UserContext 为空（内部调用）时跳过校验。
      */
-    private boolean isOperatorMismatch(Long operatorId) {
+    private void requireOperator(Long operatorId) {
         Long current = UserContext.get();
-        return current != null && operatorId != null && !current.equals(operatorId);
+        if (current != null && operatorId != null && !current.equals(operatorId)) {
+            throw new ApiException(CommonError.FORBIDDEN, "无权限操作");
+        }
     }
 
 //    @GetMapping("/user")
@@ -98,7 +102,7 @@ public class ContactController {
      * GET /api/v1/contact/friends?cursor=&limit=&status=
      */
     @GetMapping("/friends")
-    public com.lou.common.api.Result<PageResult<FriendListItem>> listFriends(
+    public Result<PageResult<FriendListItem>> listFriends(
             @RequestParam(value = "cursor", required = false) String cursor,
             @RequestParam(value = "limit", required = false) Integer limit,
             @RequestParam(value = "status", required = false) Integer status) {
@@ -108,28 +112,24 @@ public class ContactController {
         int safeStatus = (status == null) ? DEFAULT_FRIEND_STATUS : status;
 
         PageResult<FriendListItem> page = friendService.listFriends(actorId, safeStatus, cursor, safeLimit);
-        return com.lou.common.api.Result.ok(page);
+        return Result.ok(page);
     }
 
     @GetMapping("/{userUUid}/user")
     public Result<SearchUserResponse> searchUser(@Valid @ModelAttribute SearchUserRequest request) {
-        if (isOperatorMismatch(Long.valueOf(request.getUserUuid()))) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(Long.valueOf(request.getUserUuid()));
         SearchUserResponse response = friendService.getUserDetails(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @PostMapping("/{userUuid}/friend/{receiveUserUuid}")
     public Result<?> addFriend(@NotNull(message = "发起人不能为空") @PathVariable("userUuid") String userUuid,
                                @NotNull(message = "接收者不能为空") @PathVariable("receiveUserUuid") String receiveUserUuid,
                                @RequestBody AddFriendRequest request) throws Exception {
-        if (isOperatorMismatch(Long.valueOf(userUuid))) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(Long.valueOf(userUuid));
         applyFriendService.addFriend(userUuid, receiveUserUuid, request);
-        return Result.OK(1);
+        return Result.ok(1);
     }
 
     /**
@@ -137,121 +137,99 @@ public class ContactController {
      */
     @GetMapping("/{userUuid}/friend/{friendUuid}")
     public Result<FriendDetailResponse> getFriendDetail(@Valid @ModelAttribute FriendDetailRequest request) {
-        if (isOperatorMismatch(request.getUserUuid())) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(request.getUserUuid());
         FriendDetailResponse response = friendService.getFriendDetails(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @GetMapping("/{userUuid}/applyCount")
     public Result<UnreadApplyResponse> getUnreadApplyCount(@Valid @ModelAttribute UnreadApplyRequest request) {
-        if (isOperatorMismatch(request.getUserUuid())) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(request.getUserUuid());
         UnreadApplyResponse response = applyFriendService.getUnreadApply(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
 
     @GetMapping("/{userUuid}/apply")
     public Result<ApplyListResponse> getApplyList(@Valid @ModelAttribute ApplyListRequest request) {
-        if (isOperatorMismatch(request.getUserUuid())) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(request.getUserUuid());
         ApplyListResponse response = applyFriendService.getApplyList(request);
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @PostMapping("{userUuid}/application/{status}")
     public Result<ModifyApplyResponse> modifyFriendApplicationStatus(@Valid @ModelAttribute ModifyApplyRequest request) throws Exception {
-        if (isOperatorMismatch(request.getUserUuid())) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(request.getUserUuid());
         ModifyApplyResponse response = applyFriendService.modifyApply(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
 
     @DeleteMapping("/{userUuid}/friend/{receiveUserUuid}")
     public Result<DeleteFriendResponse> deleteFriend(@Valid @ModelAttribute DeleteFriendRequest request) {
-        if (isOperatorMismatch(request.getUserUuid())) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(request.getUserUuid());
         DeleteFriendResponse response = friendService.deleteFriend(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @PostMapping("/{userUuid}/block/{receiveUserUuid}")
     public Result<BlockFriendResponse> blockFriend(@Valid @ModelAttribute BlockFriendRequest request) throws Exception {
-        if (isOperatorMismatch(Long.valueOf(request.getUserUuid()))) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(Long.valueOf(request.getUserUuid()));
         BlockFriendResponse response = friendService.blockFriend(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
 
     // Group
     @PostMapping("/groups")
     public Result<CreateGroupResponse> createGroup(@Valid @RequestBody CreateGroupRequest request) {
-        if (isOperatorMismatch(request.getCreatorId())) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(request.getCreatorId());
         CreateGroupResponse response = sessionService.createGroup(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @PostMapping("/group/invite")
     public Result<InviteGroupResponse> inviteGroup(@Valid @RequestBody InviteGroupRequest request) throws Exception {
-        if (isOperatorMismatch(request.getInviterId())) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(request.getInviterId());
         InviteGroupResponse response = groupService.inviteGroup(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @PostMapping("/group/kick")
     public Result<KickGroupMembersResponse> kickGroupMembers(@Valid @RequestBody KickGroupMembersRequest request) {
-        if (isOperatorMismatch(request.getOperatorId())) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(request.getOperatorId());
         KickGroupMembersResponse response = kickGroupService.kickGroupMembers(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @PostMapping("/group/exit")
     public Result<ExitGroupResponse> exitGroup(@RequestBody ExitGroupRequest request) {
-        if (isOperatorMismatch(request.getUserId())) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(request.getUserId());
         ExitGroupResponse response = exitGroupService.exitGroup(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @GetMapping("/group/{sessionId}/members")
     public Result<GroupMembersResponse> getGroupMembers(@Valid GroupMembersRequest request) {
         GroupMembersResponse response = getGroupMembersService.getGroupMembers(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @PostMapping("/group/setAdmin")
     public Result<SetGroupAdminResponse> setGroupAdmin(@Valid @RequestBody SetGroupAdminRequest request) {
-        if (isOperatorMismatch(request.getUserId())) {
-            return Result.UserError(403, "无权限操作");
-        }
+        requireOperator(request.getUserId());
         SetGroupAdminResponse response = groupAdminService.setGroupAdmin(request);
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
 

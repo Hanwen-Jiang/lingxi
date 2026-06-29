@@ -1,111 +1,102 @@
 package com.lou.contactservice.exception;
 
 import com.lou.common.api.ApiException;
+import com.lou.common.api.CommonError;
 import com.lou.common.api.ErrorCode;
-import com.lou.contactservice.common.Result;
+import com.lou.common.api.FieldError;
+import com.lou.common.api.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
+/**
+ * 统一异常处理(item3 收口):全部返回 chat-common {@link Result} 包络 + §3 真实 HTTP 状态。
+ * 旧自有包络(200+体内 code)已停用——领域异常按语义映射到 CommonError 大类的真实 HTTP。
+ */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /**
-     * chat-common 业务异常(新客户端端点):返回 chat-common 统一包络 + 真实 HTTP 状态。
-     * 比兜底的 Throwable 处理器更具体,优先匹配;不影响旧端点的自有 Result/200 行为。
-     */
+    private static ResponseEntity<Result<?>> of(ErrorCode e, String msg) {
+        return ResponseEntity.status(e.httpStatus()).body(Result.error(e, msg));
+    }
+
     @ExceptionHandler(ApiException.class)
-    public ResponseEntity<com.lou.common.api.Result<?>> handleApiException(ApiException ex) {
+    public ResponseEntity<Result<?>> handleApiException(ApiException ex) {
         ErrorCode error = ex.getError();
         log.warn("业务异常 code={} msg={}", error.code(), ex.getMessage());
-        return ResponseEntity
-                .status(error.httpStatus())
-                .body(com.lou.common.api.Result.error(error, ex.getMessage()));
+        return of(error, ex.getMessage());
     }
 
-
-    @ExceptionHandler(value = UserException.class)
-    public Result<?> handleUserException(UserException err) {
-        log.error("用户错误信息：{}", err.getMessage());
-
-        return Result.UserError(err.getCode(), err.getMessage());
+    /** 字段校验失败 -> 422 VALIDATION_FAILED + data.fieldErrors。 */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Result<?>> handleValid(MethodArgumentNotValidException e) {
+        List<FieldError> fieldErrors = new ArrayList<>();
+        e.getBindingResult().getFieldErrors().forEach(fe ->
+                fieldErrors.add(new FieldError(fe.getField(), fe.getDefaultMessage())));
+        log.warn("字段校验失败: {}", fieldErrors);
+        return ResponseEntity.status(CommonError.VALIDATION_FAILED.httpStatus())
+                .body(Result.error(CommonError.VALIDATION_FAILED, "字段校验失败", fieldErrors));
     }
 
-    @ExceptionHandler(value = CodeException.class)
-    public Result<?> handleCodeException(CodeException err) {
-        log.error("验证码信息错误：{}", err.getMessage());
-
-        return Result.UserError(err.getCode(), err.getMessage());
+    // ---- 领域异常 → 真实 HTTP(原先恒 200+体内 code,本轮翻 §3 状态) ----
+    @ExceptionHandler(UserException.class)
+    public ResponseEntity<Result<?>> handleUser(UserException e) {
+        log.warn("用户错误: {}", e.getMessage());
+        return of(CommonError.BAD_REQUEST, e.getMessage());
     }
 
-    @ExceptionHandler(value = DatabaseException.class)
-    public Result<?> handleCodeException(DatabaseException err) {
-        log.error("数据库错误：{}", err.getMessage());
-
-        return Result.DatabaseError(err.getMessage());
+    @ExceptionHandler(CodeException.class)
+    public ResponseEntity<Result<?>> handleCode(CodeException e) {
+        log.warn("验证码错误: {}", e.getMessage());
+        return of(CommonError.BAD_REQUEST, e.getMessage());
     }
 
-
-    @ExceptionHandler(value = Throwable.class)
-    public Result<?> handleException(Throwable err) {
-        log.error("未知错误:", err);
-
-        return Result.ServerError(err.getMessage());
+    @ExceptionHandler(ValidationException.class)
+    public ResponseEntity<Result<?>> handleValidation(ValidationException e) {
+        log.warn("数据验证异常: {}", e.getMessage());
+        return of(CommonError.VALIDATION_FAILED, e.getMessage());
     }
 
-    @ExceptionHandler(value = MethodArgumentNotValidException.class)
-    public Result<?> handleValidException(MethodArgumentNotValidException e) {
-        BindingResult bindingResult = e.getBindingResult();
-        Map<String, String> errorMap = new HashMap<>();
-        bindingResult.getFieldErrors().forEach((fieldError) -> {
-            errorMap.put(fieldError.getField(), fieldError.getDefaultMessage());
-        });
-
-        log.error("数据校验出现问题{}，错误信息为：{}", e.getMessage(), errorMap);
-
-        return Result.ValidError(errorMap.toString());
+    @ExceptionHandler(GroupException.class)
+    public ResponseEntity<Result<?>> handleGroup(GroupException e) {
+        log.warn("群组异常: {}", e.getMessage());
+        return of(CommonError.CONFLICT, e.getMessage());
     }
 
-    @ExceptionHandler(value = ServiceUnavailableException.class)
-    public Result<?> handleServiceUnavailableException(ServiceUnavailableException e) {
-        log.error("Netty服务不可用错误：{}", e.getMessage());
-        return Result.ServiceUnavailableError();
+    @ExceptionHandler(DatabaseException.class)
+    public ResponseEntity<Result<?>> handleDb(DatabaseException e) {
+        log.error("数据库错误: {}", e.getMessage());
+        return of(CommonError.DEPENDENCY_UNAVAILABLE, "数据依赖暂不可用");
+    }
+
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<Result<?>> handleUnavailable(ServiceUnavailableException e) {
+        log.error("依赖服务不可用: {}", e.getMessage());
+        return of(CommonError.DEPENDENCY_UNAVAILABLE, "依赖服务暂不可用");
     }
 
     @ExceptionHandler(MessageSendFailureException.class)
-    public Result<?> handleMessageSendFailure(MessageSendFailureException ex) {
-        log.error("消息发送失败，原始请求: {}", ex.getRequestPayload(), ex);
-        return Result.ServerError(ex.getError().getMessage())
-                .setCode(ex.getError().getCode())
-                .setData(ex.getRequestPayload()); // 可选返回失败请求数据
+    public ResponseEntity<Result<?>> handleSendFail(MessageSendFailureException ex) {
+        log.error("消息发送失败, payload={}", ex.getRequestPayload(), ex);
+        return of(CommonError.DEPENDENCY_UNAVAILABLE, "消息发送失败,请重试");
     }
 
-    @ExceptionHandler(value = ServiceException.class)
-    public Result<?> handleServiceException(ServiceException e) {
-        log.error("服务异常：{}", e.getMessage());
-        return Result.ServerError(e.getMessage());
+    @ExceptionHandler(ServiceException.class)
+    public ResponseEntity<Result<?>> handleService(ServiceException e) {
+        log.error("服务异常: {}", e.getMessage());
+        return of(CommonError.INTERNAL, "服务器内部错误");
     }
 
-    //GroupException
-    @ExceptionHandler(value = GroupException.class)
-    public Result<?> handleGroupException(GroupException e) {
-        log.error("群组异常：{}", e.getMessage());
-        return Result.GroupError(e.getCode(), e.getMessage());
+    /** 兜底 -> 500 INTERNAL(不泄内部细节)。 */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Result<?>> handleException(Exception err) {
+        log.error("未知错误:", err);
+        return of(CommonError.INTERNAL, "服务器内部错误");
     }
-
-    @ExceptionHandler(value = ValidationException.class)
-    public Result<?> handleValidationException(ValidationException e) {
-        log.error("数据验证异常：{}", e.getMessage());
-        return Result.ValidError(e.getMessage());
-    }
-
-
-
 }

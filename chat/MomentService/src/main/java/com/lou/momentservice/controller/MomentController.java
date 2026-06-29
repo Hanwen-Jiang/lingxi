@@ -1,6 +1,8 @@
 package com.lou.momentservice.controller;
 
-import com.lou.momentservice.common.Result;
+import com.lou.common.api.ApiException;
+import com.lou.common.api.CommonError;
+import com.lou.common.api.Result;
 import com.lou.momentservice.data.deleteLike.DeleteLikeRequest;
 import com.lou.momentservice.data.deleteLike.DeleteLikeResponse;
 import com.lou.momentservice.data.createComment.CreateCommentRequest;
@@ -23,9 +25,7 @@ import com.lou.momentservice.service.MomentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
@@ -58,7 +58,7 @@ public class MomentController {
 
         CreateMomentResponse response = momentService.createMoment(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @DeleteMapping("{momentId}")
@@ -67,7 +67,7 @@ public class MomentController {
 
         DeleteMomentResponse response = momentService.deleteMoment(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @PostMapping("/like/{momentId}")
@@ -76,7 +76,7 @@ public class MomentController {
 
         CreateLikeResponse response = momentLikeService.likeMoment(momentId, request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @DeleteMapping("/like/{momentId}")
@@ -85,7 +85,7 @@ public class MomentController {
 
         DeleteLikeResponse response = momentLikeService.deleteLikeMoment(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @PostMapping("/comment/{momentId}")
@@ -99,7 +99,7 @@ public class MomentController {
                 .setMomentCommentDTO(momentCommentDTO);
 
         CreateCommentResponse response = momentCommentService.createComment(createCommentRequest);
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @DeleteMapping("/comment/{momentId}")
@@ -107,14 +107,14 @@ public class MomentController {
         verifyOperator(request.getUserId());
 
         DeleteCommentResponse response = momentCommentService.deleteComment(request);
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     @GetMapping("/list/{userId}")
     public Result<GetMomentListResponse> getMomentList(@Valid @ModelAttribute GetMomentListRequest request) {
         GetMomentListResponse response = momentService.getMomentList(request);
 
-        return Result.OK(response);
+        return Result.ok(response);
     }
 
     /**
@@ -130,7 +130,7 @@ public class MomentController {
             return;
         }
         if (operatorUserId == null || !trusted.equals(operatorUserId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权代表他人操作");
+            throw new ApiException(CommonError.FORBIDDEN, "无权代表他人操作");
         }
     }
 
@@ -146,14 +146,14 @@ public class MomentController {
             return;
         }
         if (operatorUserId == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权代表他人操作");
+            throw new ApiException(CommonError.FORBIDDEN, "无权代表他人操作");
         }
         try {
             if (!trusted.equals(Long.valueOf(operatorUserId.trim()))) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权代表他人操作");
+                throw new ApiException(CommonError.FORBIDDEN, "无权代表他人操作");
             }
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权代表他人操作");
+            throw new ApiException(CommonError.FORBIDDEN, "无权代表他人操作");
         }
     }
 

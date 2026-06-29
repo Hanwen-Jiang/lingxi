@@ -221,15 +221,18 @@ public class MomentServiceImpl extends ServiceImpl<MomentMapper, Moment> impleme
             momentIds.add(moment.getMomentId());
         }
 
-        // 查询点赞
-        QueryWrapper<MomentLike> momentLikeQueryWrapper = new QueryWrapper<>();
-        momentLikeQueryWrapper.in("moment_id", momentIds).ge("update_time", request.getTime());
-        List<MomentLike> momentLikeList = momentLikeService.list(momentLikeQueryWrapper);
+        // 查询点赞 / 评论(momentIds 为空时跳过:空 IN() 会产生非法 SQL → 500;新用户无动态即命中)
+        List<MomentLike> momentLikeList = new ArrayList<>();
+        List<MomentComment> momentCommentList = new ArrayList<>();
+        if (!momentIds.isEmpty()) {
+            QueryWrapper<MomentLike> momentLikeQueryWrapper = new QueryWrapper<>();
+            momentLikeQueryWrapper.in("moment_id", momentIds).ge("update_time", request.getTime());
+            momentLikeList = momentLikeService.list(momentLikeQueryWrapper);
 
-        // 查询评论
-        QueryWrapper<MomentComment> momentCommentQueryWrapper = new QueryWrapper<>();
-        momentCommentQueryWrapper.in("moment_id", momentIds).ge("update_time", request.getTime());
-        List<MomentComment> momentCommentList = momentCommentService.list(momentCommentQueryWrapper);
+            QueryWrapper<MomentComment> momentCommentQueryWrapper = new QueryWrapper<>();
+            momentCommentQueryWrapper.in("moment_id", momentIds).ge("update_time", request.getTime());
+            momentCommentList = momentCommentService.list(momentCommentQueryWrapper);
+        }
 
         // 组装结果
         ArrayList<Long> deleteMoment = new ArrayList<>();
