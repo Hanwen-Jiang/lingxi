@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# P10 agent go-live: bake S1-built current-source agent jar into the Docker
+# production image, tag the previous image for rollback, then recreate only
+# the agent container with the committed auth/gateway override.
+set -euo pipefail
+
+DEPLOY="${DEPLOY:-/mnt/d/InfiniteChatDeploy/projecta/deploy}"
+BASE="${BASE:-$DEPLOY/docker-compose.yml}"
+DOCKERFILE="${DOCKERFILE:-$DEPLOY/dockerfiles/java-app.Dockerfile}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OVERRIDE="${OVERRIDE:-$SCRIPT_DIR/deploy/docker-golive.override.yml}"
+ENV_FILE="${ENV_FILE:-$HOME/p9-deploy/.env}"
+
+AGENT_SOURCE_TREE="${AGENT_SOURCE_TREE:-/mnt/e/jhw/proj-agent-p10}"
+AGENT_JAR="${AGENT_JAR:-$AGENT_SOURCE_TREE/agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar}"
+STAGE="${STAGE:-$HOME/p10-agent-docker-context}"
+STAMP="$(date +%Y%m%d%H%M%S)"
+
+[ -f "$BASE" ] || { echo "missing compose: $BASE"; exit 1; }
+[ -f "$DOCKERFILE" ] || { echo "missing Dockerfile: $DOCKERFILE"; exit 1; }
+[ -f "$OVERRIDE" ] || { echo "missing override: $OVERRIDE"; exit 1; }
+[ -f "$ENV_FILE" ] || { echo "missing env file: $ENV_FILE"; exit 1; }
+[ -f "$AGENT_JAR" ] || { echo "missing agent jar: $AGENT_JAR"; exit 1; }
+
+echo "== backup current infinitechat/agent:local -> :pre-p10-$STAMP =="
+if docker image inspect infinitechat/agent:local >/dev/null 2>&1; then
+  docker tag infinitechat/agent:local "infinitechat/agent:pre-p10-$STAMP"
+fi
+
+echo "== stage agent jar =="
+rm -rf "$STAGE"
+mkdir -p "$STAGE/agent/target"
+cp -f "$AGENT_JAR" "$STAGE/agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar"
+
+echo "== build infinitechat/agent:local from $AGENT_JAR =="
+docker build -f "$DOCKERFILE" \
+  --build-arg JAR_FILE="agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar" \
+  -t infinitechat/agent:local "$STAGE"
+
+echo "== recreate agent container with committed override =="
+docker compose -f "$BASE" -f "$OVERRIDE" --env-file "$ENV_FILE" up -d --no-build agent
+
+echo "== wait for agent port =="
+for _ in $(seq 1 60); do
+  if timeout 2 bash -c "echo > /dev/tcp/127.0.0.1/${AGENT_SERVICE_PORT:-10011}" 2>/dev/null; then
+    echo "agent port ${AGENT_SERVICE_PORT:-10011} is open"
+    docker ps --filter name=infinitechat-agent --format '  {{.Names}} {{.Image}} {{.Status}}'
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "agent did not open port ${AGENT_SERVICE_PORT:-10011}; log tail:"
+docker logs --tail 80 infinitechat-agent 2>&1 || true
+exit 1

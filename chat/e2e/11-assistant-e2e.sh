@@ -19,6 +19,7 @@ status(){ curl -s -o /dev/null -w '%{http_code}' "$@"; }
 jstr(){ grep -oE "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/'; }
 jwt_sub(){ local p m; p=$(printf '%s' "$1" | cut -d. -f2); m=$(( ${#p} % 4 )); [ "$m" = 2 ] && p="${p}=="; [ "$m" = 3 ] && p="${p}="; printf '%s' "$p" | tr '_-' '/+' | base64 -d 2>/dev/null | sed -E 's/.*"sub":"?([^",}]*)"?.*/\1/'; }
 nollm(){ printf '%s' "$1" | grep -qiE "未配置|not configured|MissingAiModel|Unavailable"; }
+redis_cmd(){ redis-cli --no-auth-warning -h "${REDIS_HOST:-127.0.0.1}" -p "${REDIS_PORT:-6379}" -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} "$@"; }
 
 echo "=== 内助手全链路 E2E (gw=$GW, agent=$AGENT) ==="
 curl -s -o /dev/null --max-time 3 "$GW/actuator/health" || { echo "网关不可达"; exit 1; }
@@ -26,7 +27,7 @@ curl -s -o /dev/null --max-time 3 "$AGENT/api/actuator/health" || { echo "agent 
 
 echo "[邮箱登录]"
 EMAIL="lx_$(date +%j%H%M%S)@lingxi.test"
-redis-cli --no-auth-warning -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} set "verify:email:$EMAIL" "$CODE" EX 300 >/dev/null 2>&1
+redis_cmd set "verify:email:$EMAIL" "$CODE" EX 300 >/dev/null 2>&1
 curl -s -X POST -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\",\"code\":\"$CODE\"}" "$GW/api/v1/user/register" >/dev/null
 login=$(curl -s -X POST -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" "$GW/api/v1/user/login")
 TOKEN=$(printf '%s' "$login" | jstr token); UID_=$(printf '%s' "$login" | jstr userId)

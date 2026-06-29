@@ -15,10 +15,11 @@ status(){ curl -s -o /dev/null -w '%{http_code}' "$@"; }
 jstr(){ grep -oE "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/'; }
 jnum(){ grep -oE "\"$1\"[[:space:]]*:[[:space:]]*-?[0-9]+" | head -1 | grep -oE -- '-?[0-9]+$'; }
 has(){ printf '%s' "$1" | grep -q "$2"; }
+redis_cmd(){ redis-cli --no-auth-warning -h "${REDIS_HOST:-127.0.0.1}" -p "${REDIS_PORT:-6379}" -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} "$@"; }
 
 echo "=== 客户端 API 冒烟 (gw=$GW, email=$EMAIL) ==="
 curl -s -o /dev/null --max-time 3 "$GW/actuator/health" || { echo "网关不可达"; exit 1; }
-redis-cli --no-auth-warning -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} set "verify:email:$EMAIL" "$CODE" EX 300 >/dev/null 2>&1
+redis_cmd set "verify:email:$EMAIL" "$CODE" EX 300 >/dev/null 2>&1
 curl -s -X POST -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\",\"code\":\"$CODE\"}" "$GW/api/v1/user/register" >/dev/null
 login=$(curl -s -X POST -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" "$GW/api/v1/user/login")
 TOKEN=$(printf '%s' "$login" | jstr token)

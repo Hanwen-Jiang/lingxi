@@ -23,6 +23,7 @@ status(){ curl -s -o /dev/null -w '%{http_code}' "$@"; }
 jstr(){ grep -oE "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/'; }
 jnum(){ grep -oE "\"$1\"[[:space:]]*:[[:space:]]*-?[0-9]+" | head -1 | grep -oE -- '-?[0-9]+$'; }
 jwt_sub(){ local p m; p=$(printf '%s' "$1" | cut -d. -f2); m=$(( ${#p} % 4 )); [ "$m" = 2 ] && p="${p}=="; [ "$m" = 3 ] && p="${p}="; printf '%s' "$p" | tr '_-' '/+' | base64 -d 2>/dev/null | sed -E 's/.*"sub":"?([^",}]*)"?.*/\1/'; }
+redis_cmd(){ redis-cli --no-auth-warning -h "${REDIS_HOST:-127.0.0.1}" -p "${REDIS_PORT:-6379}" -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} "$@"; }
 
 echo "=== E2E 鉴权闭环冒烟(D14 邮箱)  (gateway=$GW, email=$EMAIL) ==="
 if ! curl -s -o /dev/null --max-time 3 "$GW/actuator/health"; then
@@ -46,8 +47,7 @@ got=$(status -X POST -H 'Content-Type: application/json' -H "X-Internal-Token: $
 [ "$got" != "401" ] && ok "T6 带正确 X-Internal-Token → 非401 (got=$got)" || ng "T6 带内部令牌应放行" "!=401" "$got"
 
 echo "[邮箱注册(BCrypt) + 登录(签发 HS256 JWT)]"
-redis-cli --no-auth-warning -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} \
-  set "verify:email:$EMAIL" "$CODE" EX 300 >/dev/null 2>&1 || echo "  (warn: redis 预置验证码失败)"
+redis_cmd set "verify:email:$EMAIL" "$CODE" EX 300 >/dev/null 2>&1 || echo "  (warn: redis 预置验证码失败)"
 reg=$(curl -s -X POST -H 'Content-Type: application/json' \
   -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWD\",\"code\":\"$CODE\"}" "$GW/api/v1/user/register")
 ck "T7 邮箱注册成功 code=0" 0 "$(printf '%s' "$reg" | jnum code)"

@@ -5,7 +5,8 @@ set -uo pipefail
 DEPLOY=/mnt/d/InfiniteChatDeploy/projecta/deploy
 BASE="$DEPLOY/docker-compose.yml"
 DOCKERFILE="$DEPLOY/dockerfiles/java-app.Dockerfile"
-OVERRIDE="/mnt/e/jhw/proj-chatbe-p9/chat/scripts/deploy/docker-golive.override.yml"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OVERRIDE="$SCRIPT_DIR/deploy/docker-golive.override.yml"
 V09="$HOME/projecta-v0.9"
 STAGE="$HOME/p9-deploy"; mkdir -p "$STAGE"
 AUG="$STAGE/.env"
