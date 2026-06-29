@@ -841,6 +841,31 @@
 
 ## S4 · chat 前端(owns chat-frontend/)
 
+### 2026-06-29 · P12 unit3:release polish 验证收口(build/test/verify + UI final check)(分支 feat/chat-frontend-p12)
+- 完成:① P12 改动验证完成:`npm run test -w chat-frontend` **4/4 绿**;`npm run build -w chat-frontend` **绿**(Vite 2152 modules,仅既有 HeroUI CSS minify `:is()` warning);`npm run verify:ui -w chat-frontend` **绿**(50 files);`git diff --check` 无空白错误(仅 Windows LF/CRLF 提示)。② UI final check 走真实 prod proxy:错误态(错误密码登录显示 `邮箱或密码不正确`,overflow 0);空态(真实新账号 `s4_p12_empty_221248@lingxi.test` 无会话,`还没有会话`,overflow 0);深色桌面(`?theme=dark`,html `data-theme=dark` + `.dark`,body bg `rgb(0,0,0)`,overflow 0);深色移动 375x812(`/messages?theme=dark`,bottom nav 存在,空态可见,overflow 0)。
+- 产出物:本单元只写 STATUS;build 产物 `chat-frontend/dist/` 未纳入 git。
+- 关键决策:继续不改根 `package.json`/lockfile,遵守 S4 只改 `chat-frontend/` 与 `packages/design-system/` 的范围;`docs/planning/STATUS.md` 作为本轮指定 ledger 例外。
+- 阻塞:媒体图片发布验收仍被 unit2 的 COS CORS + public read/CDN 403 挡住;其余 release polish 绿。
+- 交接:无代码交接;HUB 若要整体仓库版本/lockfile `1.0.0`,需在中枢分支统一处理。
+- 待中枢确认:同 unit2 的 COS 路线 + 根包版本路线。
+
+### 2026-06-29 · P12 unit2:生产 `:10010` 全 UI 浏览器烟测 + 媒体/COS 可见性定位(分支 feat/chat-frontend-p12)
+- 完成:① 运行态基线:`SMOKE_ENV=~/p9-deploy/.env GATEWAY_PUBLIC_PORT=10010 bash chat/scripts/runtime-smoke.sh` 对 WSL prod `:10010` **11/11 绿**(无 token/garbage 401、注册登录、IM 发/落库/历史、agent SSE、跨源 OPTIONS+实际 POST SSE、F01 challenge/confirm/replay)。Windows `127.0.0.1:10010` 仍不可达,本轮浏览器访问方式为 Vite same-origin proxy `127.0.0.1:5273 -> http://100.122.46.119:10010`(不 mock)。② UI 真栈:账号 `live_b_213305@lingxi.test` 登录成功;会话 `99213305` 历史显示 `live-213305`;A 侧真实 API 发 `p12-ui-realtime-1782740951560` 后 B 浏览器无需刷新出现;IM 内助手 prompt `P12 UI SSE ...` 经 `/api/chat/auto/stream` 返回真实 §9/agent 答复并渲染;桌面与 mobile 视口 `scrollWidth-clientWidth=0`。③ 媒体:浏览器真实文件输入上传 PNG 时,`POST /api/v1/user/media/upload-url` 200,随后 COS 预签名 `PUT` 的浏览器 preflight 到 `https://infinite-chat-1306566676.cos.ap-guangzhou.myqcloud.com/...` 返回 **403 application/xml**,控制台 CORS 拦截,因此 UI 图片发送停在上传阶段、未进入 `POST /api/v1/chat/session`。④ direct API 补证(非 mock):修正脚本 `Content-Type` 后同账号 `upload-url` 200,Node 直传 presigned `PUT`=200,随后用后端返回 `fileUrl=https://img.infinitechat.nsnzd.cn/chat/2071587764226363392/20260629/117ac63dc3284b8383ef1bd9ef3e231e.png` 发图片消息成功(`messageId=347045399091740672`);但该 `fileUrl` 匿名 GET=**403 AccessDenied / application/xml**。重载 UI 历史页后 `<img alt="图片消息">` 存在,`src` 为该后端 `fileUrl`,但 `naturalWidth=0`;浏览器对 XML/403 图片响应报 `net::ERR_BLOCKED_BY_ORB`。
+- 产出物:本单元只写 STATUS;未改前端媒体代码。
+- 关键决策:确认前端已经使用后端返回的 M11 `fileUrl`/`uploadUrl`: `uploadMedia()` 拿 `fileUrl`,图片消息 body 为 `{url:fileUrl,size}`,`MessageBubble` 直接 `<img src={message.content}>`。当前 chat media 契约未返回 auth download URL,所以 S4 不做 URL 替换或签名绕过。
+- 阻塞:🟡 用户/COS 基建挡媒体可见:1) **COS bucket CORS** 需允许浏览器从前端源对 presigned object URL 发 PUT:AllowedOrigins 至少含 `http://127.0.0.1:5273` 与正式前端域名;AllowedMethods `PUT,GET,HEAD`(预检 OPTIONS 由 COS 响应);AllowedHeaders 至少 `Content-Type`(建议 `*`);ExposeHeaders 建议 `ETag,x-cos-request-id`;MaxAgeSeconds 建议 `600`。2) **公开读/CDN** 需让匿名 GET `https://img.infinitechat.nsnzd.cn/chat/*` 返回图片而非 XML 403:将 COS bucket `infinite-chat-1306566676` 设为 public-read/private-write,或配置 bucket policy `Principal:*` + `Action:cos:GetObject` + `Resource:qcs::cos:ap-guangzhou:uid/1306566676:infinite-chat-1306566676/chat/*`;若 `img.infinitechat.nsnzd.cn` 是 CDN 域名,需确认 CDN 回源到同 bucket/path,关闭会拦普通 GET 的鉴权/防盗链,或配置 CDN 私有源回源鉴权但客户端访问 CDN URL 无需签名。验收命令:`curl -I https://img.infinitechat.nsnzd.cn/chat/...png` 应返回 `200 image/png|image/*`(当前 `403 application/xml`)。
+- 交接:S3/HUB 无需再追 P11 CORS POST/SSE,本轮实测已通;媒体交给用户/COS 配置或 S3 deploy 文档固化。若后端未来改为私有桶,需由 S3 提供 auth download endpoint/短链字段,再由 S4 切渲染 URL。
+- 待中枢确认:COS bucket/CDN 采用“公开读 chat/*”还是“后端 auth download URL”路线;当前前端按既有 M11 `fileUrl` 公开读契约验收。
+
+### 2026-06-29 · P12 unit1:版本升 1.0.0 + D5 sessionId 前端请求收口(分支 feat/chat-frontend-p12,独立 worktree)
+- 背景:从新 main `bfbd470` 起独立 worktree `E:\jhw\proj-chat-p12`,分支 `feat/chat-frontend-p12`。已先读 HUB P11 与 S4 P10: P11 已由 S1 修好 agent string `sessionId` 双读/边界映射,由 S3 修好生产跨源 POST/SSE CORS(`RemoveRequestHeader=Origin`,网关为唯一 CORS 边界);P10 仍待确认 COS/CDN `fileUrl` 403。
+- 完成:① `chat-frontend` 与 `packages/design-system` 包版本升 `1.0.0`(根 `package.json`/`package-lock.json` 不动,因 S4 本轮只允许改两个前端目录)。② `realApi.streamAssistant` 恢复随请求发送 `sessionId: String(sessionId)`,包括 `s-lingxi` 这类 client-only 助手线程;P8/P10 为规避旧 agent Long 反序列化而省略非数字 sessionId 的逻辑已不再符合 P11 后契约。
+- 产出物:`chat-frontend/package.json`,`packages/design-system/package.json`,`chat-frontend/src/api/real.ts`。
+- 关键决策:IM 历史/read 仍只对数字后端会话命中真实接口;但 agent SSE 入口按 P11 D5 统一发送 string sessionId,前端不再保留旧阻塞期 workaround。
+- 阻塞:无。
+- 交接:无。
+- 待中枢确认:根包版本/lockfile 是否由 HUB 统一升 `1.0.0`(S4 受目录约束未改)。
+
 ### 2026-06-29 · P10:指向生产 `:10010` 浏览器冲烟 + client-only 助手线程抗 WS 抖动(分支 feat/chat-frontend-p10,独立 worktree)
 - 背景:P9 已把 chat Docker 生产栈切到鉴权版;P10 任务是前端指向 WSL 生产运行态 `:10010` 做真栈冒烟,不 mock。worktree `E:\jhw\proj-chat-p10`,分支 `feat/chat-frontend-p10`。
 - 完成:① **访问方式坐实**:WSL 内 `127.0.0.1:10010` 正常(无 token→401);Windows `127.0.0.1:10010` 超时(NAT/localhost 转发不可用);Windows 浏览器可用 WSL IP `http://100.122.46.119:10010` 访问生产网关(该 IP 会随 WSL 网络变化)。② **生产后端基线**:标准 `chat/scripts/runtime-smoke.sh` 在 agent ready 后 **9/9 绿**(鉴权401/garbage401/邮箱注册登录/IM 发消息/落库/历史/SSE 到 agent/F01 challengeToken 往返);首次失败为 agent 容器启动窗口,网关 `agent:10011 connection refused`,ready 后消失。③ **浏览器真栈冒烟**(dev 前端 real branch 指生产):播种真实用户+会话 `SID=88181651`;B 登录成功→会话/历史显示 `p10-history-p10181650`;B 浏览器 WS 握手写入 Redis `user:session:2071538376586170368`;A 走真实 API 发 `p10-realtime-181845`→B UI **无刷新实时出现**;无水平溢出。④ **内助手 SSE**:绝对跨源直连 WSL IP 的实际 POST `/api/chat/auto/stream` 被网关返回 **403 `Invalid CORS request`**(OPTIONS 预检 200,实际 POST 403);同源 dev proxy(`VITE_API_BASE=1`,`VITE_GATEWAY=http://100.122.46.119:10010`)不 mock,真实 POST 返回 `200 text/event-stream`,§9 `start` 后 `error: request timed out`(agent/LLM provider 超时),UI 冷启动复测显示用户 prompt + `request timed out`。⑤ **媒体图片**:媒体预签名 `code=0`,有效 PNG 对 presigned `uploadUrl` PUT=200,图片消息发送 `code=0`,前端 bubble/历史 URL 均存在;但公开 `fileUrl=https://img.infinitechat.nsnzd.cn/...png` GET=**403 AccessDenied**(Tencent COS),浏览器 `<img alt="图片消息"> naturalWidth=0`。

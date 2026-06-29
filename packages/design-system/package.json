@@ -1,6 +1,6 @@
 {
   "name": "@infinitechat/design-system",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "灵犀 (Lingxi) design system — brand tokens + HeroUI Pro brand wrappers + real-IM-state primitives. Owned by S4 (chat-frontend), consumed by S2 (agent-frontend). Source of truth: infinitechat-web/DESIGN.md + docs/planning D8/D12.",
   "type": "module",
