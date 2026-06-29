@@ -151,6 +151,21 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-28 · P6 IM 内助手就绪:F01/限流 Redis 多实例硬化 + J1 入 E2E 栈对接清单
+- 完成:在 P5 的 F01 挑战令牌/SSE §9 基础上做多实例硬化 + 产出 agent 入 E2E 栈对接清单。**分支 `feat/agent-backend-p6`(push origin,commit `9f763ab`,从新 main `902335d` 起)**:
+  - **F01 一次性消费改原子 GETDEL**:`ToolConfirmationChallengeService.consume` 原为 Redis `get`→`delete`(**非原子,并发可双消费**),改 `opsForValue().getAndDelete`(Redis 6.2+ 原子),杜绝竞态;一次性/TTL/指纹语义不变。内存兜底路径不变。
+  - **限流改 Redis 令牌桶**:`RateLimitInterceptor` 原进程内固定窗口(单实例),改 **Redis 令牌桶(Lua 原子,跨实例一致)**;Redis 缺失/异常**降级进程内固定窗口**。capacity=突发上限、refill=capacity/window-seconds。构造加 `ObjectProvider<StringRedisTemplate>`,测试同步改 4 参(noRedis→验降级路径)。
+  - **SSE §9 复核(无需改码)**:`StreamChatEvent.v` @Builder.Default 恒带;`/chat/auto/stream` 的 agent/RAG 工具路由 `buffered=true` 整段、direct/`/streamChat` 逐 token 省略 buffered——与 §9 一致。
+  - **J1 交付 `agent/docs/E2E-INTEGRATION.md`**:网关路由前缀(`/api/agent|rag|memory|chat/auto/stream|streamChat`,保留 `/api` 前缀)、agent E2E 启动 env(硬依赖极少、其余优雅降级、**agent 不持 JWT_SECRET_KEY**)、健康端点白名单、3 条鉴权断言、SSE §9 schema(给 S4)、F01 令牌形状(给 S2)。
+- 产出物:`agent/.../governance/ToolConfirmationChallengeService.java`、`ratelimit/RateLimitInterceptor.java`+`...Test.java`、`agent/docs/E2E-INTEGRATION.md`。
+- 关键决策:Redis 为 F01/限流主存储(多实例正确),进程内为优雅降级(单实例,与本工程一贯降级风格一致);限流码沿用字面量 42900(错误码归一以 chat-common 为准)。
+- 验证:**离线 test-compile 全过**;纯逻辑测试(F01 内存路径 / AuthPrincipal / Snowflake)`forkCount=0` 绿。⚠️ **F01/限流的真 Redis 路径 + 网关 SSE 真路径需带 Redis/网关环境实跑**(本环境无,见 E2E-INTEGRATION.md);Mockito 测试(限流/过滤器)仍受本机 fork-JVM OOM,**请 CI/HUB 复跑**。
+- 🤝 **交接 → S3(J1,关键):** 见 `agent/docs/E2E-INTEGRATION.md`。**请把 agent 加进 chat E2E 栈**:① E2E `e2e.env` 设 agent `SERVER_PORT`(建议 +100 段 `18180`)+ `AGENT_GATEWAY_ENFORCE_IDENTITY=true` + E2E Redis;② 网关 `AGENT_GATEWAY_URI` 指向该端口(路由 `/api/agent|rag|memory` 已在 main);③ 起 agent 服务(最小可达只需端口+enforce,其余降级);④ E2E 加 3 断言(经网关 200 / 直连无头 401 / 伪造头网关剥离)。agent:port 须仅内网可达。
+- 🤝 **交接 → S4(内助手接 agent):** 端点 + SSE §9 schema 见 E2E-INTEGRATION.md §4——缓冲式 `POST /api/agent/chat`;SSE `POST /api/chat/auto/stream`(agent 工具路由 `buffered:true` 整段)或 `/api/streamChat`(逐 token);`v` 必带、未知 type 容忍;记忆/RAG 按 X-User-Id 隔离。
+- 🤝 **交接 → S2(F01 令牌形状已 live):** `data.toolGovernance{confirmationRequired:true, challengeToken, challengeExpiresInSec}`;确认后原 prompt 重发带 `confirmationToken=<challengeToken>`(`AgentRequest.confirmationToken`,勿传工具名);一次性+TTL,过期重取。P6 起 Redis 路径原子,多实例安全。
+- 阻塞:无(agent 侧就绪;端到端实跑需 S3 把 agent 拉进 E2E 栈)。
+- 待中枢确认:① S3 按 J1 清单把 agent 纳入 E2E 栈并跑 3 断言。② CI/HUB 复跑 Mockito 测试 + F01/限流真 Redis 路径。③ D5 出参已 string(P5),其余包络真实 HTTP 翻转 agent 随时配合(翻前点名)。
+
 ### 2026-06-28 · P5 契约收尾(D5 string id + SSE §9 版本化)+ F01 工具确认挑战令牌 + 备 agent 给 IM 内助手
 - 完成:**分支 `feat/agent-backend-p5`(push origin,2 commits `f751a2d`/`7a71171`,从新 main `7c5352b` 起,独立 worktree)**。三件:
   - **① D5 string id 收尾(§5,expand/contract 双读)**:新增 `@SnowflakeId` 元注解(`@JsonSerialize ToStringSerializer`)——出参 Long id → JSON **string**;入参靠 Jackson 标量强制**天然双读**(数字/字符串都收),老前端不破。全量标注请求/响应 DTO 的 id 字段(userId/sessionId/审计行 id/StreamChatEvent.sessionId 等),**只动 id**、不碰时间戳/计数/分数/token 等非 id Long(§5 边界);`BaseResponse.timestamp` 不动。✅ 确认 **agent 成功 `code=0` 自 P2 已 live、无 200 残留**(本轮无需再翻;S3 侧 Auth+发消息端点已 code=0,其余 Contact/RTC/Offline/Moment 待与 S1 同批翻——agent 已就绪,见交接)。
@@ -288,6 +303,19 @@
 ---
 
 ## S2 · agent 前端(owns agent-frontend/)
+
+### 2026-06-28 · P5 wave2 · M4 F01 切真 + D5 string id + SSE §9(commits `d142195`/`94a491c`/`1c8ad23`)
+- 分支:`feat/agent-frontend-p5-wave2`(从 main `902335d` 起,HTTPS push,**未合 main**)。本轮三件主活全独立 commit 便于回滚;无跨流文件接触。
+- **unit 1 · M4 切真 F01 挑战令牌(commit `d142195`):** S1 P5 已 ship F01(server 一次性 challengeToken,fingerprinted on prompt+session+confirmedToolSet,Redis 原子 GETDEL 多实例安全)。前端把 P5 wave1 的 `confirmedTools[]` 壳一次性切真——`AgentResponse.toolGovernance` 类型化为 `{confirmationRequired, challengeToken, challengeExpiresInSec, pendingTools?}`;`api.agentChat` payload 把 `confirmedTools?: string[]` 换成 `confirmationToken?: string`(从类型上禁掉旧字段,防 silent no-op)。`useChat.confirmTools(assistantId, selected)` → `useChat.confirmTurn(assistantId, shouldRelease)`,内部用 stash 的 challengeToken 重放(**不传工具名**);多轮治理:响应再带新 token 则重新 stash;取消路径不二次 call agentChat、写"已取消工具调用"+ `meta.confirmationCancelled`。`ToolConfirmation` 卡片拿掉复选框(F01 不看工具名,选无意义),改信息展示 list + 确认/取消两按钮 + in-flight 锁。**关键不变量:有 challengeToken 才 stash 待确认 turn**(光有 pendingTools 而无 token=no-op)。测试 +10(useChat.confirmTurn 5 + ToolConfirmation 4 改 + 1 空 tools)。
+- **unit 2 · D5 string id 一次翻净(commit `94a491c`,13 文件 / 101+/111-):** S1(commit `1d29` P5)、S3(commit `22e0` P5)已把出参所有 id JSON string-encoded(雪花),入参在过渡期双读 number/string;前端把 types/hooks/components/tests 的 number id 一次翻 string 锁死,不再有歧义口子。types.ts:`ChatRequest.{userId,sessionId}` / `ChatResponse.sessionId` / `StreamChatEvent.sessionId` / `ChatSessionSummary` / `ChatTurnSummary` / `ChatSessionCreateRequest` / `MemoryItem` 全部 `number→string`。api.ts:`listSessions/getSession/summarizeSession/writeMemory/listUserMemories` signature 翻 string,`listUserMemories` 路径段补 `encodeURIComponent` 保护(原 number 直接拼,雪花 string 必须 escape)。hooks:`useChat/useSessions/useMemory` props 全 string;`useSessions.startNewSession` 用 `String(Date.now())` 作占位(server 雪花 minter = /chat/sessions,占位写完即被 server 返回值覆写)。App.tsx:**删 `userIdToNumber` 适配器**(雪花直接传不再降精度);`resolveInitialSession` 返 `{id:string, restored}`,storage 直存字符串。features:`ChatHeader/SessionList/MemoryPanel/SettingsWorkspace` props 全翻;`SessionList.onSelectionChange` 把 React-Aria 的 Key `String()` 归一(原 `Number(key) + isFinite` 守卫已无意义)。测试 ~30 处数字字面量翻字符串。
+- **unit 3 · SSE §9(v / buffered / 未知 type)(commit `1c8ad23`):** 03-contracts.md §9 live since S1 P5。本前端的 `streamAutoMode` 本身已 §9 兼容(只 react `delta`/`error` + metadata 帧,其他静默 skip;`parseSsePayload` 把 JSON.parse 结果原样透传不做形归一)。本 commit 显式契约化 + 锁回归测试。types.ts `StreamChatEvent` 加 `v?: number`、`buffered?: boolean`,`type` 的 string fallback 用注释点明"未知 type 静默忽略"的协议口径。测试 +5:useChat.test §9 conformance(① unknown type tool_call/citation_delta 混在 delta 之间不爆栈不污染;② buffered:true 单帧路径作为正常完成 turn);api.test parseSsePayload(① v+buffered 透传;② 未知 type 不被强翻 delta;③ 非 JSON data 行兜底 synthetic delta)。
+- 5 大门(逐轮):`tsc -b`/`eslint`/`prettier --check`/`vitest`(**68**,新增 15)/`vite build` 全 exit 0。
+- 产出物:`agent-frontend/src/{types.ts, api.ts, App.tsx, lib/chat.ts, hooks/{useChat,useSessions,useMemory}.ts, features/{chat/{MessageTimeline,ChatHeader,ToolConfirmation}.tsx, sessions/SessionList.tsx, settings/{MemoryPanel,SettingsWorkspace}.tsx}}` + 5 测试文件刷新。
+- **🛑 给 S1(F01 wire 一致性检查点):** 本前端按 S1 P5 ship 形 `{confirmationRequired, challengeToken, challengeExpiresInSec, pendingTools}` 接入;若 S1 后续重命名字段(特别是 `challengeExpiresInSec` 单位/前缀)请同时点名 S2 复测。本前端**只发 `confirmationToken`,绝不发 `confirmedTools[]`** — S1 端"客户端二次确认即放行"伪闸侧已可关闭(只靠 server token)。
+- 阻塞:WAVE 2 流式回复**端到端实跑**待 J1(agent 入 S3 E2E 栈 `:10110`);本轮的 F01 / D5 / §9 都已 wire-compatible,J1 ready 后即可端到端验证(token 一次性 + TTL 过期路径、buffered:true 真路由)。
+- 交接 → **HUB**:可下一轮集成检查点并入 `feat/agent-frontend-p5-wave2` → main(三件主活已分别 commit,zero file conflict)。
+- 待中枢确认:无。
+
 
 ### 2026-06-28 · P5 · 真实登录 E2E 实证(:10110)+ M3 模式路由 + M4 工具确认壳(commits `6dcd361`、`6330828`)
 - 分支:`feat/agent-frontend-p5`(从 main `7c5352b` 起,HTTPS push,**未合 main**)。⚠️ 中途共享工作树 HEAD 被外部(疑 S4)切到 `feat/chat-frontend-p5`,已自查并切回自己分支后才提交(改动全在 `agent-frontend/`,跨分支无冲突携带)。

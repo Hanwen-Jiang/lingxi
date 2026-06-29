@@ -1,6 +1,6 @@
 import {afterEach, describe, expect, it, vi} from "vitest";
 
-import {ApiError, createApiClient} from "./api";
+import {ApiError, createApiClient, parseSsePayload} from "./api";
 import type {ChatSessionSummary} from "./types";
 
 type MockResponseInit = {
@@ -22,8 +22,8 @@ function mockResponse({ok, status, json, text = "", contentType = "application/j
 }
 
 const session: ChatSessionSummary = {
-  userId: 1,
-  sessionId: 42,
+  userId: "1",
+  sessionId: "42",
   title: "First conversation",
   mode: "auto",
 };
@@ -40,7 +40,7 @@ describe("createApiClient.listSessions", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const api = createApiClient("/api");
-    const result = await api.listSessions(1);
+    const result = await api.listSessions("1");
 
     expect(result).toEqual([session]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -55,8 +55,8 @@ describe("createApiClient.listSessions", () => {
 
     const api = createApiClient("/api");
 
-    await expect(api.listSessions(1)).rejects.toBeInstanceOf(ApiError);
-    await expect(api.listSessions(1)).rejects.toMatchObject({code: 500, message: "boom"});
+    await expect(api.listSessions("1")).rejects.toBeInstanceOf(ApiError);
+    await expect(api.listSessions("1")).rejects.toMatchObject({code: 500, message: "boom"});
   });
 
   it("throws ApiError when the response is not ok", async () => {
@@ -65,8 +65,8 @@ describe("createApiClient.listSessions", () => {
 
     const api = createApiClient("/api");
 
-    await expect(api.listSessions(1)).rejects.toBeInstanceOf(ApiError);
-    await expect(api.listSessions(1)).rejects.toMatchObject({status: 503, message: "unavailable"});
+    await expect(api.listSessions("1")).rejects.toBeInstanceOf(ApiError);
+    await expect(api.listSessions("1")).rejects.toMatchObject({status: 503, message: "unavailable"});
   });
 
   it("accepts the contract envelope where success code is 0", async () => {
@@ -76,7 +76,7 @@ describe("createApiClient.listSessions", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const api = createApiClient("/api");
-    const result = await api.listSessions(1);
+    const result = await api.listSessions("1");
     expect(result).toEqual([session]);
   });
 });
@@ -89,7 +89,7 @@ describe("createApiClient auth wiring", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const api = createApiClient("/api", {getAccessToken: () => "abc.def.ghi"});
-    await api.listSessions(1);
+    await api.listSessions("1");
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer abc.def.ghi");
@@ -102,7 +102,7 @@ describe("createApiClient auth wiring", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const api = createApiClient("/api", {getAccessToken: () => null});
-    await api.listSessions(1);
+    await api.listSessions("1");
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
@@ -115,7 +115,7 @@ describe("createApiClient auth wiring", () => {
 
     const api = createApiClient("/api", {onUnauthorized});
 
-    await expect(api.listSessions(1)).rejects.toBeInstanceOf(ApiError);
+    await expect(api.listSessions("1")).rejects.toBeInstanceOf(ApiError);
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
@@ -128,7 +128,7 @@ describe("createApiClient auth wiring", () => {
 
     const api = createApiClient("/api", {onUnauthorized});
 
-    await expect(api.listSessions(1)).rejects.toBeInstanceOf(ApiError);
+    await expect(api.listSessions("1")).rejects.toBeInstanceOf(ApiError);
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 });
@@ -165,7 +165,7 @@ describe("createApiClient refresh-on-401 pipeline", () => {
       onUnauthorized,
     });
 
-    const result = await api.listSessions(1);
+    const result = await api.listSessions("1");
 
     expect(result).toEqual([session]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -194,7 +194,7 @@ describe("createApiClient refresh-on-401 pipeline", () => {
       onUnauthorized,
     });
 
-    await expect(api.listSessions(1)).rejects.toBeInstanceOf(ApiError);
+    await expect(api.listSessions("1")).rejects.toBeInstanceOf(ApiError);
     expect(fetchMock).toHaveBeenCalledTimes(2); // original + refresh; no retry
     expect(onRefreshed).not.toHaveBeenCalled();
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
@@ -210,7 +210,7 @@ describe("createApiClient refresh-on-401 pipeline", () => {
       onUnauthorized,
     });
 
-    await expect(api.listSessions(1)).rejects.toBeInstanceOf(ApiError);
+    await expect(api.listSessions("1")).rejects.toBeInstanceOf(ApiError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
@@ -244,7 +244,7 @@ describe("createApiClient refresh-on-401 pipeline", () => {
       },
     });
 
-    const [a, b] = await Promise.all([api.listSessions(1), api.listSessions(1)]);
+    const [a, b] = await Promise.all([api.listSessions("1"), api.listSessions("1")]);
     expect(a).toEqual([session]);
     expect(b).toEqual([session]);
 
@@ -278,8 +278,38 @@ describe("createApiClient refresh-on-401 pipeline", () => {
       onUnauthorized,
     });
 
-    await expect(api.listSessions(1)).rejects.toBeInstanceOf(ApiError);
+    await expect(api.listSessions("1")).rejects.toBeInstanceOf(ApiError);
     expect(fetchMock).toHaveBeenCalledTimes(3); // original + refresh + ONE retry
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+});
+
+// SSE §9 (03-contracts.md). The frame envelope is {type, ...} JSON; the
+// parser must surface v / buffered / unknown-type fields unchanged so the
+// hook can decide what to do with them.
+describe("parseSsePayload — SSE §9 envelope", () => {
+  it("preserves v and buffered fields when present", () => {
+    const chunk = `data: ${JSON.stringify({type: "delta", v: 1, buffered: true, text: "hi"})}\n\n`;
+    const {events, tail} = parseSsePayload(chunk);
+    expect(tail).toBe("");
+    expect(events).toEqual([{type: "delta", v: 1, buffered: true, text: "hi"}]);
+  });
+
+  it("passes through unknown event types without translating them to delta", () => {
+    // Forward-compat: backend may add tool_call / citation_delta / etc.;
+    // the parser must surface the raw event so the hook can ignore it
+    // explicitly. Coercing to delta would corrupt the assistant content.
+    const chunk = `data: ${JSON.stringify({type: "tool_call", v: 1, name: "x"})}\n\n`;
+    const {events} = parseSsePayload(chunk);
+    expect(events).toEqual([{type: "tool_call", v: 1, name: "x"}]);
+  });
+
+  it("falls back to a synthetic delta only for unparseable payloads", () => {
+    // Defensive: a bare non-JSON line (e.g. a raw token) keeps the assistant
+    // bubble rendering rather than killing the stream. This is intentionally
+    // distinct from the unknown-type case above.
+    const chunk = "data: raw-token\n\n";
+    const {events} = parseSsePayload(chunk);
+    expect(events).toEqual([{type: "delta", text: "raw-token"}]);
   });
 });

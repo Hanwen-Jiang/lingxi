@@ -5,7 +5,7 @@ import type {MemoryItem} from "../types";
 
 // Long-term memory list lives at the app level so it persists across
 // chat<->settings navigation (SettingsWorkspace unmounts on view switch).
-export function useMemory({api, userId}: {api: ApiClient; userId: number}) {
+export function useMemory({api, userId}: {api: ApiClient; userId: string}) {
   const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([]);
 
   const refreshMemories = useCallback(async () => {

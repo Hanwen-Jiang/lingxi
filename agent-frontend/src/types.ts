@@ -61,14 +61,18 @@ export type LoginResponse = {
   refreshToken?: string;
 };
 
+// D5 (live since S1 P5 / S3 P5): all id fields in JSON are string-encoded
+// snowflakes — see 03-contracts.md §5. Inputs sent to the backend follow the
+// same shape; the server tolerates either during the expand/contract window
+// but new code on this side standardizes on string everywhere.
 export type ChatRequest = {
-  userId: number;
-  sessionId: number;
+  userId: string;
+  sessionId: string;
   prompt: string;
 };
 
 export type ChatResponse = {
-  sessionId: number;
+  sessionId: string;
   answer: string;
 };
 
@@ -86,10 +90,21 @@ export type AutoChatResponse = {
   errorMessage?: string;
 };
 
+// SSE event envelope (03-contracts.md §9, live since S1 P5). The string
+// fallback on `type` is the explicit "tolerate unknown" affordance — when
+// the backend introduces a new event kind (e.g. tool/citation deltas), older
+// clients must silently ignore it rather than tear down the stream. `v` is
+// the schema version (currently 1; bump and the client should still parse
+// known fields and skip the rest). `buffered:true` marks a "non-streaming
+// streaming" route — agent and adaptive-RAG currently send the whole answer
+// in one delta, so the UI must accept a single-frame response as a normal
+// stream rather than treating it as a partial.
 export type StreamChatEvent = {
   type: "start" | "delta" | "usage" | "done" | "error" | string;
+  v?: number;
+  buffered?: boolean;
   requestId?: string;
-  sessionId?: number;
+  sessionId?: string;
   text?: string;
   code?: number;
   message?: string;
@@ -153,20 +168,33 @@ export type AgentResponse = {
   estimatedInputTokens?: number;
   contextTruncated?: boolean;
   memoryTrace?: unknown;
-  toolGovernance?: unknown;
+  toolGovernance?: ToolGovernance;
 };
 
 // A tool the agent wants to run but is holding for human confirmation (M4).
-// The wire shape is owned by S1's F01 (tool-confirmation challenge token), which
-// is not shipped yet — lib/chat.extractPendingTools parses it defensively out of
-// `toolGovernance` so this stays the single seam to adapt when F01 lands. The
-// `name` is what we echo back in confirmedTools[]; challengeToken (when present)
-// is threaded through untouched.
+// Surfaced in the UI as informational context — "灵犀想调用以下工具" — but
+// the actual approval rides on the server-issued challengeToken, not the
+// tool list (S1 F01 fingerprints prompt+session and only honours that
+// single-use token; echoing tool names would be ignored).
 export type PendingTool = {
   name: string;
   title?: string;
   description?: string;
   args?: unknown;
+};
+
+// S1 F01 wire shape (live since 2026-06-27 P5 — see agent/docs/E2E-INTEGRATION.md
+// and STATUS S1 P6 entry). When the agent holds a turn for high-risk tool
+// confirmation, the response carries a one-shot, TTL-bounded challengeToken
+// the client must echo back in `AgentRequest.confirmationToken` to release
+// the turn. The token is fingerprinted on prompt+session+confirmedToolSet —
+// re-typing the prompt invalidates an unconsumed token. pendingTools is
+// informational only.
+export type ToolGovernance = {
+  confirmationRequired?: boolean;
+  challengeToken?: string;
+  challengeExpiresInSec?: number;
+  pendingTools?: PendingTool[];
 };
 
 export type DocumentIngestJobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | string;
@@ -193,8 +221,8 @@ export type MemoryType =
 
 export type MemoryItem = {
   memoryId: string;
-  userId: number;
-  sessionId?: number;
+  userId: string;
+  sessionId?: string;
   memoryType?: MemoryType;
   content?: string;
   summary?: string;
@@ -207,8 +235,8 @@ export type MemoryItem = {
 };
 
 export type ChatSessionSummary = {
-  userId: number;
-  sessionId: number;
+  userId: string;
+  sessionId: string;
   title: string;
   mode: ChatModeId | string;
   summary?: string;
@@ -220,9 +248,9 @@ export type ChatSessionSummary = {
 };
 
 export type ChatTurnSummary = {
-  id: number;
-  userId: number;
-  sessionId: number;
+  id: string;
+  userId: string;
+  sessionId: string;
   mode: ChatModeId | string;
   prompt: string;
   answer?: string;
@@ -240,8 +268,8 @@ export type ChatSessionDetail = {
 };
 
 export type ChatSessionCreateRequest = {
-  userId: number;
-  sessionId?: number;
+  userId: string;
+  sessionId?: string;
   mode?: ChatModeId | string;
   title?: string;
 };

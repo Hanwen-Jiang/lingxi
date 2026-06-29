@@ -97,11 +97,10 @@ function asOptionalString(value: unknown): string | undefined {
 }
 
 // Pull the "tools awaiting confirmation" list out of an agent response's
-// `toolGovernance` blob (M4). This is the single adapter for S1's F01 shape,
-// which isn't finalized — we accept a handful of likely field names
-// (pendingTools/pending; name/tool/toolName; description/reason; args/arguments)
-// so the UI shell works today and only this function changes when F01 ships.
-// Returns [] when nothing needs confirming.
+// `toolGovernance` blob. Used purely as informational context in the UI
+// (the user sees what the agent wants to run); the actual approval rides
+// on extractChallengeToken below. Field-name tolerance is kept so an older
+// backend shape doesn't blank the card.
 export function extractPendingTools(governance: unknown): PendingTool[] {
   const list = getObjectValue(governance, "pendingTools") ?? getObjectValue(governance, "pending");
   if (!Array.isArray(list)) return [];
@@ -117,6 +116,26 @@ export function extractPendingTools(governance: unknown): PendingTool[] {
     });
     return acc;
   }, []);
+}
+
+// S1 F01 (live): the agent returns a one-shot challenge token when it holds
+// a turn for high-risk tool confirmation. The client must echo it back in
+// AgentRequest.confirmationToken to release the turn — the token is
+// fingerprinted on prompt+session+confirmedToolSet, so re-typing the prompt
+// invalidates an unconsumed one. Returns null when no confirmation is owed.
+export function extractChallengeToken(governance: unknown): {challengeToken: string; expiresInSec?: number} | null {
+  const required = getObjectValue(governance, "confirmationRequired");
+  const token = getObjectValue(governance, "challengeToken");
+  if (typeof token !== "string" || !token) return null;
+  // confirmationRequired is the explicit guard, but treat a present token as
+  // sufficient — if S1 starts sending the token without the flag we don't want
+  // to silently drop it.
+  if (required === false) return null;
+  const expires = getObjectValue(governance, "challengeExpiresInSec");
+  return {
+    challengeToken: token,
+    expiresInSec: typeof expires === "number" && expires > 0 ? expires : undefined,
+  };
 }
 
 export function messageFromTurn(turn: ChatTurnSummary): WorkspaceMessage[] {

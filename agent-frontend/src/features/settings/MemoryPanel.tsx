@@ -35,8 +35,8 @@ export function MemoryPanel({
 }: {
   api: ApiClient;
   items: MemoryItem[];
-  sessionId: number;
-  userId: number;
+  sessionId: string;
+  userId: string;
   onItems: (items: MemoryItem[]) => void;
   onRefresh: () => void;
 }) {
