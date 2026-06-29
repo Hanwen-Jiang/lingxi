@@ -20,6 +20,15 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-29 · P8 集成:🎉 全栈契约收口完成(code=0+真实HTTP)+ 全栈 E2E 57 绿 + Mockito 测试债清除;下轮=上线(WSL 切 v0.x)
+- **本轮 P8 数字(git 核实)**:四条 `feat/*-p8` 并入 `main`(均 on-main/0-behind,代码目录互不相交,STATUS 自动 union,**零冲突**)。S3 `cb526ae`(**item3 包络收口完成·同批翻**:Contact 14端点/Offline/Moment/RTC HTTP→chat-common Result code=0 + 真实 HTTP,收敛单一 advice;顺手修 `MomentService.getMomentList` 空 `IN()`→500 真 bug;**全栈 E2E**:04·13/06·10/07·14/08·4/10·5/11·5 + **新增 `12` 翻转回归 6/6 = 57 全绿**);S1 `8ff6c27`(包络**零 drift** 审计+live 双证无改;**清掉 Mockito OOM 测试债** opt-in `low-mem-test` profile→12 类 39 测试全绿;限流 Micrometer 指标 `agent.ratelimit.decisions{result,backend}`);S4 `c9dd42c`(**IM 内置助手浏览器级 E2E 实证**对真实 agent);S2 `8323b5d`(🛑 瞬时 Redis :6399 down 挡住 F01/§9 浏览器 E2E,拒 mock 伪造,仅 ledger)。
+- **里程碑**:🎉 **全栈契约收口完成**——成功 `code=0` + 真实 HTTP 全栈一致(chat 4 服务翻完 + agent 零 drift),全栈 E2E **57 项全绿**(含翻转回归);**Mockito 测试债清除**。鉴权/IM/数据安全/内助手/契约 五块技术骨架已干净。
+- **已集成**:merge tips agent-backend→agent-frontend→chat-frontend→chat-backend = `e5c1dbe`;pre-merge 补提 S1 P8 ledger(又被写进共享 main 工作树);本 HUB 条目随后 docs 提交,已 push。
+- **🟡 仍欠(均小尾巴/已解阻)**:① 前端 **200 兼容收缩**(S2+S4 仍 `{0,200}`→S3 已点名"可关 200 兼容",P9 收掉);② **S2 浏览器级 F01/§9 E2E 补跑**(P8 被瞬时 Redis :6399 down 挡,现全栈已绿=已解阻);③ DLQ consumer-lag gauge(L3,chat 侧)。
+- **用户拍板(3 问)**:① 全合(不另打 tag,`v0.1-e2e-green` 仍成立);② **下轮 P9 = 上线:WSL 运行态切到 v0.x**(替换 pre-P0 无鉴权旧栈),前端 200 收缩 + S2 补跑随之收掉;③ 下轮做完 **S3 会话内全栈 E2E + 上线冲烟** 验收。
+- **下一轮(P9)**:S3 主力(把 E2E 绿的 main 部署到 WSL 开发运行态、替换无鉴权旧栈 + 上线冲烟)+ 点名前端收缩;S1 配合上线(agent 入运行态、enforce/降级/健康探针)+ 补 DLQ lag gauge;S4/S2 收缩 `{0,200}→{0}` + S2 补跑 F01/§9 浏览器 E2E。详见各流 prompt。
+- 阻塞:无。待中枢确认:无(P9 即上线,线上不再 defer——目标=替换 WSL 无鉴权旧栈)。
+
 ### 2026-06-29 · P7 集成:🎉 J1 闭环 + 灵犀内置助手全链路 E2E 51/51 绿(LLM 在线);打 tag `v0.1-e2e-green`;下轮=契约收口 + 前端验收闭合
 - **本轮 P7 数字(git 核实)**:四条 `feat/*-p7` 并入 `main`(均 on-main/0-behind,代码目录互不相交,STATUS 自动 union,**零冲突**)。S3 `b474ea4`(**收 J1**:`10-agent-smoke` 5/5 直连缺头401/网关注入身份放行/SSE 达 agent;**内助手全链路 `11-assistant-e2e` 5/5**:@灵犀→真实 agent SSE §9 + **F01 工具确认令牌往返**,**LLM 在线真流式**;修 E2E infra 跨会话存活 setsid + agent Redis e2e db6);S1 `9d1cfbf`(本机降级态实跑预验 J1 agent 侧 + **修 redis 无关 readiness/liveness 探针**——原 Redis 降级→主 /health 503 会误杀就绪门;agent 侧包络 code=0 复证);S4 `6adc891`(消费 S3 两缺口 `peerUserId`/图片历史 + 内助手端点对齐 `/api/chat/auto/stream` 自动路由 + §9 `v` 归一);S2 `e78c048`(SSE §9 `v` 类型回归到 string 对齐 backend wire + D5 回归扫零)。
 - **里程碑**:🎉 **J1 闭环 + 内置助手全链路 E2E 51/51 绿**(`04`13+`06`10+`07`14+`08`4+`10`5+`11`5)——**鉴权 → IM 实时 → 数据安全(B4/B5)→ 内置助手(SSE+F01)** 整条核心链路端到端验证(LLM 在线)。打 tag **`v0.1-e2e-green`** 标记此里程碑。
