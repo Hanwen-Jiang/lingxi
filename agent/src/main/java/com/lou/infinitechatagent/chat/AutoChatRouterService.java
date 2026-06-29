@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lou.infinitechatagent.agent.ReActAgentOrchestrator;
 import com.lou.infinitechatagent.agent.dto.AgentRequest;
 import com.lou.infinitechatagent.agent.dto.AgentResponse;
+import com.lou.infinitechatagent.common.id.SessionIdCodec;
 import com.lou.infinitechatagent.ai.AiChat;
 import com.lou.infinitechatagent.chat.dto.AutoChatResponse;
 import com.lou.infinitechatagent.chat.dto.AutoRouteDecision;
@@ -214,7 +215,8 @@ public class AutoChatRouterService {
     private AutoChatResponse fromAgent(ChatRequest request, AutoRouteDecision decision, String requestId, boolean draft) {
         AgentRequest agentRequest = new AgentRequest();
         agentRequest.setUserId(safeUserId(request));
-        agentRequest.setSessionId(safeSessionId(request));
+        Long sessionId = safeSessionId(request);
+        agentRequest.setSessionId(request == null ? SessionIdCodec.toWire(sessionId) : request.getSessionId());
         agentRequest.setPrompt(draft ? draftPrompt(decision.getPrompt()) : decision.getPrompt());
         agentRequest.setDebug(true);
         // F01:透传高风险工具确认令牌(若客户端在 /chat/auto 二次请求里带了)。
@@ -316,7 +318,7 @@ public class AutoChatRouterService {
     }
 
     private Long safeSessionId(ChatRequest request) {
-        return request == null || request.getSessionId() == null ? System.currentTimeMillis() : request.getSessionId();
+        return request == null ? SessionIdCodec.generateInternal() : request.ensureInternalSessionId();
     }
 
     private int valueOrZero(Number value) {

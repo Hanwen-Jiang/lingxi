@@ -1,6 +1,7 @@
 package com.lou.infinitechatagent.controller;
 
 import com.lou.infinitechatagent.common.BaseResponse;
+import com.lou.infinitechatagent.common.id.SessionIdCodec;
 import com.lou.infinitechatagent.common.ResultUtils;
 import com.lou.infinitechatagent.chat.ChatHistoryService;
 import com.lou.infinitechatagent.monitor.MonitorContext;
@@ -48,10 +49,11 @@ public class AgentController {
 
     @GetMapping("/tools/audit")
     public BaseResponse<List<ToolAuditRecord>> toolAudit(@CurrentUser AuthPrincipal principal,
-                                                         @RequestParam(required = false) Long sessionId,
+                                                         @RequestParam(required = false) String sessionId,
                                                          @RequestParam(defaultValue = "20") int limit) {
         // 按主体限权(B1):只查当前网关身份自己的审计记录。
-        return ResultUtils.success(toolGovernanceService.listAuditRecords(principal.requireUserId(), sessionId, limit));
+        return ResultUtils.success(toolGovernanceService.listAuditRecords(
+                principal.requireUserId(), SessionIdCodec.toInternal(sessionId), limit));
     }
 
     @PostMapping("/chat")
@@ -59,15 +61,16 @@ public class AgentController {
                                             @CurrentUser AuthPrincipal principal) {
         // 网关身份(B1):userId 取自网关注入身份,贯通到 ReAct 编排/记忆/审计深层(不再回退 body)。
         request.setUserId(principal.requireUserId());
+        Long sessionId = request.internalSessionId();
         MonitorContextHolder.setContext(MonitorContext.builder()
                 .userId(request.getUserId())
-                .sessionId(request.getSessionId())
+                .sessionId(sessionId)
                 .build());
         try {
             AgentResponse response = reActAgentOrchestrator.chat(request);
             chatHistoryService.recordSuccess(
                     request.getUserId(),
-                    request.getSessionId(),
+                    sessionId,
                     "agent",
                     request.getPrompt(),
                     response.getAnswer(),
@@ -78,7 +81,7 @@ public class AgentController {
         } catch (RuntimeException e) {
             chatHistoryService.recordError(
                     request.getUserId(),
-                    request.getSessionId(),
+                    sessionId,
                     "agent",
                     request.getPrompt(),
                     e.getMessage(),

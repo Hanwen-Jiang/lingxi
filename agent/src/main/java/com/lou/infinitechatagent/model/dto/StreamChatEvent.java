@@ -1,6 +1,5 @@
 package com.lou.infinitechatagent.model.dto;
 
-import com.lou.infinitechatagent.common.json.SnowflakeId;
 import com.lou.infinitechatagent.rag.dto.Citation;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,8 +38,7 @@ public class StreamChatEvent {
 
     private String requestId;
 
-    @SnowflakeId
-    private Long sessionId;
+    private String sessionId;
 
     private String text;
 

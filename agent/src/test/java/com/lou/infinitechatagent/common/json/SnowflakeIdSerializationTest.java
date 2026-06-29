@@ -3,6 +3,7 @@ package com.lou.infinitechatagent.common.json;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lou.infinitechatagent.agent.dto.AgentRequest;
+import com.lou.infinitechatagent.model.dto.ChatRequest;
 import com.lou.infinitechatagent.memory.dto.MemoryItem;
 import com.lou.infinitechatagent.model.dto.StreamChatEvent;
 import org.junit.jupiter.api.Test;
@@ -39,14 +40,31 @@ class SnowflakeIdSerializationTest {
                 "{\"userId\":\"2070816390297817088\",\"sessionId\":\"123\",\"prompt\":\"hi\"}",
                 AgentRequest.class);
         assertThat(fromString.getUserId()).isEqualTo(2070816390297817088L);
-        assertThat(fromString.getSessionId()).isEqualTo(123L);
+        assertThat(fromString.getSessionId()).isEqualTo("123");
+        assertThat(fromString.internalSessionId()).isEqualTo(123L);
 
         // 老前端发数字(expand/contract 双读过渡)
         AgentRequest fromNumber = mapper.readValue(
                 "{\"userId\":2070816390297817088,\"sessionId\":123,\"prompt\":\"hi\"}",
                 AgentRequest.class);
         assertThat(fromNumber.getUserId()).isEqualTo(2070816390297817088L);
-        assertThat(fromNumber.getSessionId()).isEqualTo(123L);
+        assertThat(fromNumber.getSessionId()).isEqualTo("123");
+        assertThat(fromNumber.internalSessionId()).isEqualTo(123L);
+    }
+
+    @Test
+    void sessionId_acceptsClientOnlyStringWithoutJacksonFailure() throws Exception {
+        ChatRequest chatRequest = mapper.readValue(
+                "{\"sessionId\":\"s-lingxi\",\"prompt\":\"hi\"}",
+                ChatRequest.class);
+        AgentRequest agentRequest = mapper.readValue(
+                "{\"sessionId\":\"s-lingxi\",\"prompt\":\"hi\"}",
+                AgentRequest.class);
+
+        assertThat(chatRequest.getSessionId()).isEqualTo("s-lingxi");
+        assertThat(agentRequest.getSessionId()).isEqualTo("s-lingxi");
+        assertThat(chatRequest.internalSessionId()).isEqualTo(agentRequest.internalSessionId());
+        assertThat(chatRequest.internalSessionId()).isPositive();
     }
 
     @Test
@@ -60,7 +78,7 @@ class SnowflakeIdSerializationTest {
     void streamChatEvent_carriesSchemaVersionAndStringSessionId() throws Exception {
         StreamChatEvent event = StreamChatEvent.builder()
                 .type("delta")
-                .sessionId(123L)
+                .sessionId("123")
                 .text("hi")
                 .build();
         String json = mapper.writeValueAsString(event);

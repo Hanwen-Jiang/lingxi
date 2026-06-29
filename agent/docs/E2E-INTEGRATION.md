@@ -34,6 +34,14 @@ agent 提供这些前缀(均在 context-path `/api` 下,**转发须保留 `/api`
 | `DASHSCOPE_API_KEY` | 真 key(可选) | 有则真实 LLM + text-embedding-v4 语义检索;无则聊天走 Unavailable 提示、RAG 嵌入降级哈希 |
 | `MYSQL_*` | E2E agent 库(可选) | 缺失降级 H2 内存(`agent.local-fallback.enabled=true`);Flyway 默认 off,SchemaInitializer 自建表 |
 | `PGVECTOR_*` | E2E Postgres(可选) | 缺失降级内存向量库 |
+| `RAG_BOOTSTRAP_ENABLED` | `true`(默认) | 本地基础文档启动入库开关;轻量 smoke 可设 `false` 跳过启动灌库 |
+
+### 2.1 LLM / OpenAI-compatible 配置(P11)
+
+- 无可用 LLM key/model 时是**显式降级**:agent 仍启动,`/api/actuator/health/readiness` 仍 200,聊天/流式接口返回可见错误事件,并通过 `ai_model_*` 指标记录。
+- OpenAI-compatible 路径必须同时配置 `AGENT_MODEL_PROVIDER=openai-compatible`、`AGENT_MODEL_OPENAI_COMPATIBLE_BASE_URL`、`AGENT_MODEL_OPENAI_COMPATIBLE_API_KEY`、`AGENT_MODEL_OPENAI_COMPATIBLE_CHAT_MODEL`。`CHAT_MODEL` 必须是该上游 `/v1/models` 返回的可用模型;不要把 `gpt-5.5` 这类未被上游支持的占位值带进生产。
+- `AGENT_MODEL_OPENAI_COMPATIBLE_REASONING_EFFORT` 默认留空;只有所选模型明确支持时再设。`AGENT_MODEL_OPENAI_COMPATIBLE_STREAM_TIMEOUT_SECONDS` 默认 15,上游慢/不可用时 `/api/chat/auto/stream` 会先发 `start`,随后发 `error`,不阻塞 readiness。
+- 有真实 key/model 时,S3 可用经网关 `POST /api/chat/auto/stream` 验证 `start` 后出现至少一个 `delta`;无 key 时只验请求达 agent、身份注入、降级 error 事件。
 
 > **agent 不持 `JWT_SECRET_KEY`**:它**不自验/不签发 JWT**,只消费网关注入的 `X-User-Id`/`X-User-Roles`(契约 §1/§7)。网关验签后注入即可。
 
@@ -61,6 +69,7 @@ agent 提供这些前缀(均在 context-path `/api` 下,**转发须保留 `/api`
 - **`POST /api/chat/auto/stream`**:自动路由;**agent/RAG 工具路由 = `buffered:true`** 整段一次性;direct 路由逐 token(省略 buffered)。
 - **`POST /api/streamChat`**:逐 token 真增量(buffered 省略)。
 - **隔离**:记忆(四层)/RAG 全程按网关 `X-User-Id`,无 body userId 残留(P3 已收敛)。
+- **P11 D5 收口**:`/api/agent/chat`、`/api/chat/auto`、`/api/chat/auto/stream`、`/api/chat`、`/api/streamChat` 的 `sessionId` 入参接受 JSON string/number。标准后端 session 仍应传 string snowflake;前端 client-only 字符串(如 `s-lingxi`)不再触发 Jackson 500,agent 内部会稳定映射为 Long 用于记忆/F01 绑定,SSE 事件继续回传原始 string。
 
 ## 5. F01 工具确认挑战令牌形状(S2 的 M4,已 live)
 

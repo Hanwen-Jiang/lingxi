@@ -134,9 +134,9 @@ class OpenAiCompatibleChatModelTest {
         server.createContext("/v1/chat/completions", exchange -> {
             requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             byte[] body = """
-                    data: {"id":"resp-test","model":"gpt-5.5","choices":[{"delta":{"content":"hel"},"finish_reason":null}]}
+                    data: {"id":"resp-test","model":"gpt-5-test","choices":[{"delta":{"content":"hel"},"finish_reason":null}]}
 
-                    data: {"id":"resp-test","model":"gpt-5.5","choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}]}
+                    data: {"id":"resp-test","model":"gpt-5-test","choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}]}
 
                     data: [DONE]
 
@@ -151,7 +151,7 @@ class OpenAiCompatibleChatModelTest {
             OpenAiCompatibleChatModel model = new OpenAiCompatibleChatModel(
                     "http://127.0.0.1:" + server.getAddress().getPort(),
                     "test-key",
-                    "gpt-5.5",
+                    "gpt-5-test",
                     0.2,
                     123,
                     RestClient.builder().build(),

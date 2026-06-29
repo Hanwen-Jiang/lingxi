@@ -32,15 +32,16 @@ public class RagChatController {
                                                             @CurrentUser AuthPrincipal principal) {
         // 网关身份(B1):userId 取自网关注入身份(不再回退 body)。
         Long userId = principal.requireUserId();
+        Long sessionId = chatRequest.ensureInternalSessionId();
         MonitorContextHolder.setContext(MonitorContext.builder()
                 .userId(userId)
-                .sessionId(chatRequest.getSessionId())
+                .sessionId(sessionId)
                 .build());
         try {
-            RagQueryResponse response = ragQueryService.chatWithCitations(chatRequest.getSessionId(), chatRequest.getPrompt());
+            RagQueryResponse response = ragQueryService.chatWithCitations(sessionId, chatRequest.getPrompt());
             chatHistoryService.recordSuccess(
                     userId,
-                    chatRequest.getSessionId(),
+                    sessionId,
                     "rag",
                     chatRequest.getPrompt(),
                     response.getAnswer(),
@@ -51,7 +52,7 @@ public class RagChatController {
         } catch (RuntimeException e) {
             chatHistoryService.recordError(
                     userId,
-                    chatRequest.getSessionId(),
+                    sessionId,
                     "rag",
                     chatRequest.getPrompt(),
                     e.getMessage(),

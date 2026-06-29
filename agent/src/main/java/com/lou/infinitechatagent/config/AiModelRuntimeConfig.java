@@ -44,10 +44,10 @@ public class AiModelRuntimeConfig {
             @Value("${agent.model.provider:auto}") String defaultProvider,
             @Value("${agent.model.openai-compatible.base-url:${AGENT_MODEL_OPENAI_COMPATIBLE_BASE_URL:https://api.openai.com}}") String defaultOpenAiBaseUrl,
             @Value("${agent.model.openai-compatible.api-key:${AGENT_MODEL_OPENAI_COMPATIBLE_API_KEY:}}") String defaultOpenAiApiKey,
-            @Value("${agent.model.openai-compatible.chat-model:${AGENT_MODEL_OPENAI_COMPATIBLE_CHAT_MODEL:gpt-5.4-mini}}") String defaultOpenAiChatModel,
+            @Value("${agent.model.openai-compatible.chat-model:${AGENT_MODEL_OPENAI_COMPATIBLE_CHAT_MODEL:}}") String defaultOpenAiChatModel,
             @Value("${agent.model.openai-compatible.temperature:${AGENT_MODEL_OPENAI_COMPATIBLE_TEMPERATURE:0.7}}") Double defaultOpenAiTemperature,
             @Value("${agent.model.openai-compatible.max-output-tokens:${AGENT_MODEL_OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS:1024}}") Integer defaultOpenAiMaxOutputTokens,
-            @Value("${agent.model.openai-compatible.reasoning-effort:high}") String defaultOpenAiReasoningEffort,
+            @Value("${agent.model.openai-compatible.reasoning-effort:${AGENT_MODEL_OPENAI_COMPATIBLE_REASONING_EFFORT:}}") String defaultOpenAiReasoningEffort,
             @Value("${agent.model.openai-compatible.stream-timeout-seconds:15}") Integer defaultOpenAiStreamTimeoutSeconds,
             @Value("${langchain4j.community.dashscope.chat-model.api-key:}") String defaultDashScopeApiKey,
             @Value("${langchain4j.community.dashscope.chat-model.model-name:qwen-plus}") String defaultDashScopeChatModel) {
@@ -176,7 +176,7 @@ public class AiModelRuntimeConfig {
         String message = configured
                 ? "AI model configured"
                 : (openAiCompatible
-                ? "Missing OpenAI-compatible model API key or base URL"
+                ? "Missing OpenAI-compatible model API key, base URL, or model"
                 : "Missing DASHSCOPE_API_KEY");
         return ModelStatusResponse.builder()
                 .provider(config.provider())
@@ -201,10 +201,10 @@ public class AiModelRuntimeConfig {
                     provider,
                     firstText(defaultOpenAiBaseUrl, "https://api.openai.com"),
                     defaultOpenAiApiKey,
-                    firstText(defaultOpenAiChatModel, "gpt-5.4-mini"),
+                    firstText(defaultOpenAiChatModel),
                     firstNumber(defaultOpenAiTemperature, 0.7),
                     firstNumber(defaultOpenAiMaxOutputTokens, 1024),
-                    normalizeReasoningEffort(firstText(defaultOpenAiReasoningEffort, "high")),
+                    normalizeReasoningEffort(defaultOpenAiReasoningEffort),
                     firstNumber(defaultOpenAiStreamTimeoutSeconds, 15)
             );
         }

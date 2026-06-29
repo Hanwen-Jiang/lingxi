@@ -40,12 +40,13 @@ public class AiChatController {
                                            @CurrentUser AuthPrincipal principal) {
         // 网关身份(B1):userId 取自网关注入身份(不再回退 body)。
         Long userId = principal.requireUserId();
-        MonitorContextHolder.setContext(MonitorContext.builder().userId(userId).sessionId(chatRequest.getSessionId()).build());
+        Long sessionId = chatRequest.ensureInternalSessionId();
+        MonitorContextHolder.setContext(MonitorContext.builder().userId(userId).sessionId(sessionId).build());
         try {
-            String answer = aiChat.chat(chatRequest.getSessionId(), chatRequest.getPrompt());
+            String answer = aiChat.chat(sessionId, chatRequest.getPrompt());
             chatHistoryService.recordSuccess(
                     userId,
-                    chatRequest.getSessionId(),
+                    sessionId,
                     "chat",
                     chatRequest.getPrompt(),
                     answer,
@@ -59,7 +60,7 @@ public class AiChatController {
         } catch (RuntimeException e) {
             chatHistoryService.recordError(
                     userId,
-                    chatRequest.getSessionId(),
+                    sessionId,
                     "chat",
                     chatRequest.getPrompt(),
                     e.getMessage(),
@@ -76,9 +77,10 @@ public class AiChatController {
     public Flux<ServerSentEvent<StreamChatEvent>> streamChat(@Valid @RequestBody ChatRequest chatRequest,
                                                              @CurrentUser AuthPrincipal principal) {
         Long userId = principal.requireUserId();
+        Long sessionId = chatRequest.ensureInternalSessionId();
         MonitorContext context = MonitorContext.builder()
                 .userId(userId)
-                .sessionId(chatRequest.getSessionId())
+                .sessionId(sessionId)
                 .build();
         String requestId = UUID.randomUUID().toString();
 
@@ -94,7 +96,7 @@ public class AiChatController {
                     .build()));
             Flux<ServerSentEvent<StreamChatEvent>> delta = Flux.defer(() -> {
                         MonitorContextHolder.setContext(context);
-                        return aiChat.streamChat(chatRequest.getSessionId(), chatRequest.getPrompt())
+                        return aiChat.streamChat(sessionId, chatRequest.getPrompt())
                                 .map(text -> {
                                     answer.get().append(text);
                                     return sse(StreamChatEvent.builder()
@@ -125,7 +127,7 @@ public class AiChatController {
                                 failed.set(true);
                                 chatHistoryService.recordError(
                                         userId,
-                                        chatRequest.getSessionId(),
+                                        sessionId,
                                         "stream",
                                         chatRequest.getPrompt(),
                                         event.data() == null ? null : event.data().getMessage(),
@@ -137,7 +139,7 @@ public class AiChatController {
                         if (!failed.get()) {
                             chatHistoryService.recordSuccess(
                                     userId,
-                                    chatRequest.getSessionId(),
+                                    sessionId,
                                     "stream",
                                     chatRequest.getPrompt(),
                                     answer.get().toString(),

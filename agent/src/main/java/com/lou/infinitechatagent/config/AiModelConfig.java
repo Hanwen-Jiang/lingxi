@@ -111,8 +111,9 @@ public class AiModelConfig {
 
         @Override
         public ChatRequestParameters defaultRequestParameters() {
+            String modelName = runtimeConfig.current().model();
             return DefaultChatRequestParameters.builder()
-                    .modelName(runtimeConfig.current().model())
+                    .modelName(hasText(modelName) ? modelName : "unconfigured")
                     .build();
         }
 
@@ -172,8 +173,9 @@ public class AiModelConfig {
 
         @Override
         public ChatRequestParameters defaultRequestParameters() {
+            String modelName = runtimeConfig.current().model();
             return DefaultChatRequestParameters.builder()
-                    .modelName(runtimeConfig.current().model())
+                    .modelName(hasText(modelName) ? modelName : "unconfigured")
                     .build();
         }
 

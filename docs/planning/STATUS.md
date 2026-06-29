@@ -199,6 +199,15 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-29 · P11 发行打磨:D5 sessionId string 收口 + LLM 配置显式化
+- 完成:**分支 `feat/agent-backend-p11`(从 main `3016d90` 起,worktree `E:\jhw\proj-agent-p11`)**。把 agent 对外入口的 `sessionId` 收到 wire-level string:`AgentRequest.sessionId`、`ChatRequest.sessionId` 改为 String,Jackson 接受 JSON string/number;业务边界经 `SessionIdCodec` 转内部 Long。标准 session 仍为 string snowflake;前端 client-only 字符串(如 `s-lingxi`)稳定映射到高位内部 Long,用于记忆/F01 challenge token 绑定,不会再在反序列化阶段 500。`StreamChatEvent`/`ChatResponse` 出参保持 string sessionId。
+- 完成:同步修 `/api/agent/chat`、`/api/chat`、`/api/streamChat`、`/api/chat/auto(/stream)`、`/api/rag/chat` 的内部 sessionId 边界;`/api/chat/auto/stream` 首帧继续回传原始 `sessionId:"s-lingxi"`。新增 `RAG_BOOTSTRAP_ENABLED` 可选启动开关(默认 true)便于轻量 smoke 跳过本地文档灌库,不改默认行为。
+- 完成:LLM 上游配置改为**显式模型**:OpenAI-compatible 默认 `chat-model` 留空,避免带 key 后默认请求不受支持的占位模型;`.env.example`/README/E2E/模型工厂文档明确 `AGENT_MODEL_OPENAI_COMPATIBLE_*`、`stream-timeout-seconds`、`reasoning-effort` 留空策略。无 key/model 时 readiness 保持 200,聊天/SSE 走显式降级错误;`gpt-5.5` 这类 unsupported 模型需由部署 env 换成上游 `/v1/models` 实际支持的模型。
+- 验证:WSL Java 21 执行 `./mvnw test -Plow-mem-test` **40/40 绿**;`./mvnw clean package -DskipTests` **BUILD SUCCESS**,jar `agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar` sha256=`3bf6110e1bfa6e036309aef222e61b3bc1d6632e182d19c3515e57938af30317`。Windows JVM 仍受页面文件不足/Mockito self-attach 限制,本轮构建测试以 WSL 链为准。
+- 验证:本机临时 P11 jar `:18280`(H2 + PgVector 降级 + 无 LLM key/model + `RAG_BOOTSTRAP_ENABLED=false`) readiness **200**;`POST /api/agent/chat` body `{"sessionId":"s-lingxi","prompt":"现在时间"}` + `X-User-Id` → **200/code=0**;`POST /api/chat/auto/stream` body `{"sessionId":"s-lingxi","prompt":"你好"}` → **200 text/event-stream**,首帧 `event:start` 且 `sessionId:"s-lingxi"`。
+- 交接:**S2/S4:agent sessionId 现已支持 string,请恢复/重跑真实 UI 内助手与卡片级 F01**(含 client-only `s-lingxi` 场景,二次确认 token 会绑定稳定内部 sessionId)。**S3:若要验真实 delta,请把生产 OpenAI-compatible env 的 model/key 换成上游支持值;无 key/model 时只验 readiness/身份/SSE start+error 降级。**
+- 阻塞:无。待中枢确认:无。
+
 ### 2026-06-29 · P10 收口:agent 当前源镜像上线 + 生产 :10010 内助手/F01 冲烟全绿
 - 完成:**分支 `feat/agent-backend-p10`** 在 agent 侧补两个运行态修复后重新构建交付:① 兼容部署 env 的 `AGENT_MODEL_OPENAI_COMPATIBLE_*` 命名并加 `stream-timeout-seconds`(默认 15s),避免旧部署变量名与当前 Spring 配置脱节;② `/chat/auto/stream` 与 `/streamChat` 把阻塞模型调用放到 `boundedElastic` 并传播 `MonitorContext`,确保 **SSE start 首帧先发**、慢/不可用 LLM 转 error/metrics,不再让内助手空挂。
 - 完成:最终 jar 由 WSL Java 21 执行 `./mvnw clean package -DskipTests` 成功构建(Windows JVM 受页面文件不足影响,改用同一 worktree 的 WSL 构建链);最终 jar `agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar` sha256=`6bb12d552d957101a40965272926587089d32750f261de1c9d32bf800aefcba3`。用部署 Dockerfile 重建 `infinitechat/agent:local`=`438deced...`,旧镜像保留 `infinitechat/agent:pre-p10`=`ef8f707...`。
