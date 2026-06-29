@@ -32,7 +32,11 @@ start_jar() {
   echo "started $name  log=$logfile"
 }
 
-jar_of() { echo "$E2E_SRC/$1/target/$1-0.0.1-SNAPSHOT.jar"; }
+jar_of() {
+  local jar
+  jar="$(ls "$E2E_SRC/$1/target/$1"-*.jar 2>/dev/null | grep -vE '(-sources|-javadoc|\\.original)$' | head -1 || true)"
+  [ -n "$jar" ] && echo "$jar" || echo "$E2E_SRC/$1/target/$1-*.jar"
+}
 
 for svc in AuthenticationService ContactService MessagingService \
            RealTimeCommunicationService OfflineDataStoreService MomentService GateWay; do

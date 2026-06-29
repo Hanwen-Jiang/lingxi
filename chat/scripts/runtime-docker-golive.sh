@@ -29,8 +29,14 @@ for s in gateway auth contact messaging realtime offline moment; do
 done
 
 echo "== 自建 chat 镜像(P8 jar from $V09) =="
+jar_of() {
+  local module="$1" jar
+  jar="$(ls "$V09/chat/$module/target/$module"-*.jar 2>/dev/null | grep -vE '(-sources|-javadoc|\\.original)$' | head -1 || true)"
+  [ -n "$jar" ] || { echo "  !! missing jar for $module under $V09/chat/$module/target"; exit 1; }
+  printf '%s\n' "${jar#$V09/}"
+}
 build_img() {
-  docker build -q -f "$DOCKERFILE" --build-arg JAR_FILE="chat/$2/target/$2-0.0.1-SNAPSHOT.jar" \
+  docker build -q -f "$DOCKERFILE" --build-arg JAR_FILE="$(jar_of "$2")" \
     -t "infinitechat/$1:local" "$V09" >/dev/null && echo "  built $1" || { echo "  !! build $1 失败"; exit 1; }
 }
 build_img gateway GateWay

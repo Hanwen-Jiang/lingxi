@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.lou</groupId>
     <artifactId>chat-common</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>chat-common</name>
     <description>灵犀 chat 跨服务统一契约:Result/ErrorCode/Page/Snowflake/JwtUtil/身份头(实现 03-contracts.md)</description>
 
