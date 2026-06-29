@@ -516,6 +516,23 @@
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
 
+### 2026-06-29 · 🔴 P9 上线受阻:旧栈是 **root Docker 容器**,我(hanwen)无权替换——已就绪可一键完成
+- **关键发现:** WSL 运行态的 pre-P0 旧栈**不是** native projecta-current/start-apps,而是 **root 的 Docker 容器**(生产端口 10010/8082/8080/8081/9000 监听者 uid=0,进程 `java -jar app.jar`;`docker.service` active)。hanwen **不在 docker 组** + **sudo 需密码(无任何 NOPASSWD)** → 非交互下**无法 stop/替换 docker 旧栈**。native start-apps 起新栈时端口被占(`Port 10010 already in use`),旧无鉴权栈仍服务(冲烟 R1 无 token → **200**,证实旧栈未替换)。
+- **已就绪(可回滚,均无害于运行中的 docker 栈):**
+  - 构建 `~/projecta-v0.9`(P8 绿 main 全量 jar)+ 拷入 HUB agent jar;
+  - **备份**:`InfiniteChat` mysqldump、chat.env/agent.env、旧 symlink 记录(`~/projecta-runtime/backups/`);
+  - **DB 迁移(幂等已应用到真实 InfiniteChat:3307)**:`message_outbox` 表 + `user_session.last_read_message_id`(加法,旧码不读、无害);
+  - **runtime env**:chat.env 注入 `JWT_SECRET_KEY`/`INTERNAL_SERVICE_TOKEN`/`AGENT_GATEWAY_URI`/`GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS`;agent.env `AGENT_GATEWAY_ENFORCE_IDENTITY=true`;
+  - `projecta-current` symlink → `projecta-v0.9`(运行中 docker 栈不读 symlink,无害;待 native 切换用);
+  - 部署工具(committed):`chat/scripts/runtime-deploy.sh`(stage/backup/migrate/env/cutover/health)、`runtime-recutover.sh`(fuser 释放端口)、`runtime-rollback.sh`、`runtime-smoke.sh`(:10010 冲烟)。
+  - 已清理我起的孤儿 native 进程;**docker 旧栈保持原样未受损**。
+- **🙋 需用户/中枢决定(privileged access)——解阻后我一键完成上线:** 任一:
+  1.(推荐)用户停 docker 旧栈:`sudo docker compose down`(或 `sudo docker stop $(sudo docker ps -q)`)→ 我跑 `runtime-deploy.sh cutover && health && runtime-smoke.sh`(native 新栈占生产端口 + 冲烟);
+  2. 把 hanwen 加入 docker 组(`sudo usermod -aG docker hanwen` + 重开 shell)→ 我用 docker 管栈(或仍走 native);
+  3. 若**上线就该走 docker**(旧栈即 docker 部署模型)→ 需基于 P8 main 重建镜像 + compose(需 docker 访问,亦受同一阻塞)。
+- **不影响:** 隔离 E2E 栈(:10110)与 P8 全栈 E2E 57 绿不受本次影响(独立)。
+- 阻塞:**privileged access**(见上)。代码/迁移/env/构建/脚本全就绪,解阻即 1 步完成。
+
 ### 2026-06-29 · ✅ P8 item3 包络收口完成(同批翻)+ 全栈 E2E 验收(commit `ce1a4ba`)
 - **同批翻转完成:** Contact(14 端点)、Offline(`/offline/message`)、Moment(发/赞/评/list)、RTC HTTP(`/api/v1/message/**` 内部)全部从 `200+体内 code` → **chat-common `Result` 成功 code=0 + §3 真实 HTTP**;id 一律 string 化(D5)。各服务收敛到**单一 advice**:领域异常按语义映射真实 HTTP(UserException/CodeException→400、Group→409、DB/不可用/发送失败→503、Service→500、MANV→422、越权→403);RTC/Moment 的重复/旧 advice 已停用(避免双 advice 冲突);RTC 内部令牌 401 仍在拦截器(不经 advice)。
 - **🔔 S2/S4 可关 200 兼容:** 全栈成功包络现统一 `{code:0,data}`,错误走真实 4xx/5xx(非 200)。S4 的 `{0,200}` 双兼容可保留也可收敛为只认 code=0;**联系人/离线/朋友圈**端点已无 200+code 残留。RTC HTTP 为服务间内部(网关不暴露前端),无前端改动。
