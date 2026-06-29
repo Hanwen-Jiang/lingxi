@@ -64,6 +64,7 @@ public class OpenAiCompatibleChatModel implements ChatModel, StreamingChatModel 
     private final String apiKey;
     private final String modelName;
     private final String reasoningEffort;
+    private final Duration streamTimeout;
     private final RestClient restClient;
     private final HttpClient httpClient;
     private final List<ChatModelListener> listeners;
@@ -96,10 +97,24 @@ public class OpenAiCompatibleChatModel implements ChatModel, StreamingChatModel 
                                      RestClient restClient,
                                      List<ChatModelListener> listeners,
                                      String reasoningEffort) {
+        this(baseUrl, apiKey, modelName, temperature, maxOutputTokens, restClient, listeners, reasoningEffort, null);
+    }
+
+    public OpenAiCompatibleChatModel(String baseUrl,
+                                     String apiKey,
+                                     String modelName,
+                                     Double temperature,
+                                     Integer maxOutputTokens,
+                                     RestClient restClient,
+                                     List<ChatModelListener> listeners,
+                                     String reasoningEffort,
+                                     Integer streamTimeoutSeconds) {
         this.baseUrl = trimTrailingSlash(requireText(baseUrl, "baseUrl"));
         this.apiKey = requireText(apiKey, "apiKey");
         this.modelName = requireText(modelName, "modelName");
         this.reasoningEffort = AiModelRuntimeConfig.normalizeReasoningEffort(reasoningEffort);
+        int timeoutSeconds = streamTimeoutSeconds == null || streamTimeoutSeconds < 1 ? 15 : streamTimeoutSeconds;
+        this.streamTimeout = Duration.ofSeconds(timeoutSeconds);
         this.restClient = Objects.requireNonNull(restClient, "restClient");
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(15))
@@ -165,7 +180,7 @@ public class OpenAiCompatibleChatModel implements ChatModel, StreamingChatModel 
         String requestModel = firstText(request.parameters().modelName(), request.modelName(), modelName);
         try {
             HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(AiModelRuntimeConfig.openAiApiUrl(baseUrl, "/chat/completions")))
-                    .timeout(Duration.ofMinutes(5))
+                    .timeout(streamTimeout)
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Accept", "text/event-stream, application/json")
                     .header("Content-Type", "application/json");

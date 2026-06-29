@@ -6,6 +6,8 @@ import com.lou.infinitechatagent.chat.dto.AutoRouteDecision;
 import com.lou.infinitechatagent.common.BaseResponse;
 import com.lou.infinitechatagent.common.ErrorCode;
 import com.lou.infinitechatagent.common.ResultUtils;
+import com.lou.infinitechatagent.monitor.MonitorContext;
+import com.lou.infinitechatagent.monitor.MonitorContextHolder;
 import com.lou.infinitechatagent.model.dto.ChatRequest;
 import com.lou.infinitechatagent.model.dto.StreamChatEvent;
 import com.lou.infinitechatagent.security.AuthPrincipal;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -48,6 +51,10 @@ public class AutoChatController {
         // §9:真增量(逐 token)路由 buffered=null;非增量(整段一次性 delta)路由显式 buffered=true。
         boolean tokenStreaming = autoChatRouterService.supportsTokenStreaming(decision);
         Boolean buffered = tokenStreaming ? null : Boolean.TRUE;
+        MonitorContext monitorContext = MonitorContext.builder()
+                .userId(request.getUserId())
+                .sessionId(request.getSessionId())
+                .build();
         AtomicReference<StringBuilder> answer = new AtomicReference<>(new StringBuilder());
         AtomicReference<Object> toolTrace = new AtomicReference<>(java.util.Map.of(
                 "capability",
@@ -69,19 +76,24 @@ public class AutoChatController {
                 .message("auto stream started")
                 .build()));
         Flux<ServerSentEvent<StreamChatEvent>> delta = tokenStreaming
-                ? autoChatRouterService.stream(request, decision)
-                .map(text -> {
-                    answer.get().append(text);
-                    return sse(StreamChatEvent.builder()
-                            .type("delta")
-                            .requestId(requestId)
-                            .sessionId(request.getSessionId())
-                            .route(decision.getRoute())
-                            .forced(Boolean.TRUE.equals(decision.getForced()))
-                            .reason(decision.getReason())
-                            .text(text)
-                            .build());
+                ? Flux.defer(() -> {
+                    MonitorContextHolder.setContext(monitorContext);
+                    return autoChatRouterService.stream(request, decision)
+                            .map(text -> {
+                                answer.get().append(text);
+                                return sse(StreamChatEvent.builder()
+                                        .type("delta")
+                                        .requestId(requestId)
+                                        .sessionId(request.getSessionId())
+                                        .route(decision.getRoute())
+                                        .forced(Boolean.TRUE.equals(decision.getForced()))
+                                        .reason(decision.getReason())
+                                        .text(text)
+                                        .build());
+                            })
+                            .doFinally(signal -> MonitorContextHolder.clearContext());
                 })
+                .subscribeOn(Schedulers.boundedElastic())
                 : Flux.defer(() -> {
                     AutoChatResponse response = autoChatRouterService.executeStream(request, decision, requestId);
                     String responseText = response.getAnswer() == null ? "" : response.getAnswer();
@@ -100,7 +112,7 @@ public class AutoChatController {
                             .citations(response.getCitations())
                             .toolTrace(response.getToolTrace())
                             .build()));
-                });
+                }).subscribeOn(Schedulers.boundedElastic());
         Flux<ServerSentEvent<StreamChatEvent>> done = Flux.defer(() -> Flux.just(sse(StreamChatEvent.builder()
                 .type("done")
                 .requestId(requestId)

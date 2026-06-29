@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -91,16 +92,21 @@ public class AiChatController {
                     .sessionId(chatRequest.getSessionId())
                     .message("stream started")
                     .build()));
-            Flux<ServerSentEvent<StreamChatEvent>> delta = aiChat.streamChat(chatRequest.getSessionId(), chatRequest.getPrompt())
-                    .map(text -> {
-                        answer.get().append(text);
-                        return sse(StreamChatEvent.builder()
-                                .type("delta")
-                                .requestId(requestId)
-                                .sessionId(chatRequest.getSessionId())
-                                .text(text)
-                                .build());
-                    });
+            Flux<ServerSentEvent<StreamChatEvent>> delta = Flux.defer(() -> {
+                        MonitorContextHolder.setContext(context);
+                        return aiChat.streamChat(chatRequest.getSessionId(), chatRequest.getPrompt())
+                                .map(text -> {
+                                    answer.get().append(text);
+                                    return sse(StreamChatEvent.builder()
+                                            .type("delta")
+                                            .requestId(requestId)
+                                            .sessionId(chatRequest.getSessionId())
+                                            .text(text)
+                                            .build());
+                                })
+                                .doFinally(signal -> MonitorContextHolder.clearContext());
+                    })
+                    .subscribeOn(Schedulers.boundedElastic());
             Flux<ServerSentEvent<StreamChatEvent>> done = Flux.just(sse(StreamChatEvent.builder()
                     .type("done")
                     .requestId(requestId)

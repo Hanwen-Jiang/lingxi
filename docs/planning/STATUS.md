@@ -190,6 +190,21 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-29 · P10 收口:agent 当前源镜像上线 + 生产 :10010 内助手/F01 冲烟全绿
+- 完成:**分支 `feat/agent-backend-p10`** 在 agent 侧补两个运行态修复后重新构建交付:① 兼容部署 env 的 `AGENT_MODEL_OPENAI_COMPATIBLE_*` 命名并加 `stream-timeout-seconds`(默认 15s),避免旧部署变量名与当前 Spring 配置脱节;② `/chat/auto/stream` 与 `/streamChat` 把阻塞模型调用放到 `boundedElastic` 并传播 `MonitorContext`,确保 **SSE start 首帧先发**、慢/不可用 LLM 转 error/metrics,不再让内助手空挂。
+- 完成:最终 jar 由 WSL Java 21 执行 `./mvnw clean package -DskipTests` 成功构建(Windows JVM 受页面文件不足影响,改用同一 worktree 的 WSL 构建链);最终 jar `agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar` sha256=`6bb12d552d957101a40965272926587089d32750f261de1c9d32bf800aefcba3`。用部署 Dockerfile 重建 `infinitechat/agent:local`=`438deced...`,旧镜像保留 `infinitechat/agent:pre-p10`=`ef8f707...`。
+- 完成:S3 Docker 运行态已 `docker compose ... up -d --no-build agent`;容器 `infinitechat-agent` 运行新镜像 `438deced...`,容器内 `/app/app.jar` sha256 与最终 jar 一致。运行 env 实测 `AGENT_GATEWAY_ENFORCE_IDENTITY=true`,MySQL=`mysql:3306/agent`,Redis=`redis:6379`,PgVector=`postgres:5432`;无 `DASHSCOPE_API_KEY` 时嵌入显式降级 HashEmbeddingModel,readiness 保持 200。
+- 验证:**A1-A4 生产冲烟 `PASS=5 FAIL=0`**:`:10011/api/actuator/health/readiness` 200;直连无头 `/api/agent/tools` 401;经生产网关 `:10010` 登录→`/api/agent/tools` 200/code=0;`/api/chat/auto/stream` 经网关达 agent 并立即产出 §9 `event:start` SSE(不再 404/空挂)。**完整 production runtime smoke `PASS=9 FAIL=0`**:无 token/garbage 401、邮箱登录、IM 发收落库/历史、内助手 SSE、F01 `confirmationRequired+challengeToken` 与二次持令牌放行全绿。
+- 验证/可观测:`/api/actuator/prometheus` 导出 `agent_ratelimit_decisions_total{backend="redis",result="allowed"}`,`agent_memory_op_duration_seconds`,`ai_model_*` 错误指标;最终日志未再出现 `MonitorContext is null`/“监控上下文丢失”。当前部署的 OpenAI-compatible 上游对 `gpt-5.5` 返回 unsupported/timeout,已记录为 `ai_model_errors_total` 且不影响 readiness/鉴权/F01/SSE 首帧。
+- 阻塞:无。交接:S3 可用 `infinitechat/agent:pre-p10` 回滚旧 agent 镜像;若要真实 delta,需把生产 env 的 OpenAI-compatible model/key 换成上游支持的模型。待中枢确认:无。
+
+### 2026-06-29 · P10 unit1/2:当前源 agent jar + docker 镜像已交付 S3 容器
+- 完成:**分支 `feat/agent-backend-p10`(从新 main `086f7593` 起独立 worktree `E:\jhw\proj-agent-p10`)**。按 P10 要求用当前 main agent 源执行 `.\mvnw.cmd clean package -DskipTests` → **BUILD SUCCESS**;胖 jar `agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar` 大小 98,326,432 bytes,sha256=`418526fb51a2796621ead44da3764a196b851edce46e87e5696e5d9580816901`。
+- 完成:用部署 Dockerfile `D:\InfiniteChatDeploy\projecta\deploy\dockerfiles\java-app.Dockerfile` 构建 `infinitechat/agent:local`(build context=P10 worktree,`JAR_FILE=agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar`)；旧镜像已备份为 `infinitechat/agent:pre-p10`(`ef8f7077...`,6/23 旧版),新镜像为 `b58d78ff...`(2026-06-29 18:09,416MB)。
+- 完成:交付 S3 Docker 运行态:`docker compose -f docker-compose.yml -f /mnt/e/jhw/proj-chatbe-p9/chat/scripts/deploy/docker-golive.override.yml --env-file ~/p9-deploy/.env up -d --no-build agent` 已重建 `infinitechat-agent`;容器实际镜像 `sha256:b58d78ff...`,端口 `10011`,jar 指纹与 P10 构建 jar 一致。运行 env 已确认 `AGENT_GATEWAY_ENFORCE_IDENTITY=true`,`MYSQL_URL=jdbc:mysql://mysql:3306/agent...`,`REDIS_HOST=redis/REDIS_PORT=6379`,`PGVECTOR_HOST=postgres/5432`;未配置 `DASHSCOPE_API_KEY` 时日志显式降级 HashEmbeddingModel。
+- 验证:agent readiness `GET :10011/api/actuator/health/readiness` → **200**(`db=MySQL UP`);主 health → **UP**(`redis=UP`);直连无头 `/api/agent/tools` → **401**,带 `X-User-Id` → **200 code=0**。`/app/app.jar` sha256=`418526fb51a2796621ead44da3764a196b851edce46e87e5696e5d9580816901`。
+- 阻塞:无。交接:S3 可继续以 `infinitechat/agent:pre-p10` 回滚旧 agent 镜像；我继续跑生产 `:10010` A1-A4 + 内助手/F01 冲烟。待中枢确认:无。
+
 ### 2026-06-29 · P9 agent 入运行态(WSL :18080 真实库)+ 可观测收尾;网关 A1–A4 一手全绿
 - 完成:**分支 `feat/agent-backend-p9`(push origin,commit `f2e40fa`/`e1e1cda`,从新 main `14eaac0` 起独立 worktree)**。把 agent **真正部署到 WSL 运行态接真实库**,并补齐 RAG/记忆/LLM 运行态指标。
   - **① agent 上线(task1)= 实测在线**:WSL `:18080` 起当前 main 真实库实例(替换 S3 `09` 的 pre-P7 降级实例 db=H2)。**接真实库**:MySQL `agent` 库(3308,P9 `CREATE DATABASE agent`,SchemaInitializer 自建表)+ Redis(6379 db6 带密码);PgVector 无凭据→**显式降级内存**、无 DASHSCOPE→LLM/嵌入降级(均 readiness 仍 200)。enforce=true。**实证**:`health` `db=MySQL`/`redis=UP(8.0.2)`、`/health/readiness=200`;直连无头→**401**、带 `X-User-Id`→**200**。**亲跑 S3 网关冲烟 `10-agent-smoke` A1–A4 = `PASS=5 FAIL=0`**(A3 登录→网关→X-User-Id→agent 全链路;A4 SSE 经网关达 agent,无 key 回 model-not-configured)。

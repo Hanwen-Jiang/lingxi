@@ -35,18 +35,20 @@ public class AiModelRuntimeConfig {
     private final Double defaultOpenAiTemperature;
     private final Integer defaultOpenAiMaxOutputTokens;
     private final String defaultOpenAiReasoningEffort;
+    private final Integer defaultOpenAiStreamTimeoutSeconds;
     private final String defaultDashScopeApiKey;
     private final String defaultDashScopeChatModel;
     private final AtomicReference<ModelConfig> override = new AtomicReference<>();
 
     public AiModelRuntimeConfig(
             @Value("${agent.model.provider:auto}") String defaultProvider,
-            @Value("${agent.model.openai-compatible.base-url:https://api.openai.com}") String defaultOpenAiBaseUrl,
-            @Value("${agent.model.openai-compatible.api-key:}") String defaultOpenAiApiKey,
-            @Value("${agent.model.openai-compatible.chat-model:gpt-5.4-mini}") String defaultOpenAiChatModel,
-            @Value("${agent.model.openai-compatible.temperature:0.7}") Double defaultOpenAiTemperature,
-            @Value("${agent.model.openai-compatible.max-output-tokens:1024}") Integer defaultOpenAiMaxOutputTokens,
+            @Value("${agent.model.openai-compatible.base-url:${AGENT_MODEL_OPENAI_COMPATIBLE_BASE_URL:https://api.openai.com}}") String defaultOpenAiBaseUrl,
+            @Value("${agent.model.openai-compatible.api-key:${AGENT_MODEL_OPENAI_COMPATIBLE_API_KEY:}}") String defaultOpenAiApiKey,
+            @Value("${agent.model.openai-compatible.chat-model:${AGENT_MODEL_OPENAI_COMPATIBLE_CHAT_MODEL:gpt-5.4-mini}}") String defaultOpenAiChatModel,
+            @Value("${agent.model.openai-compatible.temperature:${AGENT_MODEL_OPENAI_COMPATIBLE_TEMPERATURE:0.7}}") Double defaultOpenAiTemperature,
+            @Value("${agent.model.openai-compatible.max-output-tokens:${AGENT_MODEL_OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS:1024}}") Integer defaultOpenAiMaxOutputTokens,
             @Value("${agent.model.openai-compatible.reasoning-effort:high}") String defaultOpenAiReasoningEffort,
+            @Value("${agent.model.openai-compatible.stream-timeout-seconds:15}") Integer defaultOpenAiStreamTimeoutSeconds,
             @Value("${langchain4j.community.dashscope.chat-model.api-key:}") String defaultDashScopeApiKey,
             @Value("${langchain4j.community.dashscope.chat-model.model-name:qwen-plus}") String defaultDashScopeChatModel) {
         this.defaultProvider = defaultProvider;
@@ -56,6 +58,7 @@ public class AiModelRuntimeConfig {
         this.defaultOpenAiTemperature = defaultOpenAiTemperature;
         this.defaultOpenAiMaxOutputTokens = defaultOpenAiMaxOutputTokens;
         this.defaultOpenAiReasoningEffort = defaultOpenAiReasoningEffort;
+        this.defaultOpenAiStreamTimeoutSeconds = defaultOpenAiStreamTimeoutSeconds;
         this.defaultDashScopeApiKey = defaultDashScopeApiKey;
         this.defaultDashScopeChatModel = defaultDashScopeChatModel;
     }
@@ -83,7 +86,8 @@ public class AiModelRuntimeConfig {
                             request == null ? null : request.getReasoningEffort(),
                             currentOpenAiCompatible ? current.reasoningEffort() : null,
                             defaultOpenAiReasoningEffort
-                    ))
+                    )),
+                    currentOpenAiCompatible ? current.streamTimeoutSeconds() : defaultOpenAiStreamTimeoutSeconds
             );
         } else {
             next = new ModelConfig(
@@ -91,6 +95,7 @@ public class AiModelRuntimeConfig {
                     null,
                     firstText(request == null ? null : request.getApiKey(), defaultDashScopeApiKey),
                     firstText(request == null ? null : request.getModel(), defaultDashScopeChatModel),
+                    null,
                     null,
                     null,
                     null
@@ -199,7 +204,8 @@ public class AiModelRuntimeConfig {
                     firstText(defaultOpenAiChatModel, "gpt-5.4-mini"),
                     firstNumber(defaultOpenAiTemperature, 0.7),
                     firstNumber(defaultOpenAiMaxOutputTokens, 1024),
-                    normalizeReasoningEffort(firstText(defaultOpenAiReasoningEffort, "high"))
+                    normalizeReasoningEffort(firstText(defaultOpenAiReasoningEffort, "high")),
+                    firstNumber(defaultOpenAiStreamTimeoutSeconds, 15)
             );
         }
         return new ModelConfig(
@@ -207,6 +213,7 @@ public class AiModelRuntimeConfig {
                 null,
                 defaultDashScopeApiKey,
                 firstText(defaultDashScopeChatModel, "qwen-plus"),
+                null,
                 null,
                 null,
                 null
@@ -294,7 +301,8 @@ public class AiModelRuntimeConfig {
             String model,
             Double temperature,
             Integer maxOutputTokens,
-            String reasoningEffort
+            String reasoningEffort,
+            Integer streamTimeoutSeconds
     ) {
     }
 
@@ -311,7 +319,7 @@ public class AiModelRuntimeConfig {
     private static List<ModelOptionResponse> parseModels(String responseBody, String configuredModel) throws Exception {
         JsonNode data = OBJECT_MAPPER.readTree(responseBody).path("data");
         if (!data.isArray()) {
-            return configuredModelFallback(new ModelConfig(null, null, null, configuredModel, null, null, null));
+            return configuredModelFallback(new ModelConfig(null, null, null, configuredModel, null, null, null, null));
         }
         Set<String> seen = new LinkedHashSet<>();
         List<ModelOptionResponse> models = new ArrayList<>();
