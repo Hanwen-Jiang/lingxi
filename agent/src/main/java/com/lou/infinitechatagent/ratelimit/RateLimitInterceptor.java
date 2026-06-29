@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lou.infinitechatagent.common.BaseResponse;
 import com.lou.infinitechatagent.security.AuthPrincipal;
 import com.lou.infinitechatagent.security.GatewayIdentityFilter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -71,15 +72,20 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     private final double refillPerSec;
     private final long retryAfterSeconds;
     private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
     /** 进程内固定窗口兜底(Redis 不可用时)。 */
     private final ConcurrentHashMap<String, Window> windows = new ConcurrentHashMap<>();
+
+    /** 懒解析并缓存的指标注册表(可观测可选;缺失则计数为 no-op,不影响限流逻辑)。 */
+    private volatile MeterRegistry meterRegistry;
 
     public RateLimitInterceptor(
             @Value("${agent.ratelimit.llm.enabled:true}") boolean enabled,
             @Value("${agent.ratelimit.llm.capacity:30}") int capacity,
             @Value("${agent.ratelimit.llm.window-seconds:60}") long windowSeconds,
-            ObjectProvider<StringRedisTemplate> redisTemplateProvider) {
+            ObjectProvider<StringRedisTemplate> redisTemplateProvider,
+            ObjectProvider<MeterRegistry> meterRegistryProvider) {
         this.enabled = enabled;
         this.capacity = Math.max(1, capacity);
         long safeWindow = Math.max(1, windowSeconds);
@@ -87,6 +93,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         this.refillPerSec = (double) this.capacity / safeWindow;
         this.retryAfterSeconds = Math.max(1, (long) Math.ceil(1.0 / this.refillPerSec));
         this.redisTemplateProvider = redisTemplateProvider;
+        this.meterRegistryProvider = meterRegistryProvider;
     }
 
     @Override
@@ -97,11 +104,36 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         String key = subjectKey(request);
         Boolean redisAllowed = tryRedisTokenBucket(key);
         boolean allowed = redisAllowed != null ? redisAllowed : allowInProcess(key);
+        recordDecision(allowed, redisAllowed != null ? "redis" : "in_process");
         if (!allowed) {
             writeTooManyRequests(request, response);
             return false;
         }
         return true;
+    }
+
+    /**
+     * 限流决策计数(可观测,L3 债)。指标 {@code agent.ratelimit.decisions},
+     * 标签 {@code result=allowed|blocked} × {@code backend=redis|in_process}——低基数,
+     * 便于看限流触发频率与降级占比。MeterRegistry 缺失时为 no-op,不改限流行为。
+     */
+    private void recordDecision(boolean allowed, String backend) {
+        MeterRegistry registry = registry();
+        if (registry == null) {
+            return;
+        }
+        registry.counter("agent.ratelimit.decisions",
+                "result", allowed ? "allowed" : "blocked",
+                "backend", backend).increment();
+    }
+
+    private MeterRegistry registry() {
+        MeterRegistry cached = meterRegistry;
+        if (cached == null) {
+            cached = meterRegistryProvider.getIfAvailable();
+            meterRegistry = cached;
+        }
+        return cached;
     }
 
     /** Redis 令牌桶;Redis 不可用/异常返回 null(调用方降级进程内)。 */
