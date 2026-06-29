@@ -108,11 +108,12 @@ export type ApiClientOptions = {
   onUnauthorized?: () => void;
 };
 
-// Per docs/planning/03-contracts.md §2 — the success code is `0`. We were
-// originally written against the legacy `200` shape, so for the expand/
-// contract window (S1/S3 翻 envelope) we accept either. Either reduces to
-// "data is the meaningful payload, message is for surfacing if non-zero".
-const ENVELOPE_SUCCESS_CODES = new Set([0, 200]);
+// Per docs/planning/03-contracts.md §2 — the envelope success code is `0`.
+// The legacy `200`-as-success shape was retired in P8 (full-stack closeout:
+// commit 14eaac0; 6/6 flip-regression E2E green). 200 here is now strictly
+// an HTTP status concern, not an envelope code — accepting it as success
+// would mask backend bugs that miscode an error as 200 inside the body.
+const ENVELOPE_SUCCESS_CODES = new Set([0]);
 const UNAUTHENTICATED_CODES = new Set([40100]);
 
 export function createApiClient(apiBase: string, options: ApiClientOptions = {}) {

@@ -363,6 +363,26 @@
 
 ## S2 · agent 前端(owns agent-frontend/)
 
+### 2026-06-29 · P9 unit 1+2 · envelope 200 收缩 + Vite proxy 修通(commit `c8ebec3`)
+- 分支:`feat/agent-frontend-p9`(独立 worktree:`.claude/worktrees/agent-frontend-p9/`,从新 main `14eaac0` 起,HTTPS push,**未合 main**)。
+- **unit 1 · envelope `{0,200}→{0}` 收缩(已被中枢点名,STATUS 行 28-29):** P8 集成 `14eaac0` 已完成全栈包络收口(Contact/RTC/Offline/Moment 翻 chat-common Result code=0 + 真实 HTTP;flip-regression E2E 12 6/6 绿)。本前端 D4 expand/contract 窗口收掉:`api.ts` `ENVELOPE_SUCCESS_CODES = new Set([0, 200])` → `new Set([0])`;原 D4 注释改写为引用 P8 closeout commit。**新增 regress 用例**(api.test.ts):envelope `code=200` 在 P8 后必须被 `ApiError` 拒绝 —— 防止某服务静默回归到把 200 当 success(那会吞真错误)。改老 fixture 把 `code:200` mock 翻成 `code:0`。
+- **unit 2 · Vite dev proxy POST 500 真因 + 修通(P8 误诊订正):** P8 STATUS 把 dev proxy POST 500 写成 "Vite-5/Node-22 keep-alive 噪声 / 与 F01 无关",P9 实证发现是**两个独立 bug 叠加,与 Vite 自身无关**:
+  - **① env 传递断链 — `process.env` → `loadEnv`:** vite.config.ts 用 `process.env.VITE_API_PROXY_TARGET` 读环境变量,但 dev launcher(preview MCP、部分 dev shim)对 launch config 的 `env:` 字段**透传不稳**,vite 拿默认 `:10010` → :10010 在 WSL 段未 routed (WSL2 NAT) → `connect ETIMEDOUT` → Vite 报 empty-body 500。**修:** 用 vite 的 `loadEnv(mode, __dirname, "")` 链式读 `.env.local` / `.env.development.local` / `.env.development` / `.env`,launcher env 断也能 work。开发者在 `.env.local`(gitignored)写 `VITE_API_PROXY_TARGET=<目标>` 即可锁定 dev proxy 目标。
+  - **② 网关 CORS 收紧后 proxy 的 Origin 不再命中白名单:** P6 S3 `4584ae5` 把网关 CORS 硬化到 production `allowedOriginPatterns: http://localhost:[*]`(**任意 localhost 端口,不含 raw 127.0.0.1**)。本前端 Vite proxy 原来写 `Origin: <proxy target>`(P5 时命中"信任自身"那条),P6 后**全被网关 403 `Invalid CORS request`**。**修:** Vite proxy `configure` 钩子把 Origin 固定写成 `http://localhost:5173`(白名单内 hostname,与浏览器实际加载 host 解耦),无论浏览器走 localhost / 127.0.0.1 都过 CORS。原 `headers: {origin}` 改为 `configure: proxyReq.setHeader`,header 注入时机更稳健 + 便于后续加 5xx 调试 hook。
+- **unit 3 浏览器 F01/§9 E2E · 部分阻塞:**
+  - ✅ **登录 + token 注入 + Vite proxy + 网关 + 注入 X-User-Id 整条链路 wire-shape 通**(实证:spawn vite 5180 → `POST /api/v1/user/login` 经 proxy 200 + code:0 + string userId + access/refresh token;`POST /api/agent/chat` 不再 403 CORS,**直达 agent 业务层**)。
+  - 🛑 **F01 真 token 往返 / §9 流式真渲染仍阻塞 Redis :6399 down**(P8/P7 同症):agent 业务路径返 `code:50000`,traceId 链回 `LettuceConnectionFactory → connect 127.0.0.1:6399 timed out`(F01 token / 记忆 / 会话写 Redis 全 fail)。**这是 S3 E2E 栈维护问题,非前端**,前端 wire-shape 已 Vitest+spawn-curl 双证 P5 wave2 起对齐 P7 `11-assistant-e2e` 5/5 后端形(toolGovernance 结构、`v="1"`、buffered、未知 type 容忍均在 useChat.test/ToolConfirmation.test 16+5 用例覆盖)。
+- **task 3 (登录/聊天指向运行态 `:10010`)· 双重阻塞 S3 P9 上线:**
+  - WSL 内部 `:10010` 在线但 **Windows host 不可达**(WSL2 NAT 转发问题,curl 4s timeout)。
+  - 即便 reach,`:10010` 仍是 **pre-P0 旧栈**(WSL 内部 curl 返 `{code:40003, msg:"登录失败,用户名或者密码错误"}` — 旧 envelope:**字段 `msg` 不是 `message`、code `40003` 不在 chat-common Result 域、账号库与 E2E 段也不通**)。
+  - 用户拍板(STATUS 行 28-29):"P9 = 上线:WSL 运行态切到 v0.x 替换 pre-P0 无鉴权旧栈" — 是 S3 P9 主活,本轮**未完成**。本前端 vite.config 默认 proxy target 仍是 `:10010`,S3 切到 v0.x 后**零代码改动**(`.env.local` 也无需写,默认就指 :10010)。
+- 5 大门(逐轮):tsc / lint / prettier / vitest(**8 文件 / 69 测试**,新增 1 个 200-as-error regress)/ vite build 全 exit 0。
+- 产出物:`agent-frontend/src/{api.ts, api.test.ts}` + `agent-frontend/vite.config.ts`(3 文件 / +80 / -43)。
+- **🛑 给 S3(E2E 栈维护 — 同 P7/P8 交接):** WSL Redis e2e `:6399` 仍 down(P7 起一直 timeout 没改),是 F01/§9 真路径端到端唯一阻塞点。重启即可解阻 — 后端代码未动,P7 `11-assistant-e2e` 5/5 当时绿。重启后请在 STATUS 标"E2E Redis 已恢复",我即可 spawn vite + 浏览器一并跑 F01 token 真往返(网络面板验 `confirmationToken=<challengeToken>`、一次性消费、TTL 过期重取)+ §9 流式真渲染 6 步实证,补上 P7-P9 累积欠的"S2 浏览器级 E2E"。
+- **🛑 给 S3(P9 上线主活 — 完成度):** `:10010` 当前仍 pre-P0 旧栈(WSL 内 curl 返 `code:40003 msg:登录失败` 旧 envelope)+ Windows host 不可达。**用户拍板 P9 = 上线 v0.x 替换无鉴权旧栈,本轮未到位。** 切完后请在 STATUS 标"运行态 `:10010` 已切 v0.x",前端不需要任何改动即可冒烟(vite.config default proxy target 仍 `:10010`)。
+- 待中枢确认:无。
+
+
 ### 2026-06-29 · P8 unit 0 · F01/§9 浏览器 E2E 阻塞 + 包络收缩待点名(无代码变更)
 - 分支:`feat/agent-frontend-p8`(独立 worktree:`.claude/worktrees/agent-frontend-p8/`,从新 main `f9e3812` 起,HTTPS push,**未合 main**)。
 - **现状判断:** P8 prompt 两件主活在本轮**均无法 ship 真路径产出**,**不强行**(用户红线"网关/Auth 起不来时不硬上 mock 伪造通过"):

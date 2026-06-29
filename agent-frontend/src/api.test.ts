@@ -33,10 +33,10 @@ afterEach(() => {
 });
 
 describe("createApiClient.listSessions", () => {
-  it("returns data when the envelope has code 200", async () => {
+  it("returns data when the envelope has code 0 (full-stack contract since P8)", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(mockResponse({ok: true, status: 200, json: {code: 200, data: [session], message: "ok"}}));
+      .mockResolvedValue(mockResponse({ok: true, status: 200, json: {code: 0, data: [session], message: "ok"}}));
     vi.stubGlobal("fetch", fetchMock);
 
     const api = createApiClient("/api");
@@ -45,6 +45,24 @@ describe("createApiClient.listSessions", () => {
     expect(result).toEqual([session]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toContain("/chat/sessions");
+  });
+
+  // P9 收缩 regress: envelope body code=200 was a legacy expand/contract
+  // affordance retired in P8 (full-stack closeout commit 14eaac0). Treating
+  // 200 as success would now mask a real backend bug (some service returning
+  // success envelope with the wrong code). Must reject as ApiError, *not*
+  // silently unwrap data.
+  it("rejects an envelope code=200 as an error after the P8 envelope closeout", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        mockResponse({ok: true, status: 200, json: {code: 200, data: [session], message: "stale 200 envelope"}}),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const api = createApiClient("/api");
+    await expect(api.listSessions("1")).rejects.toBeInstanceOf(ApiError);
+    await expect(api.listSessions("1")).rejects.toMatchObject({code: 200});
   });
 
   it("throws ApiError when the envelope code is not 200", async () => {
