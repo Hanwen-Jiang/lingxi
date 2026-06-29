@@ -3,6 +3,7 @@
 // the gateway injects X-User-Id), D4 envelope unwrap, HTTP-status→message mapping,
 // and the 401→refresh→retry replay (D2). The real api (real.ts) is built on this.
 import type {AuthSession} from "./types";
+import {isSuccessCode} from "./envelope";
 import {useAuthStore} from "@/store/auth";
 
 // --- Base URL resolution -----------------------------------------------------
@@ -57,10 +58,6 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
-
-// code 0 = success (§2). We also accept legacy 200 for the not-yet-flipped
-// endpoints (S3 item3 翻转前旧端点自有 Result),per the cross-stack {0,200} 兜底.
-const SUCCESS_CODES = new Set([0, 200]);
 
 /** User-facing message by HTTP status (§3). Gateway-level rejections (e.g. the
  *  401 for a missing token) come back with an EMPTY body, so we can't rely on the
@@ -147,9 +144,9 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
     );
   }
 
-  // 2xx with an envelope: a non-{0,200} code is still an error (defensive — the
-  // contract maps errors to HTTP status, but tolerate a stray body-coded error).
-  if (env && env.code !== undefined && !SUCCESS_CODES.has(env.code)) {
+  // 2xx with an envelope: a non-success code (anything but 0 — §2, post-P9
+  // contraction) is still an error, even on HTTP 200.
+  if (env && !isSuccessCode(env.code)) {
     throw new ApiError(res.status, env.message || "请求失败", env.code, env.traceId);
   }
 
@@ -222,7 +219,7 @@ function tryRefresh(): Promise<boolean> {
       }
       const text = await res.text();
       const env = text ? (JSON.parse(text) as Envelope<LoginResponseRaw>) : null;
-      if (!env?.data || (env.code !== undefined && !SUCCESS_CODES.has(env.code))) {
+      if (!env?.data || !isSuccessCode(env.code)) {
         store.signOut();
         return false;
       }
