@@ -207,6 +207,15 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-29 · P12 发行支撑:1.0.0 元数据 + string session/F01 运行态复证
+- 完成:**分支 `feat/agent-backend-p12`(从 main `bfbd470` 起,worktree `E:\jhw\proj-agent-p12`)**。agent 发行元数据升到 **1.0.0**:`agent/pom.xml` 版本 `1.0.0`;OpenAPI `Info.version=1.0.0`;Spring Boot `build-info` 纳入 jar;`/api/actuator/info` 暴露 `app.component=agent-backend`、`app.version=1.0.0` 与 build version。
+- 验证:WSL 执行 `./mvnw test -Plow-mem-test` **40/40 绿**;`./mvnw clean package -DskipTests` **BUILD SUCCESS**。发行 jar 路径变为 `agent/target/InfiniteChat-Agent-1.0.0.jar`,sha256=`103cc35771d947f6496ebf12d81d06d67a0fb720d7b6cdc3b252032a036d6c8d`。注意:S3/部署若复用旧脚本默认 `InfiniteChat-Agent-0.0.1-SNAPSHOT.jar`,需显式改 `AGENT_JAR`/`JAR_FILE` 到 1.0.0 jar。
+- 运行态复证(E2E 栈 `gw=:10110`,agent `:18080`,client-only `sessionId:"s-lingxi"`):seed 登录后,直连带 `X-User-Id` `POST /api/agent/chat` → **200/code=0**,无 Jackson/sessionId 500;经网关 `POST /api/chat/auto/stream` → **SSE start**,首帧回传 `sessionId:"s-lingxi"`,随后因当前栈未配 OpenAI-compatible key/model 走显式 error 降级,未验证真实 delta。
+- F01 复证:`/api/agent/chat` 直连与经网关均用 `sessionId:"s-lingxi"` 首轮命中 **200 + confirmationRequired + challengeToken**;二轮回传 `confirmationToken` 后**无 500**、sessionId/string/F01 token 绑定通过,当前运行态随后因 **AI 模型未配置** 返回 503 降级(非 D5/F01 问题)。若部署提供受支持 upstream LLM model+key,请在同一路径补验真实放行答案/真实 streaming delta。
+- 健康/可观测:运行态 `:18080/api/actuator/health/readiness` **200**;Prometheus 导出 `agent_ratelimit_decisions_total`、`agent_memory_op_duration_seconds`、JVM/process 指标。P12 新 jar 临时 `:18290` 启动复证 readiness **200**;`/api/actuator/info` 返回 app/build version **1.0.0**;Prometheus 指标可抓取。
+- 交接:**S2/S4 可继续全 UI 内助手/F01 验收**。若 UI 在确认后看到 503/显式 error,按当前证据优先归类为 LLM env 未配置/unsupported,不是 string sessionId 500;换受支持模型+key 后再验 `/api/chat/auto/stream` 真实 delta。
+- 阻塞:无(agent 侧)。待 S3/部署:1.0.0 jar 路径/镜像 build arg 同步;若要真 delta/F01 确认后自然语言答案,提供受支持 LLM model+key。
+
 ### 2026-06-29 · P11 发行打磨:D5 sessionId string 收口 + LLM 配置显式化
 - 完成:**分支 `feat/agent-backend-p11`(从 main `3016d90` 起,worktree `E:\jhw\proj-agent-p11`)**。把 agent 对外入口的 `sessionId` 收到 wire-level string:`AgentRequest.sessionId`、`ChatRequest.sessionId` 改为 String,Jackson 接受 JSON string/number;业务边界经 `SessionIdCodec` 转内部 Long。标准 session 仍为 string snowflake;前端 client-only 字符串(如 `s-lingxi`)稳定映射到高位内部 Long,用于记忆/F01 challenge token 绑定,不会再在反序列化阶段 500。`StreamChatEvent`/`ChatResponse` 出参保持 string sessionId。
 - 完成:同步修 `/api/agent/chat`、`/api/chat`、`/api/streamChat`、`/api/chat/auto(/stream)`、`/api/rag/chat` 的内部 sessionId 边界;`/api/chat/auto/stream` 首帧继续回传原始 `sessionId:"s-lingxi"`。新增 `RAG_BOOTSTRAP_ENABLED` 可选启动开关(默认 true)便于轻量 smoke 跳过本地文档灌库,不改默认行为。
