@@ -14,7 +14,7 @@ export const SSE_SCHEMA_V = 1;
 // fields and ignore the rest, so a newer backend shape never breaks parsing).
 export interface RawSseEvent {
   type?: string;
-  v?: number;
+  v?: number | string; // §9: string "1" on the wire; normalized to number on map
   buffered?: boolean;
   text?: string;
   delta?: string;
@@ -100,7 +100,9 @@ function extractCitations(raw: RawSseEvent): Citation[] | undefined {
  */
 export function mapAssistantEvent(raw: RawSseEvent): AssistantStreamEvent | null {
   if (!raw || typeof raw !== "object") return null;
-  const v = typeof raw.v === "number" ? raw.v : SSE_SCHEMA_V;
+  // §9 sends `v` as a string ("1"); normalize to a number, default to the known
+  // schema version when absent/garbage. (v is informational — the UI ignores it.)
+  const v = Number(raw.v) || SSE_SCHEMA_V;
   switch (raw.type) {
     case "start":
       return {type: "start", v, buffered: raw.buffered === true};
