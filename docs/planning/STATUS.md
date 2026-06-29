@@ -373,6 +373,18 @@
 
 ## S2 · agent 前端(owns agent-frontend/)
 
+### 2026-06-29 · P10 · 生产 F01/§9 补验 + 命令 Popover 修复(分支 `feat/agent-frontend-p10`)
+- 完成:从新 main `086f759` 起独立 worktree 分支 `feat/agent-frontend-p10`。按 `agent/docs/E2E-INTEGRATION.md` 复核 F01/§9 后,指向生产 Docker `:10010` 做验证；Windows host 直连 `127.0.0.1:10010` 曾超时,本轮采用本地捕获代理 `127.0.0.1:19010 -> WSL 100.122.46.119:10010` 且剥离上游 Origin(否则生产 gateway 对部分 chat 请求返 `Invalid CORS request`),浏览器 dev server `127.0.0.1:5182` 通过该代理访问生产。
+- 完成:生产登录/会话/聊天冒烟:用 Redis 验证码注册临时生产账号并在浏览器 UI 完成密码登录；剥离 Origin 后 `/api/chat/model-status`、`/api/chat/sessions` 均返 `code:0`；`/api/chat/auto/stream` 在 agent 冷启动窗口曾出现 `agent:10011 connection refused`,agent ready 后用数字 sessionId 重试得到真实 `text/event-stream`。
+- 完成:F01 生产实证(经生产 gateway + agent + Redis):高风险邮件 prompt 首次返回 `toolGovernance.confirmationRequired=true`、`challengeToken`、`challengeExpiresInSec=300`;确认请求体只有 `userId/sessionId/prompt/confirmationToken`,无 `toolName/toolNames/confirmedTools/pendingTools`;确认后不再要求确认并尝试执行邮件(因正文缺失返回 "Could not parse mail");同 token 重放不执行工具而重新进入确认态；TTL 等待 300s+ 后旧 token 确认同样重新进入确认态,重新触发可拿到新 challengeToken。
+- 完成:§9 生产 SSE 实证:数字 sessionId 下 `/api/chat/auto/stream` 真实返回 `text/event-stream`,事件含 `v:"1"`、`type=start|delta|done`,direct route,UI/解析链路可消费该形状；后端本轮未实际发 `buffered:true` 或未知 `type`,这些兼容仍由现有 `api.test`/`useChat.test` 回归覆盖(未伪造生产网络事件)。
+- 完成:修一个本轮浏览器阻断点: `ComposerActionsPopover` 原把 HeroUI `Button` 放进 `Popover.Trigger`(Trigger 自身渲染 `div role=button`)导致无效嵌套 button,点击后只 active 不挂命令列表；改为受控 Popover + Trigger 自身承载圆形按钮样式,命令选择后关闭。in-app browser DOM 复证:嵌套按钮数 0,`/agent-chat` 命令列表可见。后续 in-app browser 在选择 option 时崩到自身 `data:` crash interstitial,非应用/Vite 崩溃；本机 Playwright 包缺浏览器二进制,未再补完整 UI 卡片点击流。
+- 产出物:`agent-frontend/src/features/chat/ComposerActionsPopover.tsx`,`agent-frontend/src/styles.css`,`docs/planning/STATUS.md`。
+- 验证:5 门绿: `npm run typecheck`; `npm run lint`; `npm run format:check`; `npm run test`(8 files/69 tests); `npm run build`(exit 0,仅既有 CSS/chunk size warning)。生产只读/验证: `infinitechat-agent` health UP(db/redis UP),`infinitechat-gateway` 通过代理访问。
+- 阻塞/风险:① E2E 栈 Redis `:6399` 仍 down(P7-P9 欠账未由 E2E 环境解阻),所以本轮改走生产镜像路径收口；② 生产 agent 的 `AgentRequest.sessionId` 仍按 `Long` 反序列化,字符串 sessionId 会 500,与 D5 string-id 契约不一致,前端 UI 当前按 string 发送会影响 F01/agent 模式真 UI；本轮 F01 生产语义用数字 sessionId 验通；③ 生产 `/api/actuator/health` 经 gateway 仍 404,健康用 WSL 直连 agent `:10011/api/actuator/health` 验。
+- 交接:S1/S3 需要修 agent `AgentRequest.sessionId` string 双读/出参契约,并修 E2E Redis `:6399` 后再补真正 `:10110` 浏览器级 F01/§9；若要求完全 UI 卡片级 F01,需在后端 sessionId 契约修好后重跑。
+- 待中枢确认:是否将本轮发现的生产 gateway CORS/Origin 约束固化到 dev proxy/部署配置；是否把 agent `sessionId Long` 作为 P10/P11 阻断项处理。
+
 ### 2026-06-29 · P9 unit 1+2 · envelope 200 收缩 + Vite proxy 修通(commit `c8ebec3`)
 - 分支:`feat/agent-frontend-p9`(独立 worktree:`.claude/worktrees/agent-frontend-p9/`,从新 main `14eaac0` 起,HTTPS push,**未合 main**)。
 - **unit 1 · envelope `{0,200}→{0}` 收缩(已被中枢点名,STATUS 行 28-29):** P8 集成 `14eaac0` 已完成全栈包络收口(Contact/RTC/Offline/Moment 翻 chat-common Result code=0 + 真实 HTTP;flip-regression E2E 12 6/6 绿)。本前端 D4 expand/contract 窗口收掉:`api.ts` `ENVELOPE_SUCCESS_CODES = new Set([0, 200])` → `new Set([0])`;原 D4 注释改写为引用 P8 closeout commit。**新增 regress 用例**(api.test.ts):envelope `code=200` 在 P8 后必须被 `ApiError` 拒绝 —— 防止某服务静默回归到把 200 当 success(那会吞真错误)。改老 fixture 把 `code:200` mock 翻成 `code:0`。
