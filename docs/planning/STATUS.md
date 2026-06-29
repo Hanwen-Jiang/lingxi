@@ -20,6 +20,15 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-29 · P12 集成:🎉 agent-frontend 浏览器级 F01 终于实证(CDP 真栈)+ 全模块 v1.0.0;v1.0.0 仅差 S3 末轮验收 → P13
+- **本轮 P12 数字(git 核实)**:四条并入 `main`。**S2 `d58651d`(全新会话恢复成功)**:生产 Docker 真栈 **UI 卡片级 F01 实证(Chrome CDP 自动化,不 mock)**——真实登录 + string sessionId `s-lingxi` → 触发高危工具 → 确认卡 → 点确认 → 抓到 `confirmationToken`(无工具名)→ 一次性消费(重放签新 token 不执行)→ TTL 300s 过期重提示;§9 `v="1"` start/delta/done;版本 1.0.0;70 测试绿。**这是欠了 P7 起的 agent-frontend 浏览器 F01 验收,终于补齐**。S4 `05dede0`(发行打磨 + UI 终检:错误/空/暗色/移动,overflow 0)。S1 `113df11`(**HUB 代提**:v1.0.0 元数据 + 运行态复证 `s-lingxi`→200/F01 token 无 500/`mvnw test` 40/40)。S3 `bfa9894`(**HUB 代提**:全 chat 模块 v1.0.0 + 脚本同步)。
+- **里程碑**:🎉 内置助手 F01 **前后端浏览器级全验证**(后端 11-assistant 5/5 + 前端 CDP 卡片级);全模块统一到 **v1.0.0**。
+- **会话治理(本轮关键)**:S2 旧会话报废 → **起全新自包含会话恢复成功**(`019f139f`,完成了 F01 CDP 验收)。S1/S3 旧会话**跑完但没提交**(task_complete 后留 WIP 3.75h)→ **HUB 代提交**它们完成且一致的发行工作(S1 已自验 40/40 + BUILD SUCCESS;S3 版本号一致 bump)。
+- **已集成**:四条并入 `main = b03fb52`(merge tips → agent-backend/chat-backend/chat-frontend/agent-frontend),零冲突,已 push。
+- **🟡 距 v1.0.0 仅剩(P13)**:① **S3 末轮验收**——在集成后的 `main b03fb52` 上跑全栈 E2E 57/57 + 生产 :10010 冲烟(含 string sessionId/F01),**绿即 HUB 打 tag `v1.0.0`**(S3 本轮跑在 S2/S4 完成前,未做此验收);② deploy 配置固化需用户 sudo 应用 `p10-deploy-config.diff`;③ COS 公开读 `fileUrl` 403(用户基建);④ 真实 LLM delta 需部署提供受支持 model/key(S1 已显式化)。
+- **路线**:功能版 v1.0·快。**P13 = S3 末轮验收 + 收尾 → 打 `v1.0.0`**。注入用英文 prompt;会话坏了才换新(S2 已换)。
+- 阻塞:无。待中枢确认:deploy 固化 sudo;COS 公开读策略;是否提供 LLM key 验真 delta。
+
 ### 2026-06-29 · P11 集成(部分):D5 sessionId string 收口 + 生产网关 CORS/health 修复(S1+S3);S2 挂起/S4 空转(被 S1 修阻塞)→ 顺延 P12
 - **本轮 P11 数字(git 核实)**:S1 `86a5295`(**D5 sessionId string 收口**:`AgentRequest/ChatRequest.sessionId`→String + `SessionIdCodec` 边界转 Long,client-only `s-lingxi` 稳定映射;修全部 agent 端点 sessionId 边界;LLM 模型显式可配/无 key 降级;`mvnw test -Plow-mem-test` **40/40**,本机 jar 实测 `s-lingxi`→200/SSE start);S3 `c229544`(**生产网关 CORS 真修**:根因=网关转发保留 Origin→agent 二次拦截,改 `RemoveRequestHeader=Origin` 使网关为唯一 CORS 边界,实测跨源 POST SSE 200;health smoke 收口;deploy diff 更新;**会话内全栈 E2E 57/57**)。**S2/S4 未交付**:S2 会话挂起(2 文件未提交、无 ledger、41min idle),S4 空转——二者「全 UI 卡片级 F01/§9 验收」**被 S1 的 sessionId 修阻塞**(S1 修本轮才提交,未在 S2/S4 起始的 main 上),属正常拓扑顺延。
 - **里程碑**:v1.0.0 的两个技术前置已清——**D5 sessionId 契约收口** + **生产跨源 SSE 可用(CORS 修)**;全栈 E2E 仍 57/57。
