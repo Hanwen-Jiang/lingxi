@@ -192,7 +192,8 @@ public class AiModelConfig {
                         config.maxOutputTokens(),
                         restClientBuilder.build(),
                         List.of(listener),
-                        config.reasoningEffort()
+                        config.reasoningEffort(),
+                        config.streamTimeoutSeconds()
                 );
             }
             if (!hasText(config.apiKey())) {

@@ -180,11 +180,12 @@ agent:
   model:
     provider: ${AGENT_MODEL_PROVIDER:auto}
     openai-compatible:
-      base-url: ${OPENAI_BASE_URL:${OPENAI_COMPATIBLE_BASE_URL:https://api.openai.com}}
-      api-key: ${OPENAI_API_KEY:${OPENAI_COMPATIBLE_API_KEY:}}
-      chat-model: ${OPENAI_CHAT_MODEL:${OPENAI_MODEL:gpt-5.4-mini}}
-      temperature: ${OPENAI_TEMPERATURE:0.7}
-      max-output-tokens: ${OPENAI_MAX_OUTPUT_TOKENS:1024}
+      base-url: ${OPENAI_BASE_URL:${OPENAI_COMPATIBLE_BASE_URL:${AGENT_MODEL_OPENAI_COMPATIBLE_BASE_URL:https://api.openai.com}}}
+      api-key: ${OPENAI_API_KEY:${OPENAI_COMPATIBLE_API_KEY:${AGENT_MODEL_OPENAI_COMPATIBLE_API_KEY:}}}
+      chat-model: ${OPENAI_CHAT_MODEL:${OPENAI_MODEL:${AGENT_MODEL_OPENAI_COMPATIBLE_CHAT_MODEL:gpt-5.4-mini}}}
+      temperature: ${OPENAI_TEMPERATURE:${AGENT_MODEL_OPENAI_COMPATIBLE_TEMPERATURE:0.7}}
+      max-output-tokens: ${OPENAI_MAX_OUTPUT_TOKENS:${AGENT_MODEL_OPENAI_COMPATIBLE_MAX_OUTPUT_TOKENS:1024}}
+      stream-timeout-seconds: ${OPENAI_STREAM_TIMEOUT_SECONDS:${OPENAI_COMPATIBLE_STREAM_TIMEOUT_SECONDS:${AGENT_MODEL_OPENAI_COMPATIBLE_STREAM_TIMEOUT_SECONDS:15}}}
   tool-governance:
     enabled: true
     confirmation-threshold: HIGH
