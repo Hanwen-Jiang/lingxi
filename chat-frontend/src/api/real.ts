@@ -44,11 +44,10 @@ function remember(u: User): void {
 }
 
 // Send needs sessionType (1 single / 2 group) and, for a single chat, the peer's
-// userId as `receiveUserId` — neither of which the session-list item carries. We
-// learn both as the user browses: type from the session list, peer from any
-// inbound message in a single thread (senderId !== me). 交接 S3: exposing
-// `peerUserId` on SessionListItem would make single-chat send robust from a cold
-// open (a brand-new single thread with no peer message yet can't be derived).
+// userId as `receiveUserId`. Both come from the session list now: type from
+// `type`, peer from `peerUserId` (S3 `3929842` — so a cold-open single chat with
+// no prior message can send too). We still learn the peer from inbound history as
+// a fallback for any list item that predates the field.
 const sessionTypeById: Record<Id, number> = {};
 const sessionPeerById: Record<Id, Id> = {};
 
@@ -61,6 +60,7 @@ interface SessionListItemRaw {
   lastMessage?: string | MessageItemRaw | null;
   lastMessageTime?: number | null;
   unreadCount?: number | null;
+  peerUserId?: string | null; // single-chat peer userId (S3 `3929842`); null for groups
 }
 
 interface MessageItemRaw {
@@ -87,15 +87,13 @@ const MSG_TYPE = {TEXT: 1, PICTURE: 2, FILE: 3, VIDEO: 4, RED_PACKET: 5} as cons
 const SESSION_TYPE = {SINGLE: 1, GROUP: 2} as const;
 
 // Agent endpoint for the in-IM 灵犀 assistant, reached through the chat gateway.
-// Probed against the live E2E gateway (:10110): `/api/chat/auto/stream` → 404 (the
-// chat gateway does NOT route /api/chat/** to the agent), `/api/agent/chat` → 401
-// (routed under §6 /api/agent/**). So we use /api/agent/chat — the plan-40
-// designated route. It's buffered today (whole answer in one frame — §9
-// buffered:true; agent真流式 = M14), which the dual-mode consumer renders as a
-// single delta. 交接 S3/J1: when a streaming agent route is exposed under
-// /api/agent/** (or the gateway routes /chat/auto/stream → agent), flip this to it
-// for token-by-token — the SSE branch below is already wired.
-const ASSISTANT_STREAM_PATH = "/api/agent/chat";
+// J1 (agent/docs/E2E-INTEGRATION §1) routes /api/chat|chat/auto|chat/auto/stream +
+// /api/agent|rag|memory to the agent (gateway injects X-User-Id). We use the
+// auto-routing SSE route: a direct chat streams token-by-token, while agent/RAG/
+// tool routes send the whole answer in one frame (§9 `buffered:true`) — the
+// dual-mode consumer below renders both. (P6 fell back to /api/agent/chat because
+// the chat gateway hadn't yet routed /api/chat/** — J1 added that route.)
+const ASSISTANT_STREAM_PATH = "/api/chat/auto/stream";
 
 // Message content type → client kind. Mirrors MessageRcvTypeEnum (server-side).
 function mapMessageKind(type: number): MessageKind {
@@ -127,6 +125,8 @@ function mapMessage(r: MessageItemRaw): Message {
 
 function mapConversation(r: SessionListItemRaw): Conversation {
   if (r.sessionId) sessionTypeById[String(r.sessionId)] = r.type ?? SESSION_TYPE.SINGLE;
+  // Cold-open single-chat send: learn the peer straight from the list (S3 `3929842`).
+  if (r.sessionId && r.peerUserId) sessionPeerById[String(r.sessionId)] = String(r.peerUserId);
   const kind: ConversationKind = r.type === 2 ? "group" : "single";
   let lastMessage: Message | undefined;
   if (r.lastMessage && typeof r.lastMessage === "object") {
