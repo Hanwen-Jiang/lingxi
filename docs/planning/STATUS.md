@@ -216,6 +216,15 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-30 · P13 release-close 支撑:1.0.0 jar 兼容别名 + 验收栈交接
+- 完成:**分支 `feat/agent-backend-p13`(从 main `559d73d` 起,worktree `E:\jhw\proj-agent-p13`)**。确认 `agent/` 已是 v1.0.0(`pom`/OpenAPI/actuator info)。为支撑 S3 末轮验收,在 Maven `package` 阶段新增兼容别名:`target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar` 会从 `target/InfiniteChat-Agent-1.0.0.jar` 复制生成。这样当前仍写死旧 jar 名的 S3 E2E/deploy 脚本(`chat/e2e/09-agent-e2e.sh`、`chat/scripts/runtime-agent-golive.sh`、`runtime-deploy.sh`)即使未改脚本,也会拿到 1.0.0 字节内容。
+- 验证:WSL `./mvnw clean package -DskipTests` **BUILD SUCCESS**;`InfiniteChat-Agent-1.0.0.jar` 与兼容别名 `InfiniteChat-Agent-0.0.1-SNAPSHOT.jar` sha256 均为 `c392678544849d72f74e64c93a72693e0fd0f6896333af0f3cf0a29c28cdc863`。WSL `./mvnw test -Plow-mem-test` **40/40 绿**。
+- 镜像:用部署 Dockerfile 按旧脚本路径 `JAR_FILE=agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar` 成功构建 `infinitechat/agent:local`=`sha256:c6db77da4175...`,旧镜像已留 `infinitechat/agent:pre-p13-*`。这证明旧 build arg 可得到 P13/1.0.0 jar。
+- 验收栈现状:尝试 `docker compose ... up -d --no-build agent` 时,Docker 重新创建了 `infinitechat-agent`,但启动失败在宿主端口绑定:`listen tcp4 0.0.0.0:10011: bind: address already in use`。Windows 侧确认 `iphlpsvc` 持有 `netsh portproxy` 监听 `0.0.0.0:10011 -> 192.168.112.154:10011`(同时还有 `10010/4173/8848`),导致 Docker 不能重新绑定端口。当前这是 S3/运行态端口代理清理问题,不是 agent jar/image 内容问题。
+- 发行说明输入(agent v1.0.0):① IM 内置助手走统一网关 `/api/chat/auto/stream`,支持 §9 SSE start/delta/done/error;② RAG 接真实嵌入/混合检索/引用阈值解耦;③ F01 高风险工具确认改为服务端一次性 `challengeToken`(绑定 userId/sessionId/tool,Redis GETDEL/内存降级);④ P9+ 可观测指标包括 `ai_model_*`、`agent_rag_query_duration_seconds`、`agent_memory_op_duration_seconds`、`agent_ratelimit_decisions_total`;⑤ P11/P12 完成 D5 string sessionId(`s-lingxi`)与 1.0.0 元数据。
+- 交接:S3 最终验收前请先清理/刷新 Windows portproxy 或改 compose 端口,再启动 gateway/agent;agent 镜像当前已是 P13 构建。若验收环境提供受支持 upstream LLM model+key,继续验 `/api/chat/auto/stream` 真实 `delta`;否则按显式降级只验 readiness 200、SSE start/error、F01 token 往返无 500。
+- 阻塞:代码侧无;运行态阻塞为宿主 `iphlpsvc` portproxy 占用 `10010/10011`。
+
 ### 2026-06-29 · P12 发行支撑:1.0.0 元数据 + string session/F01 运行态复证
 - 完成:**分支 `feat/agent-backend-p12`(从 main `bfbd470` 起,worktree `E:\jhw\proj-agent-p12`)**。agent 发行元数据升到 **1.0.0**:`agent/pom.xml` 版本 `1.0.0`;OpenAPI `Info.version=1.0.0`;Spring Boot `build-info` 纳入 jar;`/api/actuator/info` 暴露 `app.component=agent-backend`、`app.version=1.0.0` 与 build version。
 - 验证:WSL 执行 `./mvnw test -Plow-mem-test` **40/40 绿**;`./mvnw clean package -DskipTests` **BUILD SUCCESS**。发行 jar 路径变为 `agent/target/InfiniteChat-Agent-1.0.0.jar`,sha256=`103cc35771d947f6496ebf12d81d06d67a0fb720d7b6cdc3b252032a036d6c8d`。注意:S3/部署若复用旧脚本默认 `InfiniteChat-Agent-0.0.1-SNAPSHOT.jar`,需显式改 `AGENT_JAR`/`JAR_FILE` 到 1.0.0 jar。
