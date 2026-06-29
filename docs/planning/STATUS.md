@@ -451,6 +451,20 @@
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
 
+### 2026-06-29 · ✅ P7 收 J1 + 内助手全链路 E2E 验收(**51/51 全绿**,commit `86afa9b`)
+- **J1 闭环(`10-agent-smoke` 5/5):** HUB 当前 agent jar 拷入 E2E 栈 + `AGENT_SKIP_BUILD=1 09-agent-e2e.sh` 起 agent(18080,enforce 开,H2 降级,Redis e2e db6 隔离)。A1 健康 200;**A2 直连缺 X-User-Id → 401(enforce)**;**A3 登录→网关带 token→注入 X-User-Id→`/api/agent/tools` 非401**;A4 `/api/chat/auto/stream` SSE 达 agent。网关路由补 `/api/chat,/api/chat/**,/api/streamChat`(不撞 chat 的 `/api/v1/chat/**`)。
+- **内助手全链路(`11-assistant-e2e` 5/5):** 邮箱登录 → @灵犀 缓冲 `/api/agent/chat` + SSE `/api/chat/auto/stream`(§9)→ **F01 高风险工具确认令牌往返**:F01-1 命中 `confirmationRequired+challengeToken`,F01-2 持令牌重发放行(一次性消费)。**LLM 在线**(F01 路由到工具说明 DASHSCOPE key 生效)→ 真实流式 + 工具确认闭环。
+- **全栈验收(常驻 WSL,对集成 main + HUB agent jar):** `04` 13/13 · `06` 10/10 · `07` 14/14 · `08` 4/4 · `10` 5/5 · `11` 5/5 = **51/51**。
+- **环境根因修(本轮踩坑):** 跨 session WSL 重启杀掉了 E2E 私有 MariaDB(:3308)+Kafka(:9192)(`01-setup` 用 **nohup** 不抗会话退出)→ 登录 500(DB connect timeout)。已把 `01-setup-infra.sh` 的 mariadbd/kafka 改 **setsid**(同 03-start),infra 跨 session 不再被杀;`09` agent Redis 改 e2e db6(死端口曾致 actuator/health 阻塞 102s)。
+- 阻塞:无。
+
+### 2026-06-29 · 📣 P7 牵头 item3 包络收口——**翻前点名 S2/S4/S1**(待同批,尚未翻)
+- **计划翻转(破坏性,expand/contract):** Contact(申请箱/群操作/查找)、Offline(`/api/v1/offline/message`)、Moment(发/赞/评/delta)、RTC HTTP(`/api/v1/message/**`,服务间内部)从各自 `200+体内 code` → **chat-common `Result`(成功 code=0)+ §3 真实 HTTP 状态**;id 一律 string 化(D5)。
+- **🔔 点名 S2/S4:** 翻后这些端点成功包络变 `{code:0,...}`、错误走真实 4xx/5xx(非 200)。S4 的 HTTP 层已 `{0,200}` 双兼容(P5 `http.ts`),但**离线拉取/联系人/朋友圈**若有按 200 或 `code==200` 的硬判定需同步;请确认就绪。RTC HTTP 为内部(网关不暴露给前端),影响小。
+- **🔔 点名 S1:** 与 agent 侧 code=0/真实 HTTP **同批翻**,避免一半栈翻一半未翻的 drift;翻转窗口请协调一个时间点。
+- **做法:** 各服务接 chat-common(新端点已是)、旧端点逐个换 `Result`+`ApiException`→真实 HTTP;加 `ApiExceptionHandler`(Messaging/Auth 已有范式)。**本单元仅点名+计划,代码翻转待 S2/S4 ack + S1 同批确认后另起 commit。**
+- 阻塞:等 S2/S4 ack + S1 同批窗口。
+
 ### 2026-06-28 · ✅ WAVE2 生产硬化:Snowflake 按实例 + 网关生产 CORS(commit `b232203`)
 - **Snowflake 按实例(D9/M6):** `messageId` 改用 chat-common `SnowflakeIdGenerator.getInstance()`(worker/datacenter 取 `WORKER_ID`/`DATACENTER_ID` env 或 hostname 派生),替换原 Hutool `getSnowflake(1,1)`——多实例不再撞 message 主键。
 - **网关生产 CORS:** `allowedOrigins`(单 localhost:10010)→ `allowedOriginPatterns`,默认 `http://localhost:[*]`(覆盖前端 5173/5180 dev 源),`GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS` 生产可设真实源;`allowCredentials=true` 必须用 pattern。**前端可直连网关,去掉 dev-proxy strip-Origin 依赖。**
