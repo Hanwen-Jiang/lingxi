@@ -11,6 +11,13 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+/**
+ * LLM 调用指标采集(运行态可观测,P9 收尾)。
+ *
+ * <p><b>低基数原则</b>:指标标签只用<b>有界维度</b>(模型名 + 状态 / token 类型 / 错误类型)。
+ * <b>不</b>按 {@code userId}/{@code sessionId}/原始 errorMessage 打标签——那些是无界维度,会让时间序列
+ * 随用户与会话无限膨胀(Prometheus 撑爆 + 本进程缓存泄漏)。用户/会话维度走结构化日志,不进指标。
+ */
 @Component
 @Slf4j
 public class AiModelMetricsCollector {
@@ -18,82 +25,66 @@ public class AiModelMetricsCollector {
     @Resource
     private MeterRegistry meterRegistry;
 
-    // 缓存已创建的指标，避免重复创建（按指标类型分离缓存）
+    // 缓存已创建的指标,避免重复创建(键为有界维度组合,缓存规模有界)
     private final ConcurrentMap<String, Counter> requestCountersCache = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Counter> errorCountersCache = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Counter> tokenCountersCache = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Timer> responseTimersCache = new ConcurrentHashMap<>();
 
-    /**
-     * 记录请求次数
-     */
-    public void recordRequest(String userId, String sessionId, String modelName, String status) {
-        // 关键：Micrometer Tags 不允许 Null
-        String safeUserId = (userId == null) ? "unknown" : userId;
-        String safeSessionId = (sessionId == null) ? "unknown" : sessionId;
-        String safeModel = (modelName == null) ? "unknown" : modelName;
-        String safeStatus = (status == null) ? "unknown" : status;
+    private static String safe(String v) {
+        return (v == null || v.isBlank()) ? "unknown" : v;
+    }
 
-        String key = String.format("%s_%s_%s_%s", safeUserId, safeSessionId, safeModel, safeStatus);
-        Counter counter = requestCountersCache.computeIfAbsent(key, k ->
+    /** 记录请求次数。tags: model_name, status(started|success|error)。 */
+    public void recordRequest(String modelName, String status) {
+        String model = safe(modelName);
+        String safeStatus = safe(status);
+        String key = model + "_" + safeStatus;
+        requestCountersCache.computeIfAbsent(key, k ->
                 Counter.builder("ai_model_requests_total")
-                        .tag("user_id", safeUserId)
-                        .tag("session_id", safeSessionId)
-                        .tag("model_name", safeModel)
+                        .description("LLM 请求次数")
+                        .tag("model_name", model)
                         .tag("status", safeStatus)
                         .register(meterRegistry)
-        );
-        counter.increment();
+        ).increment();
     }
 
-    /**
-     * 记录错误
-     */
-    public void recordError(String userId, String sessionId, String modelName, String errorMessage) {
-        String key = String.format("%s_%s_%s_%s", userId, sessionId, modelName, errorMessage);
-        Counter counter = errorCountersCache.computeIfAbsent(key, k ->
+    /** 记录错误次数。tags: model_name, error_type(异常类名,有界)。 */
+    public void recordError(String modelName, String errorType) {
+        String model = safe(modelName);
+        String type = safe(errorType);
+        String key = model + "_" + type;
+        errorCountersCache.computeIfAbsent(key, k ->
                 Counter.builder("ai_model_errors_total")
-                        .description("AI模型错误次数")
-                        .tag("user_id", userId)
-                        .tag("session_id", sessionId)
-                        .tag("model_name", modelName)
-                        .tag("error_message", errorMessage)
+                        .description("LLM 错误次数")
+                        .tag("model_name", model)
+                        .tag("error_type", type)
                         .register(meterRegistry)
-        );
-        counter.increment();
+        ).increment();
     }
 
-    /**
-     * 记录Token消耗
-     */
-    public void recordTokenUsage(String userId, String sessionId, String modelName,
-                                 String tokenType, long tokenCount) {
-        String key = String.format("%s_%s_%s_%s", userId, sessionId, modelName, tokenType);
-        Counter counter = tokenCountersCache.computeIfAbsent(key, k ->
+    /** 记录 Token 消耗。tags: model_name, token_type(input|output|total)。 */
+    public void recordTokenUsage(String modelName, String tokenType, long tokenCount) {
+        String model = safe(modelName);
+        String type = safe(tokenType);
+        String key = model + "_" + type;
+        tokenCountersCache.computeIfAbsent(key, k ->
                 Counter.builder("ai_model_tokens_total")
-                        .description("AI模型Token消耗总数")
-                        .tag("user_id", userId)
-                        .tag("session_id", sessionId)
-                        .tag("model_name", modelName)
-                        .tag("token_type", tokenType)
+                        .description("LLM Token 消耗总数")
+                        .tag("model_name", model)
+                        .tag("token_type", type)
                         .register(meterRegistry)
-        );
-        counter.increment(tokenCount);
+        ).increment(tokenCount);
     }
 
-    /**
-     * 记录响应时间
-     */
-    public void recordResponseTime(String userId, String sessionId, String modelName, Duration duration) {
-        String key = String.format("%s_%s_%s", userId, sessionId, modelName);
-        Timer timer = responseTimersCache.computeIfAbsent(key, k ->
+    /** 记录响应时间。tag: model_name。 */
+    public void recordResponseTime(String modelName, Duration duration) {
+        String model = safe(modelName);
+        responseTimersCache.computeIfAbsent(model, k ->
                 Timer.builder("ai_model_response_duration_seconds")
-                        .description("AI模型响应时间")
-                        .tag("user_id", userId)
-                        .tag("session_id", sessionId)
-                        .tag("model_name", modelName)
+                        .description("LLM 响应时间")
+                        .tag("model_name", model)
                         .register(meterRegistry)
-        );
-        timer.record(duration);
+        ).record(duration);
     }
 }

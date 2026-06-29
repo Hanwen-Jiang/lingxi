@@ -122,6 +122,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- AOP:RAG/记忆调用指标切面(零侵入业务逻辑,P9 可观测收尾) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
 
         <dependency>
             <groupId>io.micrometer</groupId>

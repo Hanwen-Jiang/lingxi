@@ -45,8 +45,8 @@ public class AiModelMonitorListener implements ChatModelListener {
         String modelName = requestContext.chatRequest().modelName();
 
         log.info(">>> AI请求开始 | 用户: {} | 会话: {} | 模型: {}", userId, sessionId, modelName);
-        // 记录请求指标
-        aiModelMetricsCollector.recordRequest(userId, sessionId, modelName, "started");
+        // 记录请求指标(用户/会话仅入日志,不进指标标签——低基数)
+        aiModelMetricsCollector.recordRequest(modelName, "started");
     }
 
     @Override
@@ -72,13 +72,13 @@ public class AiModelMonitorListener implements ChatModelListener {
 
         // 4. 打印格式化日志
         log.info("<<< AI请求成功 | 用户: {} | 会话: {} | 模型: {} | 耗时: {}ms | Tokens: [In:{}, Out:{}, Total:{}]", userId, sessionId, modelName, durationMs.toMillis(), tokenUsage != null ? tokenUsage.inputTokenCount() : 0, tokenUsage != null ? tokenUsage.outputTokenCount() : 0, tokenUsage != null ? tokenUsage.totalTokenCount() : 0);
-        aiModelMetricsCollector.recordRequest(userId, sessionId, modelName, "success");
-        aiModelMetricsCollector.recordResponseTime(userId, sessionId, modelName, durationMs);
+        aiModelMetricsCollector.recordRequest(modelName, "success");
+        aiModelMetricsCollector.recordResponseTime(modelName, durationMs);
 
         if (tokenUsage != null) {
-            aiModelMetricsCollector.recordTokenUsage(userId, sessionId, modelName, "input", tokenUsage.inputTokenCount());
-            aiModelMetricsCollector.recordTokenUsage(userId, sessionId, modelName, "output", tokenUsage.outputTokenCount());
-            aiModelMetricsCollector.recordTokenUsage(userId, sessionId, modelName, "total", tokenUsage.totalTokenCount());
+            aiModelMetricsCollector.recordTokenUsage(modelName, "input", tokenUsage.inputTokenCount());
+            aiModelMetricsCollector.recordTokenUsage(modelName, "output", tokenUsage.outputTokenCount());
+            aiModelMetricsCollector.recordTokenUsage(modelName, "total", tokenUsage.totalTokenCount());
         }
     }
 
@@ -102,13 +102,14 @@ public class AiModelMonitorListener implements ChatModelListener {
         String userId = context.getUserId().toString();
         String sessionId = context.getSessionId().toString();
         String modelName = errorContext.chatRequest().modelName();
-        String errorMessage = errorContext.error().getMessage();
-        log.error("XXX AI请求失败 | 耗时: {}ms | 错误原因: {}", durationMs.toMillis(), errorContext.error().getMessage());
+        String errorType = errorContext.error().getClass().getSimpleName();
+        log.error("XXX AI请求失败 | 用户: {} | 会话: {} | 耗时: {}ms | 错误类型: {} | 错误原因: {}",
+                userId, sessionId, durationMs.toMillis(), errorType, errorContext.error().getMessage());
 
-        // 记录失败请求
-        aiModelMetricsCollector.recordRequest(userId, sessionId, modelName, "error");
-        aiModelMetricsCollector.recordError(userId, sessionId, modelName, errorMessage);
-        aiModelMetricsCollector.recordResponseTime(userId, sessionId, modelName, durationMs);
+        // 记录失败请求(错误用异常类型标签,非自由文本——低基数)
+        aiModelMetricsCollector.recordRequest(modelName, "error");
+        aiModelMetricsCollector.recordError(modelName, errorType);
+        aiModelMetricsCollector.recordResponseTime(modelName, durationMs);
     }
 
     /**
