@@ -5,7 +5,6 @@
 set -euo pipefail
 
 SRC="${SRC:-/mnt/e/jhw/proj/chat}"
-AGENT_JAR_SRC="${AGENT_JAR_SRC:-/mnt/e/jhw/proj/agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar}"
 RUNTIME="$HOME/projecta-runtime"
 RELEASE="${RELEASE:-$HOME/projecta-v0.9}"           # 新发布目录(symlink 将指向它)
 BACKUP="$RUNTIME/backups"
@@ -22,7 +21,16 @@ phase_stage() {
   mkdir -p "$RELEASE/chat" "$RELEASE/agent/target"
   rsync -a --delete --exclude target --exclude .git --exclude .idea --exclude 'e2e/e2e.env' "$SRC"/ "$RELEASE/chat"/
   ( cd "$RELEASE/chat" && mvn -o -q -DskipTests clean package || mvn -q -DskipTests clean package )
-  cp -f "$AGENT_JAR_SRC" "$RELEASE/agent/target/" && echo "  agent jar: $(ls -la "$RELEASE/agent/target/"*.jar | awk '{print $5}')B"
+  local agent_jar_src
+  agent_jar_src="${AGENT_JAR_SRC:-$(find /mnt/e/jhw/proj/agent/target -maxdepth 1 -type f -name 'InfiniteChat-Agent-*.jar' 2>/dev/null \
+    | grep -vE '(-sources|-javadoc|\\.original)$' \
+    | grep -v '0\.0\.1-SNAPSHOT' \
+    | sort -V | tail -1 || true)}"
+  [ -n "$agent_jar_src" ] || agent_jar_src="$(find /mnt/e/jhw/proj/agent/target -maxdepth 1 -type f -name 'InfiniteChat-Agent-*.jar' 2>/dev/null \
+    | grep -vE '(-sources|-javadoc|\\.original)$' \
+    | sort -V | tail -1 || true)"
+  [ -n "$agent_jar_src" ] || { echo "  !! 缺少 agent jar: set AGENT_JAR_SRC or build agent first"; exit 1; }
+  cp -f "$agent_jar_src" "$RELEASE/agent/target/" && echo "  agent jar: $(basename "$agent_jar_src") ($(ls -la "$RELEASE/agent/target/$(basename "$agent_jar_src")" | awk '{print $5}')B)"
   echo "  chat jars: $(ls "$RELEASE"/chat/*/target/*.jar 2>/dev/null | wc -l)/7"
 }
 
@@ -75,7 +83,13 @@ phase_cutover() {
   local apid="$RUNTIME/run/agent-app.pid" alog="$RUNTIME/logs/agent-app.log"
   [ -f "$apid" ] && kill "$(cat "$apid" 2>/dev/null || echo 0)" 2>/dev/null || true
   ( cd "$RELEASE/agent"; set -a; . "$AGENT_ENV"; set +a
-    agent_jar="$(ls "$RELEASE/agent/target/InfiniteChat-Agent-*.jar" 2>/dev/null | grep -vE '(-sources|-javadoc|\\.original)$' | head -1)"
+    agent_jar="$(find "$RELEASE/agent/target" -maxdepth 1 -type f -name 'InfiniteChat-Agent-*.jar' 2>/dev/null \
+      | grep -vE '(-sources|-javadoc|\\.original)$' \
+      | grep -v '0\.0\.1-SNAPSHOT' \
+      | sort -V | tail -1 || true)"
+    [ -n "$agent_jar" ] || agent_jar="$(find "$RELEASE/agent/target" -maxdepth 1 -type f -name 'InfiniteChat-Agent-*.jar' 2>/dev/null \
+      | grep -vE '(-sources|-javadoc|\\.original)$' \
+      | sort -V | tail -1 || true)"
     PIDF="$apid" JARF="$agent_jar" \
     setsid bash -c 'echo $$ > "$PIDF"; exec java ${JAVA_OPTS:-} -jar "$JARF" --server.port=18080' > "$alog" 2>&1 < /dev/null & )
   echo "  agent 起于 18080,log=$alog"
