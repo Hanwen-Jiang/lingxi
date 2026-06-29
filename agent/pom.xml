@@ -192,4 +192,28 @@
         </plugins>
     </build>
 
+    <profiles>
+        <!--
+          内存受限主机跑测试用:`./mvnw test -Plow-mem-test`。
+          背景:默认 surefire fork JVM 用 G1,在小内存主机上会因 G1 预留 ~1GB 虚拟地址失败
+          (insufficient memory ... G1 1GB mmap),导致 Mockito 测试在本机跑不了(历史几轮 defer 到 CI)。
+          SerialGC 不做该大块预留 + 限定堆/Metaspace 即可在本机稳定跑全量(含 Mockito 内联 mock-maker)。
+          opt-in,不改默认行为;内存充裕的 CI 可直接 `./mvnw test`。
+        -->
+        <profile>
+            <id>low-mem-test</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <argLine>-Xmx640m -XX:+UseSerialGC -XX:MaxMetaspaceSize=300m</argLine>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
 </project>
