@@ -9,13 +9,19 @@ REPO_E2E="${REPO_E2E:-/mnt/e/jhw/proj/chat/e2e}"
 set -a; . "${CHAT_ENV:-$RUNTIME/chat.env}"; . "${E2E_ENV:-$REPO_E2E/e2e.env}"; set +a
 export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-21-openjdk-amd64}"; export PATH="$JAVA_HOME/bin:$PATH"
 
-AGENT_SRC="${AGENT_SRC:-/mnt/e/jhw/proj-chat-w2/agent}"
+AGENT_SRC="${AGENT_SRC:-/mnt/e/jhw/proj/agent}"
 E2E_HOME="${E2E_HOME:-$HOME/projecta-e2e}"
 AGENT_DST="$E2E_HOME/agent"
 PORT="${AGENT_SERVICE_PORT:-18080}"
-JAR="$AGENT_DST/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar"
 PIDF="$E2E_HOME/run/agent.pid"; LOG="$E2E_HOME/logs/agent.log"
 mkdir -p "$E2E_HOME/run" "$E2E_HOME/logs"
+
+agent_jar() {
+  local jar
+  jar="$(ls "$AGENT_DST"/target/InfiniteChat-Agent-*.jar 2>/dev/null | grep -vE '(-sources|-javadoc|\\.original)$' | head -1 || true)"
+  [ -n "$jar" ] && printf '%s\n' "$jar" || printf '%s\n' "$AGENT_DST/target/InfiniteChat-Agent-*.jar"
+}
+JAR="$(agent_jar)"
 
 if [ "${AGENT_SKIP_BUILD:-0}" != "1" ]; then
   echo "== sync agent 源码 -> $AGENT_DST =="
@@ -24,7 +30,7 @@ if [ "${AGENT_SKIP_BUILD:-0}" != "1" ]; then
   ( cd "$AGENT_DST" && mvn -o -q -DskipTests package ) 2>/dev/null \
     || ( cd "$AGENT_DST" && mvn -q -DskipTests package ) \
     || { echo "!! agent 构建失败:本 E2E 环境无 maven 镜像网络 + m2 缺 SB3/langchain4j 依赖。"
-         echo "!! 解法:有网环境(S1/HUB)构建出 jar 放到 $JAR,再 AGENT_SKIP_BUILD=1 重跑。"; exit 3; }
+         echo "!! 解法:有网环境(S1/HUB)构建出 jar 放到 $AGENT_DST/target/,再 AGENT_SKIP_BUILD=1 重跑。"; exit 3; }
 fi
 [ -f "$JAR" ] || { echo "缺少 agent jar:$JAR(可 AGENT_SKIP_BUILD=1 + 放入现成 jar)"; exit 3; }
 

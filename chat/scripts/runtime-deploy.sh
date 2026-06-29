@@ -4,7 +4,7 @@
 # 约定:chat 服务端口走 application.yml 生产默认(网关 10010 / 8080-8086 / Netty 9000);agent 18080。
 set -euo pipefail
 
-SRC="${SRC:-/mnt/e/jhw/proj-chatbe-p9/chat}"
+SRC="${SRC:-/mnt/e/jhw/proj/chat}"
 AGENT_JAR_SRC="${AGENT_JAR_SRC:-/mnt/e/jhw/proj/agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar}"
 RUNTIME="$HOME/projecta-runtime"
 RELEASE="${RELEASE:-$HOME/projecta-v0.9}"           # 新发布目录(symlink 将指向它)
@@ -75,7 +75,8 @@ phase_cutover() {
   local apid="$RUNTIME/run/agent-app.pid" alog="$RUNTIME/logs/agent-app.log"
   [ -f "$apid" ] && kill "$(cat "$apid" 2>/dev/null || echo 0)" 2>/dev/null || true
   ( cd "$RELEASE/agent"; set -a; . "$AGENT_ENV"; set +a
-    PIDF="$apid" JARF="$RELEASE/agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar" \
+    agent_jar="$(ls "$RELEASE/agent/target/InfiniteChat-Agent-*.jar" 2>/dev/null | grep -vE '(-sources|-javadoc|\\.original)$' | head -1)"
+    PIDF="$apid" JARF="$agent_jar" \
     setsid bash -c 'echo $$ > "$PIDF"; exec java ${JAVA_OPTS:-} -jar "$JARF" --server.port=18080' > "$alog" 2>&1 < /dev/null & )
   echo "  agent 起于 18080,log=$alog"
 }
