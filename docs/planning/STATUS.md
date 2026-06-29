@@ -20,6 +20,15 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-29 · P7 集成:🎉 J1 闭环 + 灵犀内置助手全链路 E2E 51/51 绿(LLM 在线);打 tag `v0.1-e2e-green`;下轮=契约收口 + 前端验收闭合
+- **本轮 P7 数字(git 核实)**:四条 `feat/*-p7` 并入 `main`(均 on-main/0-behind,代码目录互不相交,STATUS 自动 union,**零冲突**)。S3 `b474ea4`(**收 J1**:`10-agent-smoke` 5/5 直连缺头401/网关注入身份放行/SSE 达 agent;**内助手全链路 `11-assistant-e2e` 5/5**:@灵犀→真实 agent SSE §9 + **F01 工具确认令牌往返**,**LLM 在线真流式**;修 E2E infra 跨会话存活 setsid + agent Redis e2e db6);S1 `9d1cfbf`(本机降级态实跑预验 J1 agent 侧 + **修 redis 无关 readiness/liveness 探针**——原 Redis 降级→主 /health 503 会误杀就绪门;agent 侧包络 code=0 复证);S4 `6adc891`(消费 S3 两缺口 `peerUserId`/图片历史 + 内助手端点对齐 `/api/chat/auto/stream` 自动路由 + §9 `v` 归一);S2 `e78c048`(SSE §9 `v` 类型回归到 string 对齐 backend wire + D5 回归扫零)。
+- **里程碑**:🎉 **J1 闭环 + 内置助手全链路 E2E 51/51 绿**(`04`13+`06`10+`07`14+`08`4+`10`5+`11`5)——**鉴权 → IM 实时 → 数据安全(B4/B5)→ 内置助手(SSE+F01)** 整条核心链路端到端验证(LLM 在线)。打 tag **`v0.1-e2e-green`** 标记此里程碑。
+- **已集成**:merge tips agent-backend→chat-frontend→agent-frontend→chat-backend = `6d31062`;另 pre-merge 补提 S1 P7 ledger(曾被写进共享 main 工作树)+ `.gitignore` 加 `.claude/worktrees/`;本 HUB 条目为随后 docs 提交,已 push + push tag。
+- **🟡 仍欠**:① **S2/S4 浏览器级验收**——内助手流式渲染 + F01 确认 UX 的前端 UI E2E(S2/S4 跑时 S3 栈未起→当时阻塞,**现 J1 已通=已解阻,待补跑**;后端链路 S3 51/51 已证);② **item3 包络收口**——Contact/RTC/Offline/Moment 翻 code=0/真实 HTTP(S3 已**翻前点名**未翻,需 S1 同批 + S2/S4 ack,翻后前端收缩 `{0,200}→{0}`);③ CI 复跑 Mockito、DLQ consumer-lag gauge(L3)。
+- **用户拍板(3 问)**:① 全合 + **打里程碑 tag `v0.1-e2e-green`**;② **下轮 P8 = 契约收口 + 前端验收闭合**;③ 下轮做完 **S3 会话内全链路 E2E 验收**。
+- **下一轮(P8)**:S3+S1 **同批翻** item3 包络(Contact/RTC/Offline/Moment→code=0/真实 HTTP,翻前 STATUS 点名 S2/S4);S2/S4 收到点名后做 expand/contract **收缩**(`{0,200}→{0}`)+ 补**浏览器级内助手 E2E**(F01 确认 UX / §9 流式渲染);S3 会话内复跑全栈 E2E(含翻转后回归)验收。详见各流 prompt。
+- 阻塞:无。待中枢确认:无(线上仍 defer;P8 后可议上线)。
+
 ### 2026-06-28 · P6 集成:灵犀内置助手四侧 code-complete + S3 IM E2E 首手全绿;唯一阻塞 J1(agent jar);下轮=收 J1 打通内助手端到端
 - **本轮 P6/wave2 数字(git 核实)**:四条分支并入 `main`(代码目录互不相交,STATUS 自动 union,**零冲突**)。S1 `9f763ab`(F01 挑战令牌 + 限流**硬化为 Redis 多实例原子** + J1 对接文档 `agent/docs/E2E-INTEGRATION.md`);S2 `3f2648b`(**M4 切真 F01 令牌** + **D5 string id 一次翻净** + SSE §9 `v`/`buffered`/容忍未知 type);S3 `4584ae5`(**首手复跑 IM E2E 38/38 绿**=04 鉴权13+06 客户端10+07 IM/B4 11+08 实时4,随后补 S4 两缺口把 07 扩到 **14/14**;`peerUserId`/图片历史持久化;**J1 turnkey 工具 `09/10`**;生产硬化 **Snowflake 按实例 D9/M6** + 网关生产 CORS);S4 `0ffb026`(**IM 内置「灵犀」助手接真实 agent SSE §9**)。
 - **里程碑**:🎉 P6 主题(IM 内置助手)**四侧 code-complete** + S3 **首手坐实 IM E2E 全绿**(此前为恢复条目,本轮一手复现)。
