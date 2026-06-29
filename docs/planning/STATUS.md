@@ -702,6 +702,15 @@
 
 ## S4 · chat 前端(owns chat-frontend/)
 
+### 2026-06-29 · P9:200 兼容收缩(`{0,200}→{0}`)+ 回归测试;上线冲烟 gated(分支 feat/chat-frontend-p9,独立 worktree)
+- 背景:S3 P8 已点名「可关 200 兼容」(全栈 item3 收口 code=0/真实 HTTP,57 E2E 绿);本轮收掉前端 200 兜底。上线运行态(:10010)冲烟待 S3 部署。
+- 完成:① **expand→contract 收缩**:抽纯模块 `api/envelope.ts`(`SUCCESS_CODES={0}` + `isSuccessCode`,无 fetch/store/`import.meta.env` 耦合 → 可单测);`http.ts` 引入之,删本地 `{0,200}` 集合 + D4 兼容注释,**两处成功判定**(2xx 包络判定 + refresh 判定)改 `isSuccessCode`;**200 不再当 success**(HTTP 200 + body `code:200` 现按错误抛)。② **回归测试** `api/envelope.test.ts`(内置 `node:test` + `node --experimental-strip-types`,**零新依赖/零安装**):4 断言绿——code 0 成功、缺 code 成功、**legacy 200 不再 success**、40100 非 success;加 `test` 脚本。
+- 产出物:`chat-frontend/src/api/{envelope.ts,envelope.test.ts}`(新)、改 `chat-frontend/src/api/http.ts` + `chat-frontend/package.json`(+`test` 脚本)。worktree `E:\jhw\proj-chat-p9`,分支 `feat/chat-frontend-p9`。
+- 关键决策:测试用 node 内置 runner + `--experimental-strip-types`(node 22.23 支持)跑 `.ts`,**不引 vitest**(避免污染共享 junction node_modules + 不破 `tsc -b`);纯逻辑抽 `envelope.ts` 以解耦 `import.meta.env` 可测。
+- 🔬 **收缩运行态安全(对 live :10110 实测)**:登录→token→客户端消费的**全部包络端点均 `code=0`**(login 200/code=0、chat/sessions 200/code=0、contact/friends 200/code=0)→ 收缩后 `isSuccessCode(0)=true` **零破坏**(无端点返 200-success 会被新客户端拒)。+ 单测锁 200 拒绝 + build 绿;P8 已浏览器实证全流程(同请求/响应,收缩仅窄化成功码集)。
+- 阻塞/待:🟡 **task2 上线冲烟 gated**——`:10010` prod 运行态 **DOWN**(S3 P9 部署 main→WSL 替换无鉴权旧栈 + **上线点名未到**)。待 S3 起 `:10010`(prod CORS 已开)后,前端指向 `:10010` 过 登录/会话/历史/实时/内助手/媒体 冒烟;当前以 `:10110` 坐实收缩安全。
+- 验证:**build(`tsc -b && vite build`)绿 + `test` 4/4 绿 + verify:ui 绿(50 文件,worktree)**;`:10110` 包络 `code=0` 实测(见上)。交接 → S3:`:10010` 起栈 + 上线点名后,S4 指向冒烟。
+
 ### 2026-06-29 · P8:浏览器级内助手 E2E 验收(真 agent SSE)+ 修 client-only 会话 bug;包络收缩 hold(分支 feat/chat-frontend-p8,独立 worktree)
 - 背景:J1 已通(S3 51/51,LLM 在线);S3 播种可登账号 `17614797418@example.com / asdf1476`。本轮**浏览器级实测**内助手 + 修 E2E 暴露的致命 bug;包络收缩待 S3/S1 点名。
 - 🔬 **浏览器 E2E(real 模式 worktree dev → 网关 :10110,逐步实测)**:① **真实登录绿**(seeded 账号→token→进应用,userId `2071126048501796864`「聪明的吗喽」);② **会话读路径绿**(`/api/v1/chat/sessions` 200/code=0;该账号无会话→空态「还没有会话」正确渲染);③ **内助手 SSE 端到端**:@灵犀→`POST /api/chat/auto/stream`→真实 agent §9 流(`event:start` + `data:{v:"1",type,route:"direct",…}`),解析器逐事件处理 start/delta/done/error **实测通过**(本机 agent 实例当前**未配 `DASHSCOPE_API_KEY`**→返 §9 error「AI 模型未配置」,客户端正确渲染该 error;真实 delta 渲染随 LLM key 在线即通——delta 走同一解析路径);④ **B8 WS 握手实测 OPEN**(`?token=&userUuid=` 经网关/Netty 放行;重连 backfill 机制有活 transport,reconnect 逻辑 P2 mock 已验)。
