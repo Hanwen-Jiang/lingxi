@@ -1,7 +1,6 @@
 import {useState} from "react";
 import {Code2, Ellipsis} from "lucide-react";
 
-import {Button} from "@heroui/react/button";
 import {Input} from "@heroui/react/input";
 import {ListBox} from "@heroui/react/list-box";
 import {Popover} from "@heroui/react/popover";
@@ -23,6 +22,7 @@ export function ComposerActionsPopover({
   isRunning: boolean;
   onCommand: (command: string) => void;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const normalizedSearch = search.trim().toLowerCase();
   const filteredCommands = COMMAND_ENTRIES.filter(
@@ -31,19 +31,16 @@ export function ComposerActionsPopover({
   );
 
   return (
-    <Popover>
-      <Popover.Trigger>
-        <Button
-          isIconOnly
-          aria-label="更多操作"
-          className="composer-icon-button"
-          isDisabled={isRunning}
-          size="sm"
-          style={COMPOSER_BUTTON_STYLE}
-          variant="outline"
-        >
-          <Ellipsis className="size-4" />
-        </Button>
+    <Popover isOpen={isOpen} onOpenChange={(open) => setIsOpen(isRunning ? false : open)}>
+      <Popover.Trigger
+        aria-disabled={isRunning}
+        aria-label="更多操作"
+        className="composer-icon-button"
+        data-disabled={isRunning ? true : undefined}
+        style={COMPOSER_BUTTON_STYLE}
+        tabIndex={isRunning ? -1 : 0}
+      >
+        <Ellipsis className="size-4" />
       </Popover.Trigger>
       <Popover.Content
         className="w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0"
@@ -69,7 +66,15 @@ export function ComposerActionsPopover({
               className="scrollbar max-h-[min(320px,calc(100vh-10rem))] overflow-y-auto p-2"
             >
               {filteredCommands.map(({command, label}) => (
-                <ListBox.Item key={command} id={command} textValue={label} onAction={() => onCommand(command)}>
+                <ListBox.Item
+                  key={command}
+                  id={command}
+                  textValue={label}
+                  onAction={() => {
+                    onCommand(command);
+                    setIsOpen(false);
+                  }}
+                >
                   <span className="flex min-w-0 items-center gap-2 text-sm">
                     <Code2 className="size-4 shrink-0 text-muted" />
                     <span className="truncate">{label}</span>
