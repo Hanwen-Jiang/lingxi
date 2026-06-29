@@ -1,7 +1,5 @@
 package com.lou.messagingservice.service.impl;
 
-import cn.hutool.core.lang.Snowflake;
-import cn.hutool.core.util.IdUtil;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lou.messagingservice.common.ServiceException;
@@ -157,7 +155,13 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         message.setSessionType(request.getSessionType());
         com.alibaba.fastjson.JSONObject body = parseBody(request.getBody());
         if (body != null) {
-            message.setContent(body.getString("content"));
+            String content = body.getString("content");
+            // 媒体消息(图/文件/视频)body 形如 {url,size} 无 content;把 url 落 content,
+            // 否则 message.content=null,刷新拉历史时图片丢失(S4 按 content=图片 url 渲染)。
+            if (content == null) {
+                content = body.getString("url");
+            }
+            message.setContent(content);
             message.setReplyId(body.getLong("replyId"));
         }
         message.setCreatedAt(createdAt);
@@ -278,11 +282,9 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
     }
 
     private Long generateMessageId() {
-        Snowflake snowflake = IdUtil.getSnowflake(
-                Integer.parseInt(ConfigEnum.WORKED_ID.getValue()),
-                Integer.parseInt(ConfigEnum.DATACENTER_ID.getValue())
-        );
-        return snowflake.nextId();
+        // D9/M6:用 chat-common 按实例派生 worker/datacenter 的雪花生成器,避免横向扩容时
+        // messageId 主键碰撞(原 Hutool getSnowflake(1,1) 全实例同 worker → 多副本必撞)。
+        return com.lou.common.id.SnowflakeIdGenerator.getInstance().nextId();
     }
 
     private static String config(String propertyName, String envName, String defaultValue) {

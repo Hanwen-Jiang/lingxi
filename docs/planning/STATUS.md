@@ -440,7 +440,27 @@
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
 
-> **[S2 恢复 2026-06-28 · HUB P5 集成时补提交回 main]** 以下 3 条 S3 P5 记录在 session 起始时为 main 工作树**未提交**改动,被 S4 commit `0f86662` 重写 STATUS 时覆盖丢失(S3 代码安全=`d2f393c` 在其分支,仅文档丢失)。S2 凭上下文原样恢复,HUB 已据 git 实况核对引用 commit 后补提交。**请 S3 复跑 E2E 确认绿数字。**
+### 2026-06-28 · ✅ WAVE2 生产硬化:Snowflake 按实例 + 网关生产 CORS(commit `b232203`)
+- **Snowflake 按实例(D9/M6):** `messageId` 改用 chat-common `SnowflakeIdGenerator.getInstance()`(worker/datacenter 取 `WORKER_ID`/`DATACENTER_ID` env 或 hostname 派生),替换原 Hutool `getSnowflake(1,1)`——多实例不再撞 message 主键。
+- **网关生产 CORS:** `allowedOrigins`(单 localhost:10010)→ `allowedOriginPatterns`,默认 `http://localhost:[*]`(覆盖前端 5173/5180 dev 源),`GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS` 生产可设真实源;`allowCredentials=true` 必须用 pattern。**前端可直连网关,去掉 dev-proxy strip-Origin 依赖。**
+- 验证:`07-im` 14/14(按实例 messageId 收发/落库正常);CORS 预检 `OPTIONS Origin=http://localhost:5173` → 200 + `Access-Control-Allow-Origin` 回显 + credentials。
+- **DLT 深度可观测:** B5 已有逐条 ERROR 告警 + 进程内累计计数(actionable);真值 **consumer lag gauge 属 L3**(需 Micrometer/actuator on Offline),本轮未做,留观测专项。
+
+### 2026-06-28 · 🟡 WAVE2 J1:agent 入网关 E2E 栈——chat 侧就绪 + turnkey 工具,**阻塞于 agent jar 构建**(commit `0686c6d`)
+- **chat 侧已做(S3 owns):** 网关 `/api/agent|memory|rag` 路由已在(P1,直连 `AGENT_GATEWAY_URI` 保前缀);`e2e.env(.example)` 加 `AGENT_SERVICE_PORT=18080`/`AGENT_GATEWAY_URI`/`AGENT_GATEWAY_ENFORCE_IDENTITY=true`/`DASHSCOPE_API_KEY`(空)。
+- **turnkey 工具:** `09-agent-e2e.sh`(rsync+构建/或 `AGENT_SKIP_BUILD=1` 用现成 jar + 隔离起:MySQL→H2、Redis→内存降级、enforce 开、setsid 常驻)、`10-agent-smoke.sh`(A1 健康 / A2 直连缺 X-User-Id→401 / **A3 登录→网关带 token→X-User-Id 注入→/api/agent/tools 非401** / A4 `/api/chat/auto/stream` SSE 达 agent)。
+- **🔴 阻塞(给 HUB/S1):** **当前 agent jar 本 E2E 环境构建不出**——无 maven 镜像网络(huaweicloud/aliyun/central 全不可达)+ m2 缺 SB3.5.13/langchain4j/flyway-11/h2-2.3 依赖;仅有 **Jun-19 旧 jar**(pre-P0,无 enforce/降级/18080,不可用)。**解阻:S1/HUB 在有网环境构建当前 agent jar → 放 `~/projecta-e2e/agent/target/` → S3 跑 `AGENT_SKIP_BUILD=1 bash 09 && bash 10` 即闭环。** 无 LLM key 时 A4 验到"请求达 agent 且带身份"(SSE start/error),填 `DASHSCOPE_API_KEY` 可验真实流式。
+
+### 2026-06-28 · ✅ WAVE2 两后端缺口(解锁 S4):SessionListItem.peerUserId + 图片历史持久化(commit `3929842`)
+- **peerUserId:** 单聊会话项带对方 userId(string,群聊 null),S4 冷开单聊可直接取作 `receiveUserId` 发首条(real.ts 已注明需要)。
+- **图片历史持久化:** 图片发送 body 为 `{url,size}` 无 `content`,B4 `buildMessageEntity` 原写 content=null → 刷新丢图;现媒体消息回退 `content=body.url`,url 落库 + 历史回显(S4 按 content=图片 url 渲染,与其 mock 契约一致)。
+- E2E:`07-im-smoke` 扩到 **14/14**(peerUserId=对方;图片 url 落 message.content + 历史分页回显);`08` 实时 4/4 回归绿。
+
+### 2026-06-28 · ✅ WAVE2 首件:P5 IM E2E **首手复跑确认**(对 integrated main `902335d`,覆盖 S2 恢复标记)
+- 背景:HUB P5 集成时 S3 的 3 条 P5 ledger 曾被 S4 commit `0f86662` 覆盖丢失、由 S2 据上下文恢复(代码安全=`d2f393c` 一直在分支)。HUB 要求 S3 复跑坐实"二手绿"。**本条即 S3 自己首手复跑结果,覆盖恢复标记。**
+- 方式:retire 已并入 main 的 `feat/chat-backend-p5` → 从 `main 902335d` 起 `feat/chat-backend-p5-wave2` → 对 **集成后 main 代码** 干净重建 E2E 栈(`02-build` clean,BUILD SUCCESS)+ 重启 → 常驻 WSL 实跑。
+- **绿数字(首手):** `04` 鉴权 **13/13** · `06` 客户端 API **10/10** · `07` IM/B4 **11/11** · `08` 实时 WS **4/4** = **38/38 全绿**。B4 同事务落库 / B5 DLQ / B8 浏览器 WS / 发送 code=0 / 发→对端实时收 均在 integrated main 上复现绿,非二手。
+- 阻塞:无。下一步:J1(agent 纳入 chat E2E 栈,登录→/api/agent 经网关→X-User-Id→流式)、S4 两缺口(SessionListItem.peerUserId / 图片消息历史持久化)。
 
 ### 2026-06-27 · ✅ P5 item3(部分)发消息端点翻 chat-common 包络——解锁 S4 真实发送(commit `d2f393c`)
 - **`POST /api/v1/chat/session` 翻 code=0:** 返回 chat-common `Result`(原为服务自有 200+code);`messageId` string 化(D5);操作人校验改用 `RequestContext`(越权抛 `ApiException FORBIDDEN`→真实 403,经既有 `ApiExceptionHandler`)。调试端点(feign/hello)保留旧 Result(最小爆破面)。E2E:`07` 发送 **code=0**、11/11;`08` 实时 4/4。
