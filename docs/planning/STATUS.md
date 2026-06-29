@@ -344,6 +344,20 @@
 
 ## S2 · agent 前端(owns agent-frontend/)
 
+### 2026-06-29 · P8 unit 0 · F01/§9 浏览器 E2E 阻塞 + 包络收缩待点名(无代码变更)
+- 分支:`feat/agent-frontend-p8`(独立 worktree:`.claude/worktrees/agent-frontend-p8/`,从新 main `f9e3812` 起,HTTPS push,**未合 main**)。
+- **现状判断:** P8 prompt 两件主活在本轮**均无法 ship 真路径产出**,**不强行**(用户红线"网关/Auth 起不来时不硬上 mock 伪造通过"):
+  1. **task1 F01/§9 浏览器 E2E**:**E2E 后端栈半挂**——agent(`:18080`)/网关(`:10110`)进程仍在(setsid 跨会话存活生效),但**Redis e2e `:6399` connection timeout**(`redis-cli -p 6399 ping` 超时;`agent.log` 重复 `LettuceConnectionFactory → Unable to connect to 127.0.0.1/<unresolved>:6399`)。**所有 chat 路径返 `code:50000`**(直连 `/api/agent/chat`、`/api/chat`、`/api/chat/auto/stream` 三条全 50000,底层在 Redis 写 F01 token/会话/记忆时抛 RuntimeException,被 GlobalExceptionHandler 兜底成 50000)。**鉴权管线本身仍活**:`/api/v1/user/login` curl 直打 :10110 返 `code:0` + string userId + token + refreshToken(envelope 双兼容路径仍 wire-compatible)。
+  2. **task2 包络收缩 `{0,200}→{0}`**:**未到点名时机**——S3 P7 STATUS(行 493)`📣 P7 牵头 item3 包络收口——翻前点名 S2/S4/S1(待同批,**尚未翻**)`;P7 集成 commit `f9e3812` 摘要"🟡 item3 包络收口:Contact/RTC/Offline/Moment 翻 code=0/真实 HTTP(S3 已**翻前点名**未翻,需 S1 同批 + S2/S4 ack,**翻后**前端收缩 `{0,200}→{0}`)"。P8 prompt 写"收 S1/S3 点名后"——**今轮未点名,不动**。
+- **本轮做了什么:**
+  - 起独立 worktree + 分支(按 P6 收口规约,STATUS 写本分支)。
+  - 拉新 main 后回归扫:tsc / D5 number id 残留(零)/`v` 类型(string,与 P7 unit 1 一致)。**前端代码已 wire-compatible P7 11-assistant-e2e 5/5 后端**(F01 形状 + §9 v="1"/buffered + envelope `{code,message,data,traceId,timestamp}` 全字段都对齐)— **无代码需改**。
+  - 浏览器实证尝试:Vite dev server 起 5173,代理 `:10110`;在登录页填邮箱+密码 → 触发 POST `/api/v1/user/login` → **代理回 500**(curl 直打 :10110 同请求是 200;Vite 代理与上游 keep-alive/chunked 交互异常,属于 dev-proxy 噪声,与 F01 验收无关 — 改用 storage 直注 token 也可绕过 Vite 代理,但 agent 端 50000 仍堵真路径)。
+- **🛑 给 S3(E2E 栈维护):** WSL Redis e2e `:6399` down 是当前**唯一**真路径阻塞点。重启 Redis(`e2e.env` 端口/密码/db6 隔离照旧)→ agent 恢复读写 → S2/S4 即可补跑浏览器级 E2E(`11-assistant-e2e` 5/5 当时绿过,后端代码未动,只是基础设施掉链)。重启前/后请在 STATUS 标"E2E Redis 已恢复",我即可起 Vite 浏览器实证:① 触发 `email_send` 风险 prompt → 验 `data.toolGovernance{confirmationRequired,challengeToken,challengeExpiresInSec}` → 点"确认并继续"→ Network panel 验 `AgentRequest.confirmationToken=<挑战令牌>`(**勿传工具名**)→ 一次性消费(同 token 重发被拒)+ TTL 过期(等过 expires 再发被拒,需要 S1 把 challengeExpiresInSec 调小到 30s 便测)。② 流式 prompt 验 `v="1"`、buffered:true/逐 token、未知 type 容忍。
+- **🛑 给 S1/S3(包络翻转点名锚):** Contact/RTC/Offline/Moment 翻 code=0 + 真实 HTTP 后请在 STATUS 写"**S2 可关 200 兼容**"一行;我会做 P8 unit 2:`api.ts` `ENVELOPE_SUCCESS_CODES = new Set([0, 200])` → `new Set([0])` + 删 D4 expand/contract 注释 + 加一条 regress test(明确 200 不再被当作 success)。
+- 待中枢确认:无。本轮**无代码 commit**(只 commit 本条 STATUS)。
+
+
 ### 2026-06-29 · P7 unit 1 · SSE §9 `v` 类型回归到 string + D5 回归扫零(commit `e78c048`)
 - 分支:`feat/agent-frontend-p7`(独立 worktree:`.claude/worktrees/agent-frontend-p7/`,从新 main `37a3760` 起,HTTPS push,**未合 main**)。本流首次按 P6 收口的"强制独立 worktree + 各流 STATUS 各写各分支"规约起步。
 - **回归扫(D5 string id):** grep 全代码树 `userId|sessionId|messageId|turnId:\s*number` / `Number(.*[Ii]d)` / `userIdToNumber` / 数字字面量 id —— **零残留**。wave2 unit2(commit `94a491c`)一次翻净到位,P7 不需补漏。
