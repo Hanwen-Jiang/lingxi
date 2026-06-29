@@ -20,7 +20,7 @@ JWT_SECRET_KEY=lingxiProdHS512Secret_2026_aB7kQ9zR3xT1vN6mYpE4wD8cF0jL5hG2
 INTERNAL_SERVICE_TOKEN=lingxi-internal-prod-7f3a9c2e5b1d4068
 AGENT_GATEWAY_URI=http://agent:10011
 AGENT_GATEWAY_ENFORCE_IDENTITY=true
-GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS=http://127.0.0.1:[*]
+GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS=http://localhost:[*],http://127.0.0.1:[*],http://100.*:[*]
 EOF
 
 echo "== 备份当前 chat 镜像 → :pre-p9 =="
@@ -56,7 +56,10 @@ docker compose -f "$BASE" -f "$OVERRIDE" --env-file "$AUG" up -d --no-build \
   auth contact messaging realtime offline moment gateway agent
 
 echo "== 等就绪 =="
-for i in $(seq 1 50); do curl -s -o /dev/null --max-time 2 "http://127.0.0.1:10010/actuator/health" 2>/dev/null && break; sleep 2; done
+for i in $(seq 1 50); do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:10010/api/v1/contact/1/applyCount" 2>/dev/null)" = "401" ] && break
+  sleep 2
+done
 for p in 10010 8082 8080 8081 8083 8085 8086 9000 10011; do
   (timeout 2 bash -c "echo > /dev/tcp/127.0.0.1/$p" 2>/dev/null && echo "  :$p UP") || echo "  :$p DOWN"
 done

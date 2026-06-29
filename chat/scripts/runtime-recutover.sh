@@ -24,7 +24,7 @@ bash "$RUNTIME/start-apps.sh" chat
 
 echo "== 等就绪 =="
 for i in $(seq 1 50); do
-  curl -s -o /dev/null --max-time 2 "http://127.0.0.1:10010/actuator/health" 2>/dev/null && break
+  [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:10010/api/v1/contact/1/applyCount" 2>/dev/null)" = "401" ] && break
   sleep 2
 done
 for port in 10010 8082 8080 8081 8083 8085 8086 9000 18080; do

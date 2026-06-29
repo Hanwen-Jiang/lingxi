@@ -19,9 +19,11 @@ jwt_sub(){ local p m; p=$(printf '%s' "$1" | cut -d. -f2); m=$(( ${#p} % 4 )); [
 redis_cmd(){ redis-cli --no-auth-warning -h "${REDIS_HOST:-127.0.0.1}" -p "${REDIS_PORT:-6379}" -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} "$@"; }
 
 echo "=== J1 agent 入网关 E2E (gw=$GW, agent=$AGENT) ==="
-curl -s -o /dev/null --max-time 3 "$GW/actuator/health" || { echo "网关不可达"; exit 1; }
-curl -s -o /dev/null --max-time 3 "$AGENT/api/actuator/health" || { echo "agent 不可达($AGENT)——先跑 09-agent-e2e.sh"; exit 1; }
-ok "A1 agent /api/actuator/health 直连 200"
+ready=$(status "$GW/api/v1/contact/1/applyCount")
+[ "$ready" = "401" ] || { echo "网关不可达或鉴权未就绪(got=$ready)"; exit 1; }
+ah=$(status "$AGENT/api/actuator/health/readiness")
+[ "$ah" = "200" ] || { echo "agent readiness 非 200(got=$ah,$AGENT)——先跑 09-agent-e2e.sh"; exit 1; }
+ok "A1 agent /api/actuator/health/readiness 直连 200"
 
 echo "[enforce-identity:直连缺 X-User-Id 被拒]"
 d=$(status "$AGENT/api/agent/tools")
@@ -43,7 +45,7 @@ t=$(status -H "Authorization: Bearer $TOKEN" "$GW/api/agent/tools")
 
 echo "[流式端点经网关到达 agent(SSE)]"
 sse=$(curl -s -N --max-time 10 -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"sessionId":1,"prompt":"你好"}' "$GW/api/chat/auto/stream")
+  -d '{"sessionId":"9007199254740993","prompt":"你好"}' "$GW/api/chat/auto/stream")
 if printf '%s' "$sse" | grep -qiE "data:|event:|\"type\"|模型未配置|model"; then
   ok "A4 /api/chat/auto/stream 经网关到达 agent 并产出 SSE(start/delta/error)"
   printf '%s' "$sse" | grep -qiE "模型未配置|未配置|not configured|MissingAiModel" \

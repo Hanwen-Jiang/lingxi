@@ -26,9 +26,8 @@ jwt_sub(){ local p m; p=$(printf '%s' "$1" | cut -d. -f2); m=$(( ${#p} % 4 )); [
 redis_cmd(){ redis-cli --no-auth-warning -h "${REDIS_HOST:-127.0.0.1}" -p "${REDIS_PORT:-6379}" -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} "$@"; }
 
 echo "=== E2E 鉴权闭环冒烟(D14 邮箱)  (gateway=$GW, email=$EMAIL) ==="
-if ! curl -s -o /dev/null --max-time 3 "$GW/actuator/health"; then
-  echo "网关 $GW 不可达。请确认 01/02/03 已执行且服务已就绪。"; exit 1
-fi
+ready=$(status "$GW/api/v1/contact/1/applyCount")
+[ "$ready" = "401" ] || { echo "网关 $GW 不可达或鉴权未就绪(got=$ready)。请确认 01/02/03 已执行且服务已就绪。"; exit 1; }
 
 echo "[鉴权网关]"
 ck "T1 网关挡未带令牌的受保护请求 → 401" 401 "$(status "$GW/api/v1/contact/1/applyCount")"

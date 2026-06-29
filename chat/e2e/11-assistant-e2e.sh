@@ -22,8 +22,10 @@ nollm(){ printf '%s' "$1" | grep -qiE "未配置|not configured|MissingAiModel|U
 redis_cmd(){ redis-cli --no-auth-warning -h "${REDIS_HOST:-127.0.0.1}" -p "${REDIS_PORT:-6379}" -n "${REDIS_DATABASE:-5}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} "$@"; }
 
 echo "=== 内助手全链路 E2E (gw=$GW, agent=$AGENT) ==="
-curl -s -o /dev/null --max-time 3 "$GW/actuator/health" || { echo "网关不可达"; exit 1; }
-curl -s -o /dev/null --max-time 3 "$AGENT/api/actuator/health" || { echo "agent 不可达——先跑 09-agent-e2e.sh"; exit 1; }
+ready=$(status "$GW/api/v1/contact/1/applyCount")
+[ "$ready" = "401" ] || { echo "网关不可达或鉴权未就绪(got=$ready)"; exit 1; }
+ah=$(status "$AGENT/api/actuator/health/readiness")
+[ "$ah" = "200" ] || { echo "agent readiness 非 200(got=$ah)——先跑 09-agent-e2e.sh"; exit 1; }
 
 echo "[邮箱登录]"
 EMAIL="lx_$(date +%j%H%M%S)@lingxi.test"
@@ -34,16 +36,16 @@ TOKEN=$(printf '%s' "$login" | jstr token); UID_=$(printf '%s' "$login" | jstr u
 { [ -z "$UID_" ] || [ "$UID_" = "null" ]; } && UID_=$(jwt_sub "$TOKEN")
 [ -n "$TOKEN" ] && ok "登录拿 token(userId=$UID_)" || { ng "登录" token "$login"; echo "PASS=$P FAIL=$F"; exit 1; }
 AUTHH=(-H "Authorization: Bearer $TOKEN")
-SID="$(date +%s)"
+SID="9007199254740993"
 
 echo "[@灵犀:缓冲式经网关 → 注入 X-User-Id → agent]"
-buf=$(curl -s "${AUTHH[@]}" -H 'Content-Type: application/json' -d "{\"sessionId\":$SID,\"prompt\":\"你好,灵犀\"}" "$GW/api/agent/chat")
-bufc=$(status "${AUTHH[@]}" -H 'Content-Type: application/json' -d "{\"sessionId\":$SID,\"prompt\":\"你好\"}" "$GW/api/agent/chat")
+buf=$(curl -s "${AUTHH[@]}" -H 'Content-Type: application/json' -d "{\"sessionId\":\"$SID\",\"prompt\":\"你好,灵犀\"}" "$GW/api/agent/chat")
+bufc=$(status "${AUTHH[@]}" -H 'Content-Type: application/json' -d "{\"sessionId\":\"$SID\",\"prompt\":\"你好\"}" "$GW/api/agent/chat")
 { [ "$bufc" != "401" ] && [ "$bufc" != "000" ] && [ -n "$buf" ]; } \
   && ok "B1 /api/agent/chat 经网关达 agent(非401,got=$bufc)" || ng "B1 agent/chat" "!=401" "$bufc :: $buf"
 
 echo "[@灵犀:SSE §9 流式经网关 → agent]"
-sse=$(curl -s -N --max-time 15 "${AUTHH[@]}" -H 'Content-Type: application/json' -d "{\"sessionId\":$SID,\"prompt\":\"用一句话介绍你自己\"}" "$GW/api/chat/auto/stream")
+sse=$(curl -s -N --max-time 15 "${AUTHH[@]}" -H 'Content-Type: application/json' -d "{\"sessionId\":\"$SID\",\"prompt\":\"用一句话介绍你自己\"}" "$GW/api/chat/auto/stream")
 if printf '%s' "$sse" | grep -qiE "\"v\"|\"type\"|data:|event:|未配置|Unavailable"; then
   ok "B2 /api/chat/auto/stream 产出 SSE(到达 agent 且带身份)"
   if nollm "$sse"; then
@@ -58,14 +60,14 @@ fi
 
 echo "[F01 高风险工具确认令牌往返]"
 f1=$(curl -s "${AUTHH[@]}" -H 'Content-Type: application/json' \
-  -d "{\"sessionId\":$SID,\"prompt\":\"给 test@example.com 发一封主题为E2E的邮件\"}" "$GW/api/agent/chat")
+  -d "{\"sessionId\":\"$SID\",\"prompt\":\"给 test@example.com 发一封主题为E2E的邮件\"}" "$GW/api/agent/chat")
 if nollm "$f1"; then
   echo "  ⏭  跳过 F01:无 DASHSCOPE_API_KEY,agent 不路由工具(ReAct 需 LLM)。填 key 可验令牌往返。"
 elif printf '%s' "$f1" | grep -q '"confirmationRequired"[[:space:]]*:[[:space:]]*true'; then
   CT=$(printf '%s' "$f1" | jstr challengeToken)
   [ -n "$CT" ] && ok "F01-1 触发高风险工具 → confirmationRequired + challengeToken" || ng "F01-1 token" "challengeToken" "$f1"
   f2=$(curl -s "${AUTHH[@]}" -H 'Content-Type: application/json' \
-    -d "{\"sessionId\":$SID,\"prompt\":\"给 test@example.com 发一封主题为E2E的邮件\",\"confirmationToken\":\"$CT\"}" "$GW/api/agent/chat")
+    -d "{\"sessionId\":\"$SID\",\"prompt\":\"给 test@example.com 发一封主题为E2E的邮件\",\"confirmationToken\":\"$CT\"}" "$GW/api/agent/chat")
   printf '%s' "$f2" | grep -q '"confirmationRequired"[[:space:]]*:[[:space:]]*true' \
     && ng "F01-2 持令牌重发应放行" "不再 confirmationRequired" "$f2" \
     || ok "F01-2 持令牌重发 → 放行(令牌一次性消费)"

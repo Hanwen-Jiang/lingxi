@@ -24,7 +24,8 @@ signup(){ local e="$1" l t u; RKEY set "verify:email:$e" "$CODE" EX 300 >/dev/nu
   t=$(printf '%s' "$l"|jstr token); u=$(printf '%s' "$l"|jstr userId); { [ -z "$u" ]||[ "$u" = "null" ]; }&&u=$(jwt_sub "$t"); echo "$t $u"; }
 
 echo "=== P9 上线冲烟 (runtime :10010, 真实 InfiniteChat) ==="
-curl -s -o /dev/null --max-time 4 "$GW/actuator/health" || { echo "网关 :10010 不可达"; exit 1; }
+ready=$(status "$GW/api/v1/contact/1/applyCount")
+[ "$ready" = "401" ] || { echo "网关 :10010 不可达或鉴权未就绪(got=$ready)"; exit 1; }
 
 echo "[鉴权已上线:旧栈无鉴权行为应消失]"
 ck=$(status "$GW/api/v1/contact/1/applyCount"); [ "$ck" = "401" ] && ok "R1 无 token 受保护接口 → 401(非旧栈放行)" || ng "R1 无 token" 401 "$ck"
@@ -50,18 +51,31 @@ hist=$(curl -s -H "Authorization: Bearer $BT" "$GW/api/v1/chat/session/$SID/mess
 printf '%s' "$hist"|grep -q "live-$ST" && ok "R4c B 拉历史含该消息" || ng "R4c 历史" "含消息" "$hist"
 
 echo "[内助手 SSE 经网关 → agent]"
-sse=$(curl -s -N --max-time 20 -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' -d "{\"sessionId\":$SID,\"prompt\":\"你好灵犀\"}" "$GW/api/chat/auto/stream")
+ASID="$SID"
+sse=$(curl -s -N --max-time 20 -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' -d "{\"sessionId\":\"$ASID\",\"prompt\":\"你好灵犀\"}" "$GW/api/chat/auto/stream")
 if printf '%s' "$sse"|grep -qiE "\"v\"|\"type\"|data:|未配置|Unavailable"; then
   ok "R5 /api/chat/auto/stream 经网关达 agent(SSE)"
   nollm "$sse" && echo "     (无 LLM key:model-unavailable)" || { printf '%s' "$sse"|grep -qE "\"type\"[[:space:]]*:[[:space:]]*\"delta\"" && ok "R5b 真实流式 delta"; }
 else ng "R5 SSE" "SSE 事件" "$(printf '%s' "$sse"|head -c 160)"; fi
 
+echo "[跨源内助手 SSE CORS]"
+ORIGIN="${SMOKE_ORIGIN:-http://127.0.0.1:5273}"
+pre=$(status -X OPTIONS -H "Origin: $ORIGIN" -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization,content-type' "$GW/api/chat/auto/stream")
+[ "$pre" = "200" ] && ok "R6a CORS 预检 OPTIONS /api/chat/auto/stream → 200($ORIGIN)" || ng "R6a CORS preflight" 200 "$pre"
+cors_sse=$(curl -s -N --max-time 20 -H "Origin: $ORIGIN" -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' \
+  -d "{\"sessionId\":\"$ASID\",\"prompt\":\"你好灵犀\"}" "$GW/api/chat/auto/stream")
+if printf '%s' "$cors_sse"|grep -qiE "\"v\"|\"type\"|data:|未配置|Unavailable"; then
+  ok "R6b CORS 实际 POST SSE → 非403且到达 agent"
+else
+  ng "R6b CORS actual POST SSE" "SSE 事件" "$(printf '%s' "$cors_sse"|head -c 160)"
+fi
+
 echo "[F01 工具确认令牌往返]"
-f1=$(curl -s -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' -d "{\"sessionId\":$SID,\"prompt\":\"给 test@example.com 发一封主题为live的邮件\"}" "$GW/api/agent/chat")
+f1=$(curl -s -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' -d "{\"sessionId\":\"$ASID\",\"prompt\":\"给 test@example.com 发一封主题为live的邮件\"}" "$GW/api/agent/chat")
 if nollm "$f1"; then echo "  ⏭ F01 跳过(无 LLM key)"
 elif printf '%s' "$f1"|grep -q '"confirmationRequired"[[:space:]]*:[[:space:]]*true'; then
   CT=$(printf '%s' "$f1"|jstr challengeToken); [ -n "$CT" ] && ok "F01-1 confirmationRequired+challengeToken" || ng "F01-1" token "$f1"
-  f2=$(curl -s -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' -d "{\"sessionId\":$SID,\"prompt\":\"给 test@example.com 发一封主题为live的邮件\",\"confirmationToken\":\"$CT\"}" "$GW/api/agent/chat")
+  f2=$(curl -s -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' -d "{\"sessionId\":\"$ASID\",\"prompt\":\"给 test@example.com 发一封主题为live的邮件\",\"confirmationToken\":\"$CT\"}" "$GW/api/agent/chat")
   printf '%s' "$f2"|grep -q '"confirmationRequired"[[:space:]]*:[[:space:]]*true' && ng "F01-2 应放行" "无 confirmationRequired" "$f2" || ok "F01-2 持令牌重发放行(一次性)"
 else echo "  ⏭ F01 未触发高风险工具,响应: $(printf '%s' "$f1"|head -c 140)"; fi
 

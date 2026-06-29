@@ -59,7 +59,7 @@ phase_env() {
   ensure_kv "$CHAT_ENV" JWT_SECRET_KEY "$jwt"
   ensure_kv "$CHAT_ENV" INTERNAL_SERVICE_TOKEN "$itk"
   ensure_kv "$CHAT_ENV" AGENT_GATEWAY_URI "http://localhost:18080"
-  ensure_kv "$CHAT_ENV" 'GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS' 'http://localhost:[*]'
+  ensure_kv "$CHAT_ENV" 'GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS' 'http://localhost:[*],http://127.0.0.1:[*],http://100.*:[*]'
   ensure_kv "$AGENT_ENV" AGENT_GATEWAY_ENFORCE_IDENTITY "true"
   echo "  chat.env JWT/内部令牌/agent-uri/CORS 就绪;agent.env enforce=true"
 }
@@ -84,7 +84,7 @@ phase_health() {
   echo "== [health] 等服务就绪 =="
   local ok=0
   for i in $(seq 1 60); do
-    if curl -s -o /dev/null --max-time 2 "http://127.0.0.1:10010/actuator/health" 2>/dev/null \
+    if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:10010/api/v1/contact/1/applyCount" 2>/dev/null)" = "401" ] \
        || curl -s -o /dev/null --max-time 2 "http://127.0.0.1:8082/actuator/health" 2>/dev/null; then ok=1; break; fi
     sleep 2
   done

@@ -37,7 +37,7 @@ export SERVER_PORT="$PORT"
 # MySQL 故意指向死端口 → agent 降级 H2 内存(E2E 不需持久 agent 库)
 export MYSQL_URL="jdbc:mysql://127.0.0.1:3399/agent_e2e?useSSL=false&allowPublicKeyRetrieval=true&connectTimeout=2000"
 # Redis 用 e2e 实例(REDIS_HOST/PORT/PASSWORD 已由 e2e.env 注入)但**独立 db6**(隔离 chat 的 db5):
-# 健康检查快(避免死 Redis 阻塞 actuator/health)+ F01 令牌/限流走 Redis 真路径(P6 GETDEL)。
+# readiness 健康检查快(避免可选 Redis 拖垮主 health)+ F01 令牌/限流走 Redis 真路径(P6 GETDEL)。
 export REDIS_DATABASE=6
 export FLYWAY_ENABLED=false
 export AGENT_GATEWAY_ENFORCE_IDENTITY="${AGENT_GATEWAY_ENFORCE_IDENTITY:-true}"
@@ -48,9 +48,9 @@ PIDFILE="$PIDF" JARF="$JAR" \
   setsid bash -c 'echo $$ > "$PIDFILE"; exec java -Xms128m -Xmx768m -jar "$JARF"' \
   > "$LOG" 2>&1 < /dev/null &
 
-echo "== 等 agent 就绪(/api/actuator/health) =="
+echo "== 等 agent 就绪(/api/actuator/health/readiness) =="
 for i in $(seq 1 45); do
-  curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$PORT/api/actuator/health" && { echo "✅ agent UP on $PORT"; exit 0; }
+  [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:$PORT/api/actuator/health/readiness")" = "200" ] && { echo "✅ agent UP on $PORT"; exit 0; }
   sleep 2
 done
 echo "❌ agent 未在 90s 内就绪,日志尾:"; tail -25 "$LOG"; exit 1

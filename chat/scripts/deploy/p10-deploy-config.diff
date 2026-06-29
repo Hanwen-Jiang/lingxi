@@ -9,7 +9,7 @@ diff --git a/deploy/.env b/deploy/.env
 +INTERNAL_SERVICE_TOKEN=lingxi-internal-prod-7f3a9c2e5b1d4068
 +AGENT_GATEWAY_URI=http://agent:10011
 +AGENT_GATEWAY_ENFORCE_IDENTITY=true
-+GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS=http://127.0.0.1:[*]
++GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS=http://localhost:[*],http://127.0.0.1:[*],http://100.*:[*]
  SUDO_PASS=asdf1476
 diff --git a/deploy/docker-compose.yml b/deploy/docker-compose.yml
 --- a/deploy/docker-compose.yml
