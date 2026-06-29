@@ -20,6 +20,14 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-29 · P11 集成(部分):D5 sessionId string 收口 + 生产网关 CORS/health 修复(S1+S3);S2 挂起/S4 空转(被 S1 修阻塞)→ 顺延 P12
+- **本轮 P11 数字(git 核实)**:S1 `86a5295`(**D5 sessionId string 收口**:`AgentRequest/ChatRequest.sessionId`→String + `SessionIdCodec` 边界转 Long,client-only `s-lingxi` 稳定映射;修全部 agent 端点 sessionId 边界;LLM 模型显式可配/无 key 降级;`mvnw test -Plow-mem-test` **40/40**,本机 jar 实测 `s-lingxi`→200/SSE start);S3 `c229544`(**生产网关 CORS 真修**:根因=网关转发保留 Origin→agent 二次拦截,改 `RemoveRequestHeader=Origin` 使网关为唯一 CORS 边界,实测跨源 POST SSE 200;health smoke 收口;deploy diff 更新;**会话内全栈 E2E 57/57**)。**S2/S4 未交付**:S2 会话挂起(2 文件未提交、无 ledger、41min idle),S4 空转——二者「全 UI 卡片级 F01/§9 验收」**被 S1 的 sessionId 修阻塞**(S1 修本轮才提交,未在 S2/S4 起始的 main 上),属正常拓扑顺延。
+- **里程碑**:v1.0.0 的两个技术前置已清——**D5 sessionId 契约收口** + **生产跨源 SSE 可用(CORS 修)**;全栈 E2E 仍 57/57。
+- **已集成**:S1+S3 两条并入 `main`(merge tips → `<本集成>`,零冲突);S2/S4 无可并物。本 HUB 条目随后 docs 提交,已 push。
+- **🟡 顺延 P12(已解阻)**:① **S2 全 UI 卡片级 F01 验收**(S1 sessionId 修已在 main→解阻;S2 会话需先理掉 p11 未提交 WIP);② **S4 全 UI 浏览器冒烟**(实时+内助手+媒体;CORS 已修→解阻)+ COS 公开读 `fileUrl` 403(属用户基建);③ **deploy 配置固化**仍需用户 sudo 应用 `chat/scripts/deploy/p10-deploy-config.diff`;④ 生产换上游受支持 LLM model/key 才有真 delta(S1 已显式化)。
+- **路线**:功能版 v1.0·快。**P12 = S2/S4 全 UI 验收 + S3 末轮验收 → 全绿即 HUB 打 tag `v1.0.0`**。注入改用**英文 prompt**(用户拍板,防乱码;汇报仍中文)。
+- 阻塞:无(P12 清单均已解阻或属用户基建)。待中枢确认:deploy 固化 sudo;COS 公开读策略。
+
 ### 2026-06-29 · P10 集成:🎉 go-live 收尾完成(生产 :10010 全栈冲烟 9/9 含内助手/F01)+ Redis:6399 根治;下轮 P11=发行打磨 → v1.0.0
 - **本轮 P10 数字(git 核实)**:四条 `feat/*-p10` 并入 `main`(均 on-main/0-behind,零冲突)。S3 `87e16a2`(**go-live 收尾**:接 S1 镜像 `docker compose up -d agent`、**根治 Redis :6399**=脚本误写 :6379 拖 3 轮、生产 :10010 全栈冲烟 **9/9** 含内助手 SSE/F01、会话内 E2E **57/57**、产出 `p10-deploy-config.diff`);S1 `71dcbf4`(当前源 agent 镜像 `438deced` 交付 + **修 SSE 首帧/boundedElastic**(治内助手空挂)+ OpenAI-compat env 命名 + A1–A4 5/5 / runtime smoke 9/9);S4 `1679ada`(生产 :10010 浏览器真栈冲烟 + **修 client-only 助手线程抗 WS 抖动** + 挖出 3 个 infra 问题);S2 `9e415b4`(**生产 F01/§9 浏览器实证**:challengeToken 往返+一次性消费+TTL 300s,§9 v="1" start/delta/done + **修 Composer 嵌套 button bug**)。
 - **里程碑**:🎉 **go-live 完整闭合**——生产 `:10010` 全功能鉴权版(IM + 内助手 + F01),冲烟 9/9 + 会话内 E2E 57/57;拖 3 轮的 Redis:6399 老坑根治。功能版 v1.0 仅剩发行打磨。
