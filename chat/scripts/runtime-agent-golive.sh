@@ -23,7 +23,13 @@ set -a; . "$ENV_FILE"; set +a
 
 agent_jar() {
   local jar
-  jar="$(ls "$AGENT_SOURCE_TREE"/agent/target/InfiniteChat-Agent-*.jar 2>/dev/null | grep -vE '(-sources|-javadoc|\\.original)$' | head -1 || true)"
+  jar="$(find "$AGENT_SOURCE_TREE"/agent/target -maxdepth 1 -type f -name 'InfiniteChat-Agent-*.jar' 2>/dev/null \
+    | grep -vE '(-sources|-javadoc|\\.original)$' \
+    | grep -v '0\.0\.1-SNAPSHOT' \
+    | sort -V | tail -1 || true)"
+  [ -n "$jar" ] || jar="$(find "$AGENT_SOURCE_TREE"/agent/target -maxdepth 1 -type f -name 'InfiniteChat-Agent-*.jar' 2>/dev/null \
+    | grep -vE '(-sources|-javadoc|\\.original)$' \
+    | sort -V | tail -1 || true)"
   [ -n "$jar" ] || { echo "missing agent jar under: $AGENT_SOURCE_TREE/agent/target"; exit 1; }
   printf '%s\n' "$jar"
 }

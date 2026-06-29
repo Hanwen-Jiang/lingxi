@@ -59,7 +59,8 @@ mariadb --no-defaults -S "$DB_SOCK" -uroot -N \
 # ---------- 2) Nacos 命名空间 ----------
 echo "== 2) 创建 Nacos 命名空间 (id=${SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE:-e2e}) =="
 NS="${SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE:-e2e}"
-code=$(curl -s -o /tmp/e2e_ns.out -w '%{http_code}' -X POST "http://127.0.0.1:8848/nacos/v1/console/namespaces" \
+NACOS_HTTP="${NACOS_SERVER_ADDR:-127.0.0.1:8848}"
+code=$(curl -s -o /tmp/e2e_ns.out -w '%{http_code}' -X POST "http://$NACOS_HTTP/nacos/v1/console/namespaces" \
   --data-urlencode "customNamespaceId=$NS" --data-urlencode "namespaceName=$NS" \
   --data-urlencode "namespaceDesc=InfiniteChat E2E" || true)
 echo "   HTTP $code  body=$(cat /tmp/e2e_ns.out 2>/dev/null)"

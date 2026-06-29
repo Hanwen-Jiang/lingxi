@@ -18,10 +18,15 @@ mkdir -p "$E2E_HOME/run" "$E2E_HOME/logs"
 
 agent_jar() {
   local jar
-  jar="$(ls "$AGENT_DST"/target/InfiniteChat-Agent-*.jar 2>/dev/null | grep -vE '(-sources|-javadoc|\\.original)$' | head -1 || true)"
+  jar="$(find "$AGENT_DST"/target -maxdepth 1 -type f -name 'InfiniteChat-Agent-*.jar' 2>/dev/null \
+    | grep -vE '(-sources|-javadoc|\\.original)$' \
+    | grep -v '0\.0\.1-SNAPSHOT' \
+    | sort -V | tail -1 || true)"
+  [ -n "$jar" ] || jar="$(find "$AGENT_DST"/target -maxdepth 1 -type f -name 'InfiniteChat-Agent-*.jar' 2>/dev/null \
+    | grep -vE '(-sources|-javadoc|\\.original)$' \
+    | sort -V | tail -1 || true)"
   [ -n "$jar" ] && printf '%s\n' "$jar" || printf '%s\n' "$AGENT_DST/target/InfiniteChat-Agent-*.jar"
 }
-JAR="$(agent_jar)"
 
 if [ "${AGENT_SKIP_BUILD:-0}" != "1" ]; then
   echo "== sync agent 源码 -> $AGENT_DST =="
@@ -32,6 +37,7 @@ if [ "${AGENT_SKIP_BUILD:-0}" != "1" ]; then
     || { echo "!! agent 构建失败:本 E2E 环境无 maven 镜像网络 + m2 缺 SB3/langchain4j 依赖。"
          echo "!! 解法:有网环境(S1/HUB)构建出 jar 放到 $AGENT_DST/target/,再 AGENT_SKIP_BUILD=1 重跑。"; exit 3; }
 fi
+JAR="$(agent_jar)"
 [ -f "$JAR" ] || { echo "缺少 agent jar:$JAR(可 AGENT_SKIP_BUILD=1 + 放入现成 jar)"; exit 3; }
 
 if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF" 2>/dev/null || echo 0)" 2>/dev/null; then

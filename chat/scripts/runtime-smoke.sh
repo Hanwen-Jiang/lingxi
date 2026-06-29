@@ -23,7 +23,7 @@ signup(){ local e="$1" l t u; RKEY set "verify:email:$e" "$CODE" EX 300 >/dev/nu
   l=$(curl -s -X POST -H 'Content-Type: application/json' -d "{\"email\":\"$e\",\"password\":\"$PASS\"}" "$GW/api/v1/user/login")
   t=$(printf '%s' "$l"|jstr token); u=$(printf '%s' "$l"|jstr userId); { [ -z "$u" ]||[ "$u" = "null" ]; }&&u=$(jwt_sub "$t"); echo "$t $u"; }
 
-echo "=== P9 上线冲烟 (runtime :10010, 真实 InfiniteChat) ==="
+echo "=== P9 上线冲烟 (runtime $GW, 真实 InfiniteChat) ==="
 ready=$(status "$GW/api/v1/contact/1/applyCount")
 [ "$ready" = "401" ] || { echo "网关 :10010 不可达或鉴权未就绪(got=$ready)"; exit 1; }
 
