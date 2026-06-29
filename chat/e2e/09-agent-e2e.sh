@@ -34,9 +34,11 @@ fi
 
 # 隔离环境变量(覆盖 agent application.yml 默认)
 export SERVER_PORT="$PORT"
+# MySQL 故意指向死端口 → agent 降级 H2 内存(E2E 不需持久 agent 库)
 export MYSQL_URL="jdbc:mysql://127.0.0.1:3399/agent_e2e?useSSL=false&allowPublicKeyRetrieval=true&connectTimeout=2000"
-export SPRING_DATA_REDIS_HOST=127.0.0.1
-export SPRING_DATA_REDIS_PORT=6399
+# Redis 用 e2e 实例(REDIS_HOST/PORT/PASSWORD 已由 e2e.env 注入)但**独立 db6**(隔离 chat 的 db5):
+# 健康检查快(避免死 Redis 阻塞 actuator/health)+ F01 令牌/限流走 Redis 真路径(P6 GETDEL)。
+export REDIS_DATABASE=6
 export FLYWAY_ENABLED=false
 export AGENT_GATEWAY_ENFORCE_IDENTITY="${AGENT_GATEWAY_ENFORCE_IDENTITY:-true}"
 export DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}"

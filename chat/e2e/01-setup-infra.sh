@@ -31,9 +31,10 @@ if ! timeout 2 nc -z 127.0.0.1 "$DB_PORT" >/dev/null 2>&1; then
       || { echo "   mariadb-install-db 失败,见 $E2E_HOME/logs/mariadb-install.log"; exit 1; }
   fi
   echo "   启动 mariadbd ..."
-  nohup mariadbd --no-defaults --datadir="$DB_DIR" --port="$DB_PORT" --bind-address=127.0.0.1 \
+  # setsid(非 nohup):放入新会话,WSL 命令/会话退出不被 SIGTERM(nohup 只挡 SIGHUP,跨会话会被杀)。
+  setsid mariadbd --no-defaults --datadir="$DB_DIR" --port="$DB_PORT" --bind-address=127.0.0.1 \
     --socket="$DB_SOCK" --skip-name-resolve --innodb-buffer-pool-size=128M \
-    >"$E2E_HOME/logs/mariadb-e2e.log" 2>&1 &
+    >"$E2E_HOME/logs/mariadb-e2e.log" 2>&1 < /dev/null &
   echo $! > "$DB_PID"
   for _ in $(seq 1 40); do
     timeout 2 nc -z 127.0.0.1 "$DB_PORT" >/dev/null 2>&1 && break
@@ -91,8 +92,8 @@ EOF
     CID=$("$KAFKA_HOME/bin/kafka-storage.sh" random-uuid)
     "$KAFKA_HOME/bin/kafka-storage.sh" format -t "$CID" -c "$CFG"
   fi
-  KAFKA_HEAP_OPTS="-Xms256m -Xmx512m" nohup "$KAFKA_HOME/bin/kafka-server-start.sh" "$CFG" \
-    > "$E2E_HOME/logs/kafka-e2e.log" 2>&1 &
+  KAFKA_HEAP_OPTS="-Xms256m -Xmx512m" setsid "$KAFKA_HOME/bin/kafka-server-start.sh" "$CFG" \
+    > "$E2E_HOME/logs/kafka-e2e.log" 2>&1 < /dev/null &
   echo $! > "$E2E_HOME/run/kafka-e2e.pid"
   echo "   启动中,日志 $E2E_HOME/logs/kafka-e2e.log"
 fi
