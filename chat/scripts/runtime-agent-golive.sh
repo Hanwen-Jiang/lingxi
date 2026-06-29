@@ -11,8 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OVERRIDE="${OVERRIDE:-$SCRIPT_DIR/deploy/docker-golive.override.yml}"
 ENV_FILE="${ENV_FILE:-$HOME/p9-deploy/.env}"
 
-AGENT_SOURCE_TREE="${AGENT_SOURCE_TREE:-/mnt/e/jhw/proj-agent-p10}"
-AGENT_JAR="${AGENT_JAR:-$AGENT_SOURCE_TREE/agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar}"
+AGENT_SOURCE_TREE="${AGENT_SOURCE_TREE:-/mnt/e/jhw/proj}"
 STAGE="${STAGE:-$HOME/p10-agent-docker-context}"
 STAMP="$(date +%Y%m%d%H%M%S)"
 
@@ -20,8 +19,15 @@ STAMP="$(date +%Y%m%d%H%M%S)"
 [ -f "$DOCKERFILE" ] || { echo "missing Dockerfile: $DOCKERFILE"; exit 1; }
 [ -f "$OVERRIDE" ] || { echo "missing override: $OVERRIDE"; exit 1; }
 [ -f "$ENV_FILE" ] || { echo "missing env file: $ENV_FILE"; exit 1; }
-[ -f "$AGENT_JAR" ] || { echo "missing agent jar: $AGENT_JAR"; exit 1; }
 set -a; . "$ENV_FILE"; set +a
+
+agent_jar() {
+  local jar
+  jar="$(ls "$AGENT_SOURCE_TREE"/agent/target/InfiniteChat-Agent-*.jar 2>/dev/null | grep -vE '(-sources|-javadoc|\\.original)$' | head -1 || true)"
+  [ -n "$jar" ] || { echo "missing agent jar under: $AGENT_SOURCE_TREE/agent/target"; exit 1; }
+  printf '%s\n' "$jar"
+}
+AGENT_JAR="${AGENT_JAR:-$(agent_jar)}"
 
 echo "== backup current infinitechat/agent:local -> :pre-p10-$STAMP =="
 if docker image inspect infinitechat/agent:local >/dev/null 2>&1; then
@@ -31,11 +37,12 @@ fi
 echo "== stage agent jar =="
 rm -rf "$STAGE"
 mkdir -p "$STAGE/agent/target"
-cp -f "$AGENT_JAR" "$STAGE/agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar"
+AGENT_JAR_BASENAME="$(basename "$AGENT_JAR")"
+cp -f "$AGENT_JAR" "$STAGE/agent/target/$AGENT_JAR_BASENAME"
 
 echo "== build infinitechat/agent:local from $AGENT_JAR =="
 docker build -f "$DOCKERFILE" \
-  --build-arg JAR_FILE="agent/target/InfiniteChat-Agent-0.0.1-SNAPSHOT.jar" \
+  --build-arg JAR_FILE="agent/target/$AGENT_JAR_BASENAME" \
   -t infinitechat/agent:local "$STAGE"
 
 echo "== recreate agent container with committed override =="
