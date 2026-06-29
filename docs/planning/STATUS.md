@@ -414,6 +414,17 @@
 
 ## S2 · agent 前端(owns agent-frontend/)
 
+### 2026-06-29 · P12 · agent-frontend v1.0.0 + 生产 UI 卡片级 F01/§9 实证(分支 `feat/agent-frontend-p12`)
+- 完成:从 `main` `bfbd470` 起独立 worktree `.claude/worktrees/agent-frontend-p12` + 分支 `feat/agent-frontend-p12`。前端发行打磨:版本号升到 `1.0.0`;F01 卡片增加 300s 失效窗口文案;`更多细节` 原始响应对 `challengeToken`/`confirmationToken` 递归脱敏,避免把一次性确认口令暴露到可复制调试块。F01 resend 代码路径保持 P10 语义:只回传服务端 `challengeToken` 到 `confirmationToken`,不传工具名。
+- 完成:生产 Docker 真栈 UI 卡片级 F01 实证(不 mock):Vite `:5183` 代理到 WSL 生产 gateway `100.122.46.119:10010`;Chrome CDP 自动化真实 UI 登录临时账号 `s2_p12_220145@lingxi.test`;将 active session 设为真实 string sessionId `s-lingxi`;通过「更多操作」命令选择「智能助理 /agent-chat」;发送高风险邮件 prompt → UI 渲染确认卡 → 点击「确认并继续」。Network/CDP 捕获:首次 `/api/agent/chat` body 为 `{"userId","sessionId":"s-lingxi","prompt"}`;确认请求 body 为 `{"userId","sessionId":"s-lingxi","prompt","confirmationToken":"2x6_JDTETuDRc_-4jqRpepzv1o4HlTsG"}`;确认 body 无 `confirmedTools`/`toolName`/`toolNames`/`pendingTools`。确认后 UI 渲染真实后端结果 `邮件发送失败: Could not parse mail`。
+- 完成:F01 一次性/TTL 实证(同生产 gateway + 同真实 JWT/session):同 token `2x6_JDTETuDRc_-4jqRpepzv1o4HlTsG` 重放 → 后端重新 `confirmationRequired=true` 并签发新 token `cvDYUHpsO010WXLFkbud1PEt7WJQCQtx`,未执行工具;另取 token `jYSBRg7p_y8fzODkC6bkQJJGz88aWt_2`,等待 `challengeExpiresInSec=300` + 8s 后携旧 token 请求 → 重新 `confirmationRequired=true`,新 token `x_aboPvuDuMY4VxbW1WiMrKWi30xpuQy`,`expiredSameToken=false`。
+- 完成:§9 SSE 生产实证:直接打真实 `/api/chat/auto/stream` with `sessionId:"s-lingxi"` 返回 `text/event-stream`,帧含 `v:"1"` + `type:"start"|"delta"|"done"`;未知 type 容忍仍由现有 `api.test`/`useChat.test` 回归覆盖。
+- 产出物:`agent-frontend/package.json`,`agent-frontend/package-lock.json`,`agent-frontend/src/features/chat/{ToolConfirmation.tsx,ToolConfirmation.test.tsx,MessageTimeline.tsx}`,`docs/planning/STATUS.md`。
+- 验证:5 门绿: `npm run typecheck`;`npm run lint`;`npm run format:check`;`npm run test`(8 files / 70 tests);`npm run build`(exit 0,仅既有 HeroUI CSS `:is()` minify warning + chunk-size warning)。生产浏览器/网络实证 artifact 留在本 worktree `.artifacts/p12-cdp-ui-flow-5.json`,`p12-ttl-expiry.json`,`p12-sse.txt`(不入库)。
+- 阻塞:无。风险/备注:Windows `127.0.0.1:10010` 仍偶发不可达/代理干扰,本轮用 WSL IP `100.122.46.119:10010` 做同一生产 Docker gateway 真栈验证;生产 `/api/actuator/health` 经 gateway 仍 404(既有),不影响 F01/§9。
+- 交接:HUB 可并入/打 v1.0.0 tag 前复核本分支。S3 若要前端 dev proxy 默认避开 Windows NAT,可考虑在本机文档建议 `.env.local VITE_API_PROXY_TARGET=http://<WSL-IP>:10010`。
+- 待中枢确认:无。
+
 ### 2026-06-29 · P10 · 生产 F01/§9 补验 + 命令 Popover 修复(分支 `feat/agent-frontend-p10`)
 - 完成:从新 main `086f759` 起独立 worktree 分支 `feat/agent-frontend-p10`。按 `agent/docs/E2E-INTEGRATION.md` 复核 F01/§9 后,指向生产 Docker `:10010` 做验证；Windows host 直连 `127.0.0.1:10010` 曾超时,本轮采用本地捕获代理 `127.0.0.1:19010 -> WSL 100.122.46.119:10010` 且剥离上游 Origin(否则生产 gateway 对部分 chat 请求返 `Invalid CORS request`),浏览器 dev server `127.0.0.1:5182` 通过该代理访问生产。
 - 完成:生产登录/会话/聊天冒烟:用 Redis 验证码注册临时生产账号并在浏览器 UI 完成密码登录；剥离 Origin 后 `/api/chat/model-status`、`/api/chat/sessions` 均返 `code:0`；`/api/chat/auto/stream` 在 agent 冷启动窗口曾出现 `agent:10011 connection refused`,agent ready 后用数字 sessionId 重试得到真实 `text/event-stream`。

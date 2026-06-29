@@ -52,6 +52,13 @@ describe("ToolConfirmation (M4 / F01)", () => {
     expect(screen.getByRole("button", {name: "取消"})).toBeDisabled();
   });
 
+  it("shows the challenge expiry window when provided", () => {
+    render(
+      <ToolConfirmation expiresInSec={300} isConfirming={false} tools={[]} onConfirm={vi.fn()} onCancel={vi.fn()} />,
+    );
+    expect(screen.getByText("确认口令将在 300 秒后失效。若过期,灵犀会重新请求确认。")).toBeInTheDocument();
+  });
+
   it("renders without a tool list when the server only sent a challenge token", () => {
     // F01 may carry a token with no pendingTools — the card still shows so
     // the user can decide to release or cancel.
