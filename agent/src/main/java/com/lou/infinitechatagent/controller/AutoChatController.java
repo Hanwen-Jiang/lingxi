@@ -46,6 +46,7 @@ public class AutoChatController {
     public Flux<ServerSentEvent<StreamChatEvent>> stream(@Valid @RequestBody ChatRequest request,
                                                          @CurrentUser AuthPrincipal principal) {
         request.setUserId(principal.requireUserId());
+        Long sessionId = request.ensureInternalSessionId();
         AutoRouteDecision decision = autoChatRouterService.decide(request);
         String requestId = UUID.randomUUID().toString();
         // §9:真增量(逐 token)路由 buffered=null;非增量(整段一次性 delta)路由显式 buffered=true。
@@ -53,7 +54,7 @@ public class AutoChatController {
         Boolean buffered = tokenStreaming ? null : Boolean.TRUE;
         MonitorContext monitorContext = MonitorContext.builder()
                 .userId(request.getUserId())
-                .sessionId(request.getSessionId())
+                .sessionId(sessionId)
                 .build();
         AtomicReference<StringBuilder> answer = new AtomicReference<>(new StringBuilder());
         AtomicReference<Object> toolTrace = new AtomicReference<>(java.util.Map.of(

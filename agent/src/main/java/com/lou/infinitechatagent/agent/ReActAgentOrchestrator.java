@@ -89,12 +89,13 @@ public class ReActAgentOrchestrator {
     public AgentResponse chat(AgentRequest request) {
         long start = System.currentTimeMillis();
         String prompt = normalizePrompt(request.getPrompt());
-        AgentContext agentContext = agentContextManager.prepare(request.getUserId(), request.getSessionId(), prompt);
+        Long sessionId = request.internalSessionId();
+        AgentContext agentContext = agentContextManager.prepare(request.getUserId(), sessionId, prompt);
         AgentPlan plan = plan(prompt);
         AgentAction action = plan.getAction();
         ToolGovernanceDecision governanceDecision = toolGovernanceService.evaluate(
                 request.getUserId(),
-                request.getSessionId(),
+                sessionId,
                 prompt,
                 action,
                 request.getConfirmationToken(),
@@ -105,14 +106,14 @@ public class ReActAgentOrchestrator {
         }
 
         return switch (action.getType()) {
-            case HYBRID_SEARCH -> answerWithRag(request.getUserId(), request.getSessionId(), prompt, plan, agentContext, governanceDecision, start);
-            case CURRENT_TIME -> answerWithCurrentTime(request.getUserId(), request.getSessionId(), prompt, plan, agentContext, governanceDecision, start);
-            case MEMORY_WRITE -> answerWithMemoryWrite(request.getUserId(), request.getSessionId(), prompt, plan, agentContext, governanceDecision, start);
-            case MEMORY_SEARCH -> answerWithMemorySearch(request.getUserId(), request.getSessionId(), prompt, plan, agentContext, governanceDecision, start);
-            case EMAIL_SEND -> answerWithEmailSend(request.getUserId(), request.getSessionId(), prompt, plan, agentContext, governanceDecision, start);
-            case WEB_SEARCH -> answerWithWebSearch(request.getUserId(), request.getSessionId(), prompt, plan, agentContext, governanceDecision, start);
-            case NO_RETRIEVAL_ANSWER -> answerDirectly(request.getUserId(), request.getSessionId(), prompt, plan, agentContext, governanceDecision, start);
-            default -> answerDirectly(request.getUserId(), request.getSessionId(), prompt, plan, agentContext, governanceDecision, start);
+            case HYBRID_SEARCH -> answerWithRag(request.getUserId(), sessionId, prompt, plan, agentContext, governanceDecision, start);
+            case CURRENT_TIME -> answerWithCurrentTime(request.getUserId(), sessionId, prompt, plan, agentContext, governanceDecision, start);
+            case MEMORY_WRITE -> answerWithMemoryWrite(request.getUserId(), sessionId, prompt, plan, agentContext, governanceDecision, start);
+            case MEMORY_SEARCH -> answerWithMemorySearch(request.getUserId(), sessionId, prompt, plan, agentContext, governanceDecision, start);
+            case EMAIL_SEND -> answerWithEmailSend(request.getUserId(), sessionId, prompt, plan, agentContext, governanceDecision, start);
+            case WEB_SEARCH -> answerWithWebSearch(request.getUserId(), sessionId, prompt, plan, agentContext, governanceDecision, start);
+            case NO_RETRIEVAL_ANSWER -> answerDirectly(request.getUserId(), sessionId, prompt, plan, agentContext, governanceDecision, start);
+            default -> answerDirectly(request.getUserId(), sessionId, prompt, plan, agentContext, governanceDecision, start);
         };
     }
 

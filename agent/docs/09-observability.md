@@ -32,7 +32,7 @@
 | **Micrometer** | Java 世界的"指标门面"。你用它写一套埋点代码，底层可以对接 Prometheus、Datadog 等任意后端。类比 SLF4J 之于日志。 |
 | **Counter(计数器)** | 只增不减的数字。适合"请求次数""错误次数""累计 token"。本项目用它记 `ai_model_requests_total` 等。 |
 | **Timer(计时器)** | 记录一段耗时，并自动算出次数、总时长、最大值等。本项目用它记模型响应耗时。 |
-| **Tag(标签/维度)** | 给一个指标贴上若干键值对，比如 `user_id=1`、`model_name=gpt-5.4-mini`。同一个指标按不同标签组合拆成多条线，这样才能"按用户/会话/模型"分别看。 |
+| **Tag(标签/维度)** | 给一个指标贴上若干键值对，比如 `model_name=your-supported-model`、`status=success`。标签必须低基数,不能放 user/session/prompt 这类无界值。 |
 | **MeterRegistry** | Micrometer 的"指标仓库"。所有 Counter/Timer 都注册到它里面，Actuator 再从它读取并导出。Spring Boot 自动给你装配好。 |
 | **ChatModelListener** | LangChain4j 提供的钩子接口，模型调用的 `onRequest / onResponse / onError` 三个时机会被回调。我们在这三个回调里埋点。 |
 | **Actuator** | Spring Boot 的运维端点集合(健康检查、指标导出等)。我们只开放其中三个。 |
@@ -182,7 +182,7 @@ counter.increment();   // :46
 
 两个要点：
 
-1. **null 兜底**：Micrometer 的标签值**绝对不能是 null**，否则注册时直接抛异常。所以这里把每个可能为空的字段都替换成 `"unknown"`。这就是为什么你在监控里有时会看到 `user_id="unknown"` 的曲线——那通常是上下文没传进来的请求。
+1. **null 兜底**：Micrometer 的标签值**绝对不能是 null**，否则注册时直接抛异常。所以这里把每个可能为空的低基数字段都替换成 `"unknown"`。user/session 只进日志,不进指标标签。
 2. **ConcurrentMap 缓存 Meter**：每个独特的标签组合(key)只会创建一个 Counter/Timer，之后复用。类里有四个独立缓存：`requestCountersCache` / `errorCountersCache` / `tokenCountersCache` / `responseTimersCache`(`:22-25`)。为什么要自己缓存? 因为反复 `Counter.builder(...).register(...)` 虽然 Micrometer 内部也会去重，但用 `computeIfAbsent` 显式缓存更省、更快，也让"一个标签组合对应一个 Meter"的关系一目了然。用 `ConcurrentHashMap` 是因为多个请求线程会并发调它。
 
 > 维度警告(重要):请求计数和 token 计数都把 `user_id` 和 `session_id` 当成标签。`session_id` 通常每次会话都不同——**这意味着指标基数(cardinality)会随会话数无限增长**,在高流量生产环境可能把内存和 Prometheus 撑爆。这是教学项目里很常见、但上线前必须正视的设计点,详见"常见坑"。
@@ -191,10 +191,10 @@ counter.increment();   // :46
 
 | 指标名 | 类型 | 标签 | 含义 |
 | --- | --- | --- | --- |
-| `ai_model_requests_total` | Counter | user_id, session_id, model_name, status | 请求次数，status ∈ {started, success, error} |
-| `ai_model_errors_total` | Counter | user_id, session_id, model_name, error_message | 错误次数(按错误消息细分) |
-| `ai_model_tokens_total` | Counter | user_id, session_id, model_name, token_type | Token 累计，token_type ∈ {input, output, total} |
-| `ai_model_response_duration_seconds` | Timer | user_id, session_id, model_name | 响应耗时(Timer 自动产出 count/sum/max) |
+| `ai_model_requests_total` | Counter | model_name, status | 请求次数，status ∈ {started, success, error} |
+| `ai_model_errors_total` | Counter | model_name, error_type | 错误次数(按异常类型细分,不按自由文本) |
+| `ai_model_tokens_total` | Counter | model_name, token_type | Token 累计，token_type ∈ {input, output, total} |
+| `ai_model_response_duration_seconds` | Timer | model_name | 响应耗时(Timer 自动产出 count/sum/max) |
 
 ### 6) 监听器是怎么挂到模型上的
 
@@ -294,13 +294,13 @@ curl -X POST http://localhost:18080/api/chat \
 curl -s http://localhost:18080/api/actuator/prometheus | grep ai_model
 ```
 
-你应该能看到类似下面这样的输出(标签里带着你刚才请求的 user/session/model)：
+你应该能看到类似下面这样的输出(标签只保留低基数 model/status/token_type)：
 
 ```text
-ai_model_requests_total{model_name="gpt-5.4-mini",session_id="1001",status="success",user_id="1"} 1.0
-ai_model_tokens_total{model_name="gpt-5.4-mini",session_id="1001",token_type="total",user_id="1"} 137.0
-ai_model_response_duration_seconds_count{model_name="gpt-5.4-mini",session_id="1001",user_id="1"} 1.0
-ai_model_response_duration_seconds_sum{model_name="gpt-5.4-mini",session_id="1001",user_id="1"} 0.842
+ai_model_requests_total{model_name="your-supported-model",status="success"} 1.0
+ai_model_tokens_total{model_name="your-supported-model",token_type="total"} 137.0
+ai_model_response_duration_seconds_count{model_name="your-supported-model"} 1.0
+ai_model_response_duration_seconds_sum{model_name="your-supported-model"} 0.842
 ```
 
 ### 接 Prometheus + Grafana 的思路
@@ -334,7 +334,7 @@ Grafana 里几条常用 PromQL：
 
 3. **忘记 clearContext 会串号**。前面强调过：Tomcat 线程复用，只 set 不 clear 会让下一个请求读到上一个用户的上下文。流式接口尤其要用 `doFinally` 而不是普通 `finally`(普通 finally 在响应式里根本拦不住异步流的结束)。
 
-4. **`MonitorContext is null` 日志**。如果监听器里频繁打 `MonitorContext is null when processing request`，说明有调用链没经过 Controller 入口的 `setContext`(比如某个内部任务直接调了模型),或者上下文在线程切换中丢了。这时指标会退化成 `user_id="unknown"`,不致命但维度失真。
+4. **`MonitorContext is null` 日志**。如果监听器里频繁打 `MonitorContext is null when processing request`，说明有调用链没经过 Controller 入口的 `setContext`(比如某个内部任务直接调了模型),或者上下文在线程切换中丢了。这会影响日志里的 user/session 定位;指标仍保持低基数。
 
 5. **端点路径别漏 `/api`**。因为有全局 `context-path: /api`，访问 Actuator 必须是 `/api/actuator/prometheus`，直接访问 `/actuator/prometheus` 会 404。配置 Prometheus 抓取时这是最常踩的坑。
 

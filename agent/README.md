@@ -175,6 +175,22 @@ PGVECTOR_PASSWORD
 DASHSCOPE_API_KEY
 ```
 
+OpenAI-compatible 模型也可作为聊天/Agent 的运行时 provider。必须显式配置可用的
+`AGENT_MODEL_OPENAI_COMPATIBLE_CHAT_MODEL`;无 key/model 时服务保持可启动/readiness 200,
+聊天接口返回可见降级错误。不要把未被上游支持的占位模型名带入生产。
+
+```text
+AGENT_MODEL_PROVIDER=openai-compatible
+AGENT_MODEL_OPENAI_COMPATIBLE_BASE_URL
+AGENT_MODEL_OPENAI_COMPATIBLE_API_KEY
+AGENT_MODEL_OPENAI_COMPATIBLE_CHAT_MODEL
+AGENT_MODEL_OPENAI_COMPATIBLE_STREAM_TIMEOUT_SECONDS
+```
+
+ID 契约:D5 要求 JSON 内 id 使用 string snowflake。`/api/agent/chat` 与
+`/api/chat/auto/stream` 会同时接受 JSON string/number 形式的 `sessionId`;client-only
+会话字符串会被稳定映射到内部 Long,避免请求在 Jackson 反序列化阶段失败。
+
 ### 2. 启动服务
 
 ```bash

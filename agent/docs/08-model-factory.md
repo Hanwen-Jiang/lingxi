@@ -5,7 +5,7 @@
 > 读完本章你能回答:
 > - 为什么所有 LLM 调用都先经过一个"包装层",而不是直接 new 一个 `QwenChatModel`?
 > - `provider=auto` 到底是怎么在 OpenAI 兼容和 DashScope(通义千问)之间做选择的?
-> - 我能不能在程序运行时,通过一个 HTTP 接口把模型从 `gpt-5.4-mini` 换成 `qwen-plus`,且不重启服务?
+> - 我能不能在程序运行时,通过一个 HTTP 接口把模型从某个 OpenAI-compatible 上游模型换成 `qwen-plus`,且不重启服务?
 > - 没配 API key、PgVector 连不上、MCP 没开,系统会崩吗?它怎么"降级"?
 
 相关章节:上游怎么用模型见 [02-basic-chat-streaming.md](02-basic-chat-streaming.md) 和 [05-react-agent.md](05-react-agent.md);Embedding 在检索里的角色见 [03-rag-retrieval.md](03-rag-retrieval.md);监控埋点见 [09-observability.md](09-observability.md)。
@@ -242,10 +242,10 @@ if (!mcpEnabled) {                    // 总开关 mcp.enabled=false(默认) -> 
 | `agent.model.provider` | 供应商:`auto` / `openai-compatible`(别名 `openai`/`deepseek`) / `dashscope` | `auto` |
 | `agent.model.openai-compatible.base-url` | OpenAI 兼容端点基址(自动补 `/v1`) | `https://api.openai.com` |
 | `agent.model.openai-compatible.api-key` | OpenAI 兼容 API key | 空 |
-| `agent.model.openai-compatible.chat-model` | OpenAI 兼容模型名 | `gpt-5.4-mini` |
+| `agent.model.openai-compatible.chat-model` | OpenAI 兼容模型名;必须填上游支持的模型 | 空 |
 | `agent.model.openai-compatible.temperature` | 采样温度 | `0.7` |
 | `agent.model.openai-compatible.max-output-tokens` | 单次最大输出 token | `1024` |
-| `agent.model.openai-compatible.reasoning-effort` | 推理强度(仅对 `gpt-5*`/`o*` 生效) | `high`(代码默认,yml 未显式列出) |
+| `agent.model.openai-compatible.reasoning-effort` | 推理强度(仅对支持该参数的模型生效) | 空 |
 | `langchain4j.community.dashscope.chat-model.model-name` | 通义模型名 | `qwen-plus` |
 | `langchain4j.community.dashscope.chat-model.api-key` | 通义 API key | 空 |
 | `mcp.enabled` | MCP 工具总开关 | `false` |
@@ -255,7 +255,7 @@ if (!mcpEnabled) {                    // 总开关 mcp.enabled=false(默认) -> 
 | `agent.local-fallback.enabled` | 是否允许向量库/数据库降级到内存 | `true` |
 | `agent.model.legacy-dashscope-config.enabled` | 是否启用老式直连通义配置 | `false`(未配即不生效) |
 
-> 小心:`reasoning-effort` 在 application.yml 里**没有**显式键,默认值 `high` 来自代码里的 `@Value("${...:high}")`(`AiModelRuntimeConfig.java:49`)。环境变量都用 `${...}` 占位,意味着这些值优先从环境变量读,没有才用默认。
+> 小心:OpenAI-compatible 的 `chat-model` 现在默认空。没有显式配置 API key/baseUrl/model 时,服务保持 readiness 200,聊天请求进入明确的"模型未配置"降级错误;不要把 `gpt-5.5` 这类未被上游支持的占位模型名带进生产。
 
 ---
 
@@ -279,12 +279,12 @@ curl -X POST http://localhost:18080/api/chat/model-config \
   -d '{"provider":"dashscope","apiKey":"sk-你的DashScopeKey","model":"qwen-plus"}'
 ```
 
-**3)再切回 OpenAI 兼容,并把模型换成支持推理的 gpt-5:**
+**3)再切回 OpenAI 兼容,并把模型换成该上游实际支持的模型:**
 
 ```bash
 curl -X POST http://localhost:18080/api/chat/model-config \
   -H "Content-Type: application/json" \
-  -d '{"provider":"openai-compatible","baseUrl":"https://api.openai.com","apiKey":"sk-...","model":"gpt-5.4-mini","reasoningEffort":"high","temperature":0.3}'
+  -d '{"provider":"openai-compatible","baseUrl":"https://api.openai.com","apiKey":"sk-...","model":"your-supported-model","temperature":0.3}'
 ```
 
 **4)列上游可用模型(仅 OpenAI 兼容有效):**

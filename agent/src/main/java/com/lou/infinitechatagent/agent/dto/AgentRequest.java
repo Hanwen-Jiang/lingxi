@@ -1,4 +1,5 @@
 package com.lou.infinitechatagent.agent.dto;
+import com.lou.infinitechatagent.common.id.SessionIdCodec;
 import com.lou.infinitechatagent.common.json.SnowflakeId;
 
 import jakarta.validation.constraints.NotNull;
@@ -10,8 +11,11 @@ public class AgentRequest {
     @SnowflakeId
     private Long userId;
 
-    @SnowflakeId
-    private Long sessionId;
+    /**
+     * D5 wire id: JSON string snowflake. Nonnumeric client-only ids are accepted and mapped at
+     * the persistence/tool-governance boundary via {@link #internalSessionId()}.
+     */
+    private String sessionId;
 
     @NotNull(message = "prompt 不能为空")
     private String prompt;
@@ -31,4 +35,12 @@ public class AgentRequest {
      */
     @Deprecated
     private java.util.Set<String> confirmedTools;
+
+    public void setSessionId(String sessionId) {
+        this.sessionId = SessionIdCodec.normalizeWire(sessionId);
+    }
+
+    public Long internalSessionId() {
+        return SessionIdCodec.toInternal(sessionId);
+    }
 }
