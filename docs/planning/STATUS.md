@@ -180,6 +180,16 @@
 
 ## S1 · agent 后端(owns agent/ → agent-backend)
 
+### 2026-06-29 · P9 agent 入运行态(WSL :18080 真实库)+ 可观测收尾;网关 A1–A4 一手全绿
+- 完成:**分支 `feat/agent-backend-p9`(push origin,commit `f2e40fa`/`e1e1cda`,从新 main `14eaac0` 起独立 worktree)**。把 agent **真正部署到 WSL 运行态接真实库**,并补齐 RAG/记忆/LLM 运行态指标。
+  - **① agent 上线(task1)= 实测在线**:WSL `:18080` 起当前 main 真实库实例(替换 S3 `09` 的 pre-P7 降级实例 db=H2)。**接真实库**:MySQL `agent` 库(3308,P9 `CREATE DATABASE agent`,SchemaInitializer 自建表)+ Redis(6379 db6 带密码);PgVector 无凭据→**显式降级内存**、无 DASHSCOPE→LLM/嵌入降级(均 readiness 仍 200)。enforce=true。**实证**:`health` `db=MySQL`/`redis=UP(8.0.2)`、`/health/readiness=200`;直连无头→**401**、带 `X-User-Id`→**200**。**亲跑 S3 网关冲烟 `10-agent-smoke` A1–A4 = `PASS=5 FAIL=0`**(A3 登录→网关→X-User-Id→agent 全链路;A4 SSE 经网关达 agent,无 key 回 model-not-configured)。
+  - **② 可观测收尾(task2)**:(a) **修 LLM 指标高基数运行态隐患**——`AiModelMetricsCollector` 原以 `user_id`+`session_id`+自由文本 `errorMessage` 打标签(无界→时间序列爆炸+缓存泄漏),收为有界维度(`model_name`+`status`/`token_type`/`error_type`),用户/会话仅入日志。(b) **新增 RAG/记忆指标**——`AgentDomainMetricsAspect`(AOP @Around,**零侵入业务**)包 `RagQueryService.chatWithCitations`+`LongTermMemoryService.write/writeWithDedup/correct`+`MemoryRetrievalService.retrieve`,导出 `agent_rag_query_duration_seconds{result}`、`agent_memory_op_duration_seconds{op,result}`(Timer 自带 count/sum→错误率)。**运行态 prometheus 实证导出**:`agent_rag_query{result=success}`、`agent_memory_op{op=write|retrieveRelevantMemories}`、`agent_ratelimit_decisions{backend=redis,result=allowed}`(**backend=redis 证真令牌桶 live**)。
+  - **③ actuator 姿态(task3)**:暴露面已最小(仅 `health,info,prometheus`,无 `env/heapdump/threaddump/loggers`);`/actuator/**` 在身份白名单内供内网抓取,依赖 agent:port 仅内网可达。**未加 Basic 鉴权**(不对外路由的内网口加鉴权只增摩擦且断 prometheus/health);若将来外露建议改 localhost 绑定独立 `management.server.port`。详见 E2E-INTEGRATION §6。
+- 产出物:`agent/.../monitor/{AiModelMetricsCollector,AiModelMonitorListener,AgentDomainMetricsAspect}.java`、`agent/pom.xml`(starter-aop)、`agent/docs/E2E-INTEGRATION.md` §6。验证:全量 39 测试绿(`-Plow-mem-test`);在线打包(拉 aop 依赖,胖 jar 内置)。
+- 🤝 **交接 → S3(关键):** ① **运行态 agent 已被 P9 替换为真实库实例**(setsid 常驻 :18080,jar 在 `/mnt/e/jhw/proj-agent-p9/agent/target/`);**重启请把 E2E-INTEGRATION §6 的真实库 env 烘进 `09-agent-e2e.sh`/`e2e.env`**(替换原硬编码 `MYSQL_URL→:3399`/`REDIS→:6399` 降级值;原 09 pidfile 已失效)。② A1–A4 我已亲跑全绿,你可纳入常驻验收。③ 填 `DASHSCOPE_API_KEY` 可验真实 delta + `ai_model_*` 指标。
+- 🤝 **交接 → 运维/可观测:** prometheus 新增 `agent_rag_query_duration_seconds`、`agent_memory_op_duration_seconds`、`agent_ratelimit_decisions_total`;`ai_model_*` 已去高基数(填 key 后产真值)。
+- 阻塞:无(运行态在线 + A1–A4 全绿)。待中枢确认:① S3 把真实库 env 固化进 09/e2e.env 接管 agent 生命周期;② 填 DASHSCOPE key 验真实 LLM 流式 + token/错误指标。
+
 ### 2026-06-29 · P8 同批翻确认无 drift + 收硬化债:Mockito 本机解 OOM 全绿 + 限流可观测
 - 完成:**分支 `feat/agent-backend-p8`(push origin,commit `8ff6c27`,从新 main `f9e3812` 起独立 worktree)**。
   - **① 包络收口(task1)= agent 零 drift,无代码改**:审计 + live 双证。控制器**只返 `BaseResponse`(成功 200+`code=0`)、零 `ResultUtils.error`/`ResponseEntity` 直返**;错误**全抛 → `GlobalExceptionHandler` `ResponseEntity.status(httpStatusForCode)` 映射真实 HTTP**(401/403/404/422/429/5xx);`ErrorCode` **全码显式映射**含 agent 域 `SENSITIVE_WORD_ERROR 71000→400`(不落 `code/100` 兜底)。item3 翻的 Contact/RTC/Offline/Moment 是 **chat 侧**,agent 无可翻;翻转窗口在线配合,**翻前点名前端**(收缩 `{0,200}→{0}`)。
