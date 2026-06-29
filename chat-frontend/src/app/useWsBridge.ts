@@ -7,6 +7,8 @@ import type {Message, Page} from "@/api/types";
 import {WsClient} from "@/api/ws/WsClient";
 import {useUiStore} from "@/store/ui";
 
+const BACKEND_SESSION_ID = /^\d+$/;
+
 /**
  * Drives the WsClient (ADR 0002) and bridges its push into the react-query cache
  * (WS is a cache side-effect layer, not a parallel store). The client owns
@@ -50,7 +52,15 @@ export function useWsBridge() {
       },
       onReconnect: () => {
         // Backfill the window we may have missed while disconnected (ADR 0002 §3.3).
-        qc.invalidateQueries({queryKey: ["messages"]});
+        // Only backend IM sessions have history to refetch. Client-only threads
+        // such as `s-lingxi` are local streaming state; refetching them returns
+        // an empty page and erases the in-flight assistant bubble during WS flaps.
+        qc.invalidateQueries({
+          predicate: (query) =>
+            query.queryKey[0] === "messages" &&
+            typeof query.queryKey[1] === "string" &&
+            BACKEND_SESSION_ID.test(query.queryKey[1]),
+        });
         qc.invalidateQueries({queryKey: ["conversations"]});
       },
     });
