@@ -94,7 +94,13 @@ export function useAssistantStream(sessionId: string) {
             qc.invalidateQueries({queryKey: ["conversations"]});
             break;
           case "error":
-            patchBot(botId, (m) => ({...m, streaming: false, content: m.content || "（出错了,稍后再试)"}));
+            // Surface the agent's §9 error message (e.g. "AI 模型未配置…") when the
+            // bubble is still empty; keep any partial text on a mid-stream error.
+            patchBot(botId, (m) => ({
+              ...m,
+              streaming: false,
+              content: m.content || e.message || "（出错了,稍后再试)",
+            }));
             setStreaming(false);
             abortRef.current = null;
             break;

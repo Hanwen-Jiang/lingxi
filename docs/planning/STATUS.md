@@ -685,6 +685,16 @@
 
 ## S4 · chat 前端(owns chat-frontend/)
 
+### 2026-06-29 · P8:浏览器级内助手 E2E 验收(真 agent SSE)+ 修 client-only 会话 bug;包络收缩 hold(分支 feat/chat-frontend-p8,独立 worktree)
+- 背景:J1 已通(S3 51/51,LLM 在线);S3 播种可登账号 `17614797418@example.com / asdf1476`。本轮**浏览器级实测**内助手 + 修 E2E 暴露的致命 bug;包络收缩待 S3/S1 点名。
+- 🔬 **浏览器 E2E(real 模式 worktree dev → 网关 :10110,逐步实测)**:① **真实登录绿**(seeded 账号→token→进应用,userId `2071126048501796864`「聪明的吗喽」);② **会话读路径绿**(`/api/v1/chat/sessions` 200/code=0;该账号无会话→空态「还没有会话」正确渲染);③ **内助手 SSE 端到端**:@灵犀→`POST /api/chat/auto/stream`→真实 agent §9 流(`event:start` + `data:{v:"1",type,route:"direct",…}`),解析器逐事件处理 start/delta/done/error **实测通过**(本机 agent 实例当前**未配 `DASHSCOPE_API_KEY`**→返 §9 error「AI 模型未配置」,客户端正确渲染该 error;真实 delta 渲染随 LLM key 在线即通——delta 走同一解析路径);④ **B8 WS 握手实测 OPEN**(`?token=&userUuid=` 经网关/Netty 放行;重连 backfill 机制有活 transport,reconnect 逻辑 P2 mock 已验)。
+- 🐞 **修 bug(real 模式内助手致命)**:`AssistantPage` 硬编码 mock 会话 id `s-lingxi` → real 模式下 IM `messages`/`read` 端点 **400** + agent `auto/stream` 收非数字 sessionId **500**。修于 seam(`real.ts`):新增 `isBackendSessionId`(雪花=数字串判定)——**client-only 会话**(灵犀助手)`listMessages` 返空、`markRead` no-op、`streamAssistant` **省略 sessionId**(agent 省略 id 即以 direct 新轮流式,实测 200)。**UI 零改**(seam 吸收 real/mock 差异)。`queries.ts` 助手 error 态**透传 §9 error message**(原硬编码「出错了」掩盖真因)。
+- 产出物:改 `chat-frontend/src/api/{real.ts,queries.ts}`(worktree `E:\jhw\proj-chat-p8`,分支 `feat/chat-frontend-p8`)。
+- 关键决策:client-only 会话用「sessionId 非数字串」通用判定(避免魔法串耦合——全应用仅灵犀助手是非数字会话);默认仍 Mock。
+- 阻塞/待:🟡 **真实 LLM delta 渲染** 待 agent 实例配 `DASHSCOPE_API_KEY`(本机当前未配;S3 51/51 时在线)——管线已实测,渲染随 key;🟡 **媒体/图片真链路 + 重连 backfill 浏览器实测** 待该账号有真实会话(当前无会话/无对端)——客户端码完备 + S3 后端 14/14 已证,归 S3 会话内 E2E。
+- 📋 **task2 包络收缩(hold·gated)**:实测 S4 消费端点(auth / chat sessions·messages·read·media / contact friends)**已全 `code=0`**;但 item3 legacy(Contact/RTC/Offline/Moment)**翻转+点名未落 main**(S3/S1 P8 并发未到)。按「收点名后」**暂 hold** `{0,200}→{0}`——已预清(消费端全 0),S3/S1 落点名后一行收缩。**已核 client 无硬判 200**(全 `res.ok` + code 集合,§3 真实 HTTP)。
+- 验证:**build(`tsc -b && vite build`)绿 + verify:ui 绿(48 文件,worktree)**;浏览器 real E2E 实测(见上)。交接 → S1/S3:agent E2E 实例补 `DASHSCOPE_API_KEY` 即可验真流式;item3 翻转**点名**后 S4 一行收缩 `{0,200}→{0}`。
+
 ### 2026-06-28 · P7:消费 S3 两缺口 + 内助手端点对齐 J1(§9)+ v 修正(分支 feat/chat-frontend-p7,独立 worktree)
 - 背景:S3 `3929842` 已补两 S4 缺口(`SessionListItem.peerUserId`、图片历史 `content=url`);S1 J1 文档 `agent/docs/E2E-INTEGRATION.md` 定 §9 schema + 网关把 `/api/chat|chat/auto|chat/auto/stream`+`/api/agent|rag|memory` 路由到 agent(agent jar 已由 HUB 构建,**待 S3 拷入 E2E 栈起服务**)。本轮按契约消费/对齐;**真实流式 E2E 待 S3 agent 起栈 + 可登账号**。
 - 完成:① **消费 `peerUserId`**:`SessionListItemRaw` 加 `peerUserId`,`mapConversation` 直落 `sessionPeerById` → **冷开单聊可发首条**(原「无法确定接收方」仅剩极端兜底;历史学习 peer 留作旧数据回退)。② **图片历史回显**:核对 `mapMessage`(PICTURE→image、`content`=S3 落库 url)+ `MessageBubble`(kind=image 渲染 `<a><img src=content></a>`)既有链路即支持刷新回显,**无需改码**(S3 `content=body.url` 落库)。③ **内助手端点对齐 J1**:`ASSISTANT_STREAM_PATH` 从 `/api/agent/chat`(P6 兜底,网关当时未路由 `/api/chat/**`,实测 404)翻 **`/api/chat/auto/stream`**(J1 文档 §1 已加路由;**自动路由**:direct 逐 token、agent/RAG 整段 `buffered:true`)——双模消费两态皆渲染。④ **§9 `v` 修正**:文档定 `v` 为字符串 `"1"`,`sse.ts` 改 `Number(raw.v)||默认` 归一、`RawSseEvent.v: number|string`。⑤ **静态核对** `sse.ts` vs §9 文档:命名事件(`event:type` + data JSON 携 `type`,解析读 data 的 type 而非 event 行)、`buffered`、`citations`(done)、未知 type(如保留未发的 `usage`)容忍——全覆盖。
