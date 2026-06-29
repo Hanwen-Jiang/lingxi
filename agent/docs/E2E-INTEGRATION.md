@@ -77,6 +77,24 @@ agent 提供这些前缀(均在 context-path `/api` 下,**转发须保留 `/api`
 - token **一次性 + TTL + 绑定 (userId,sessionId,工具指纹)**;过期/失败需重新触发拿新 token。
 - 存储:Redis(P6 改原子 GETDEL 消费,多实例安全);无 Redis 降级进程内(单实例)。`confirmedTools` 已废弃(challenge 启用时忽略)。
 
+## 6. 运行态部署(P9 实测,真实库)— 给 S3 烘进 09/e2e.env
+
+P9 已把 agent 部署到 **WSL 运行态 `:18080`,接真实库**并经网关跑通 A1–A4(`PASS=5`)。真实库连接参数(已实测可用):
+
+| env | 实测值 | 说明 |
+| --- | --- | --- |
+| `MYSQL_URL` | `jdbc:mysql://127.0.0.1:3308/agent?...&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true` | **真实 agent 库**(P9 已 `CREATE DATABASE agent`);`MYSQL_USERNAME/PASSWORD=e2e/e2e`;SchemaInitializer/MemorySchemaInitializer 自建表 |
+| `REDIS_HOST/PORT/PASSWORD` | `127.0.0.1:6379` + e2e 密码;`REDIS_DATABASE=6` | 真实 Redis(F01/限流令牌桶/短期记忆);实测 `agent_ratelimit_decisions{backend=redis}` 证令牌桶走 Redis |
+| `AGENT_GATEWAY_ENFORCE_IDENTITY` | `true` | 直连无头 401、经网关 200 |
+| `PGVECTOR_HOST/PORT` | 显式指向不可达(如 `:5499`)| **无可用凭据 → 显式降级内存向量库**(readiness 仍 200) |
+| `DASHSCOPE_API_KEY` | 空 | 无 key → LLM/嵌入降级;填真 key 验真实 delta + `ai_model_*` 指标 |
+
+> ⚠️ **运行态已被 P9 替换**:原 `:18080` 是 S3 `09` 的 pre-P7 降级实例(`db=H2`、无 readiness 分组),P9 已停它并起 **当前 main 的真实库实例**(setsid 常驻,jar 在 `/mnt/e/jhw/proj-agent-p9/agent/target/`)。S3 重启时请把上表 env 烘进 `09-agent-e2e.sh`/`e2e.env`(替换原硬编码 `MYSQL_URL→:3399`/`REDIS→:6399` 降级值)。
+>
+> **可观测**:`/api/actuator/prometheus` 导出 `ai_model_*`(低基数:model_name+status,P9 去 user/session 高基数)、`agent_ratelimit_decisions_total{result,backend}`、`agent_rag_query_duration_seconds{result}`、`agent_memory_op_duration_seconds{op,result}`。
+>
+> **actuator 姿态(P9 task3)**:暴露面最小(仅 `health,info,prometheus`,无 `env/heapdump/threaddump/loggers`);`/actuator/**` 在网关身份白名单内(供内网 prometheus 抓取),依赖 **agent:port 仅内网可达**(契约 §1)。未加 actuator Basic 鉴权——在不对外路由的内网口上加鉴权只增摩擦(且会断 prometheus 抓取/S3 health);若 agent:port 将来外露,建议改用 localhost 绑定的独立 `management.server.port`。
+
 ---
 *维护:S1。P6 配套硬化:F01 Redis 原子 GETDEL、限流 Redis 令牌桶(均带进程内降级)。Redis/网关真路径需 S3 在常驻 WSL 会话内实跑确认。*
 *P7 本机实测(`java -jar` 降级态 MySQL→H2/Redis→:6399/PgVector→:5499/enforce=true/无 DASHSCOPE):agent 正常起;`db=H2 UP`;A2 直连无头 `/api/agent/tools`→**401**;带 `X-User-Id`→**200**(返 `code:0` 工具列表,身份消费+包络双证);新增就绪分组 `/health/readiness`→**200**、`/health/liveness`→**200**、主 `/health`→**503**(诚实)。网关侧 A3/A4(经网关注入/SSE 真流式)仍需 S3 在 WSL 栈实跑。*
