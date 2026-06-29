@@ -289,19 +289,19 @@ describe("createApiClient refresh-on-401 pipeline", () => {
 // hook can decide what to do with them.
 describe("parseSsePayload — SSE §9 envelope", () => {
   it("preserves v and buffered fields when present", () => {
-    const chunk = `data: ${JSON.stringify({type: "delta", v: 1, buffered: true, text: "hi"})}\n\n`;
+    const chunk = `data: ${JSON.stringify({type: "delta", v: "1", buffered: true, text: "hi"})}\n\n`;
     const {events, tail} = parseSsePayload(chunk);
     expect(tail).toBe("");
-    expect(events).toEqual([{type: "delta", v: 1, buffered: true, text: "hi"}]);
+    expect(events).toEqual([{type: "delta", v: "1", buffered: true, text: "hi"}]);
   });
 
   it("passes through unknown event types without translating them to delta", () => {
     // Forward-compat: backend may add tool_call / citation_delta / etc.;
     // the parser must surface the raw event so the hook can ignore it
     // explicitly. Coercing to delta would corrupt the assistant content.
-    const chunk = `data: ${JSON.stringify({type: "tool_call", v: 1, name: "x"})}\n\n`;
+    const chunk = `data: ${JSON.stringify({type: "tool_call", v: "1", name: "x"})}\n\n`;
     const {events} = parseSsePayload(chunk);
-    expect(events).toEqual([{type: "tool_call", v: 1, name: "x"}]);
+    expect(events).toEqual([{type: "tool_call", v: "1", name: "x"}]);
   });
 
   it("falls back to a synthetic delta only for unparseable payloads", () => {

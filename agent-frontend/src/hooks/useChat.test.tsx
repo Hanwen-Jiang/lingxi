@@ -80,12 +80,12 @@ describe("useChat — SSE §9 schema conformance", () => {
     // a future citation frame). The hook must skip them silently and still
     // render the known text.
     const autoStreamChat = vi.fn(async (_payload: unknown, onEvent: (event: StreamChatEvent) => void) => {
-      onEvent({type: "start", v: 1, requestId: "req-1", route: "direct", forced: false});
-      onEvent({type: "tool_call", v: 1} as StreamChatEvent);
-      onEvent({type: "delta", v: 1, text: "hello "});
-      onEvent({type: "citation_delta", v: 1} as StreamChatEvent);
-      onEvent({type: "delta", v: 1, text: "world"});
-      onEvent({type: "done", v: 1});
+      onEvent({type: "start", v: "1", requestId: "req-1", route: "direct", forced: false});
+      onEvent({type: "tool_call", v: "1"} as StreamChatEvent);
+      onEvent({type: "delta", v: "1", text: "hello "});
+      onEvent({type: "citation_delta", v: "1"} as StreamChatEvent);
+      onEvent({type: "delta", v: "1", text: "world"});
+      onEvent({type: "done", v: "1"});
     });
     const api = {autoStreamChat} as unknown as ApiClient;
 
@@ -106,9 +106,9 @@ describe("useChat — SSE §9 schema conformance", () => {
     // answer arrives in one delta" — useChat must treat that exactly like
     // a multi-frame stream and finalize the bubble at done.
     const autoStreamChat = vi.fn(async (_payload: unknown, onEvent: (event: StreamChatEvent) => void) => {
-      onEvent({type: "start", v: 1, requestId: "req-1", route: "agent", forced: true, buffered: true});
-      onEvent({type: "delta", v: 1, text: "全部答案一帧到位。", buffered: true});
-      onEvent({type: "done", v: 1, buffered: true});
+      onEvent({type: "start", v: "1", requestId: "req-1", route: "agent", forced: true, buffered: true});
+      onEvent({type: "delta", v: "1", text: "全部答案一帧到位。", buffered: true});
+      onEvent({type: "done", v: "1", buffered: true});
     });
     const api = {autoStreamChat} as unknown as ApiClient;
 

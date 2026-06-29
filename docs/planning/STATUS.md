@@ -325,6 +325,19 @@
 
 ## S2 · agent 前端(owns agent-frontend/)
 
+### 2026-06-29 · P7 unit 1 · SSE §9 `v` 类型回归到 string + D5 回归扫零(commit `e78c048`)
+- 分支:`feat/agent-frontend-p7`(独立 worktree:`.claude/worktrees/agent-frontend-p7/`,从新 main `37a3760` 起,HTTPS push,**未合 main**)。本流首次按 P6 收口的"强制独立 worktree + 各流 STATUS 各写各分支"规约起步。
+- **回归扫(D5 string id):** grep 全代码树 `userId|sessionId|messageId|turnId:\s*number` / `Number(.*[Ii]d)` / `userIdToNumber` / 数字字面量 id —— **零残留**。wave2 unit2(commit `94a491c`)一次翻净到位,P7 不需补漏。
+- **修(SSE §9 `v` 类型,unit 1):** P6 J1 文档(`agent/docs/E2E-INTEGRATION.md §4`)把 agent backend 真实 SSE wire 定为 `"v": "1"`(JSON string);wave2 unit3 类型签到 `number` 是错读 §9"schema 版本 1"(数字版本号 vs JSON 字面形式),从未在运行时爆栈(没有代码路径读 `v`),但 mis-typed 测试 fixture 让"客户端形与 backend 真实 emit 对齐"的回归覆盖失真。types.ts `StreamChatEvent.v: number → string` + 注释点明 E2E-INTEGRATION §4 是 SoT;api.test.ts/parseSsePayload §9 wire 4 处 + useChat.test.tsx/§9 conformance 6 处 `v: 1` → `v: "1"`。
+- **包络双兼容现状:** api.ts `ENVELOPE_SUCCESS_CODES = {0, 200}` 仍在(D4 expand/contract 窗口)— **本前端已 wire-compatible**,S1/S3 完成 Contact/RTC/Offline/Moment 翻 code=0 后无需我动;收 S1/S3 包络翻转完成通知后做一次显式收缩(只剩 `{0}`)。
+- 5 大门(逐轮):tsc / lint / prettier / vitest(**8 文件 / 68 测试**,数字不变 — 本轮纯类型 + fixture 字面值修正) / vite build,全 exit 0。
+- 产出物:`agent-frontend/src/{types.ts, api.test.ts, hooks/useChat.test.tsx}`(3 文件 / +24 / -21)。
+- **🛑 阻塞 P7 主任务(端到端验证)——等 S3 J1 起栈:** 探活 `:10110/:18180/:18080` 全部 connection refused(WSL E2E 栈未起 agent);P6 集成 commit `37a3760` 写"agent jar built → J1 unblocked",但 S3"drop into E2E stack and run 09/10"未发生。**故本轮 P7 task #1(M4 工具确认 UX 端到端 + §9 流式回复端到端渲染)无法实跑** — 这是 P5 wave2 起就声明的"WAVE 2 待 J1"位置,P7 应是闭合点但 S3 J1 入栈未跑;不硬上 mock 伪造通过(用户红线)。
+- **交接 → S3(J1 起栈):** 按 `agent/docs/E2E-INTEGRATION.md §2`(`SERVER_PORT=18180` + `AGENT_GATEWAY_ENFORCE_IDENTITY=true` 最小可达)起 agent;`AGENT_SKIP_BUILD=1 bash 09 && bash 10` 跑 3 断言;通后通知本流即可端到端验:邮箱登录(:10110)→ 发送触发 high-risk 工具的 prompt → 浏览器实证 `data.toolGovernance{confirmationRequired, challengeToken, challengeExpiresInSec}` → 点"确认并继续"→ 网络面板验 `AgentRequest.confirmationToken=<challengeToken>`(**勿带工具名**)→ 一次性消费 + TTL 过期重取路径;再发流式 prompt 验 `v="1"`、`buffered:true`/逐 token、未知 type 容忍渲染。
+- **交接 → S1/S3(包络翻转通知点):** Contact/RTC/Offline/Moment 翻完 code=0 后请在 STATUS 标"S2 可关 200 兼容";本前端会做 unit 2 把 `ENVELOPE_SUCCESS_CODES` 收缩到 `{0}` 并删 D4 expand/contract 注释。
+- 待中枢确认:无。
+
+
 ### 2026-06-28 · P5 wave2 · M4 F01 切真 + D5 string id + SSE §9(commits `d142195`/`94a491c`/`1c8ad23`)
 - 分支:`feat/agent-frontend-p5-wave2`(从 main `902335d` 起,HTTPS push,**未合 main**)。本轮三件主活全独立 commit 便于回滚;无跨流文件接触。
 - **unit 1 · M4 切真 F01 挑战令牌(commit `d142195`):** S1 P5 已 ship F01(server 一次性 challengeToken,fingerprinted on prompt+session+confirmedToolSet,Redis 原子 GETDEL 多实例安全)。前端把 P5 wave1 的 `confirmedTools[]` 壳一次性切真——`AgentResponse.toolGovernance` 类型化为 `{confirmationRequired, challengeToken, challengeExpiresInSec, pendingTools?}`;`api.agentChat` payload 把 `confirmedTools?: string[]` 换成 `confirmationToken?: string`(从类型上禁掉旧字段,防 silent no-op)。`useChat.confirmTools(assistantId, selected)` → `useChat.confirmTurn(assistantId, shouldRelease)`,内部用 stash 的 challengeToken 重放(**不传工具名**);多轮治理:响应再带新 token 则重新 stash;取消路径不二次 call agentChat、写"已取消工具调用"+ `meta.confirmationCancelled`。`ToolConfirmation` 卡片拿掉复选框(F01 不看工具名,选无意义),改信息展示 list + 确认/取消两按钮 + in-flight 锁。**关键不变量:有 challengeToken 才 stash 待确认 turn**(光有 pendingTools 而无 token=no-op)。测试 +10(useChat.confirmTurn 5 + ToolConfirmation 4 改 + 1 空 tools)。
