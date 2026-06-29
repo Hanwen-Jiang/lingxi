@@ -3,11 +3,12 @@
 # 关键:确认 pre-P0「无鉴权」行为已消失(无 token/garbage → 401)。
 set -uo pipefail
 RUNTIME="${RUNTIME:-$HOME/projecta-runtime}"
-set -a; . "$RUNTIME/chat.env"; set +a
+# SMOKE_ENV 指定环境(native=projecta-runtime/chat.env;docker=~/p9-deploy/.env,含 MYSQL_PORT=13307/REDIS_PORT=6380)
+set -a; . "${SMOKE_ENV:-$RUNTIME/chat.env}"; set +a
 
-GW="http://127.0.0.1:10010"; AGENT="http://127.0.0.1:18080"
-DB(){ mysql -h127.0.0.1 -P3307 -u"$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" InfiniteChat -N -e "$1" 2>/dev/null; }
-RKEY(){ redis-cli -n "${REDIS_DATABASE:-0}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} --no-auth-warning "$@" 2>/dev/null; }
+GW="http://127.0.0.1:${GATEWAY_PUBLIC_PORT:-10010}"; AGENT="http://127.0.0.1:${AGENT_PUBLIC_PORT:-18080}"
+DB(){ mysql -h127.0.0.1 -P"${MYSQL_PORT:-3307}" -u"$MYSQL_USERNAME" -p"$MYSQL_PASSWORD" "${CHAT_MYSQL_DATABASE:-InfiniteChat}" -N -e "$1" 2>/dev/null; }
+RKEY(){ redis-cli -p "${REDIS_PORT:-6379}" -n "${REDIS_DATABASE:-0}" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} --no-auth-warning "$@" 2>/dev/null; }
 PASS="Test@12345"; CODE="123456"
 P=0; F=0
 ok(){ echo "  ✅ $1"; P=$((P+1)); }

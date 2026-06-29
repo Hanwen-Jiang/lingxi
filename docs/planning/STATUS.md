@@ -516,6 +516,16 @@
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
 
+### 2026-06-29 · ✅ P9 上线完成(chat 侧):Docker 栈 P8 鉴权镜像已替换 pre-P0 无鉴权旧栈(commit 见下)
+- **解阻 + 切换:** 用户把 hanwen 加入 docker 组(选项 B)。实况:线上运行态是 **Docker Compose 栈**(`D:\InfiniteChatDeploy\projecta\deploy`,源在 main `14eaac0`=P8,但镜像是 4h 前 pre-P0 旧版),非 native projecta-current。
+- **做法(无 sudo,docker 组;不改 D: 只读部署配置):** 用本地 P8 jar(`~/projecta-v0.9`)+ 部署 Dockerfile **自建 7 个 chat 镜像**(`:local`,旧镜像备份 `:pre-p9` 可回滚)→ **override compose + augmented env-file** 注入统一鉴权(基座 `&chat_env` 原缺 `JWT_SECRET_KEY`/`INTERNAL_SERVICE_TOKEN`/`AGENT_GATEWAY_URI`/CORS)→ `docker compose up -d --no-build` 重建 chat+agent 容器。脚本:`chat/scripts/runtime-docker-golive.sh` + `chat/scripts/deploy/docker-golive.override.yml` + `runtime-smoke.sh`(端口参数化)。
+- **DB 迁移(docker mysql :13307 InfiniteChat,运行期补):** `message_outbox` 表 + `user_session.last_read_message_id`;并修 **`user.status` 默认值 0→1**(部署 schema `init-chat-schema.sql` 与 chat 仓库权威 schema 不一致,默认 0 导致注册即非活跃 → 发消息 `validateSender` 抛 500;已 ALTER + 激活存量)。
+- **上线冲烟(:10010,真实 docker 库)绿:** **R1 无 token→401 · R2 garbage→401**(旧栈无鉴权 200 行为已消失,body=`{code:40100}`)· **R3 邮箱注册+登录** · **R4 IM 发消息 code=0 + B4 同事务落库 + 历史回显**。chat 侧 6/6。
+- **🔔 给 S1/HUB(剩余 3 项,非 chat):** assistant SSE `/api/chat/auto/stream` → **404**,F01 令牌格式与 §5 文档(challengeToken)不符 —— 因 **agent 镜像仍是旧 4h 版**(本轮只重建了 chat 镜像)。F01 护轨本身**生效**(高风险工具被 `CONFIRMATION_REQUIRED` 拦截)。**解法:S1/HUB 用当前 agent 源重建 `infinitechat/agent:local` 镜像并 `docker compose up -d agent`**(agent 构建需 maven 网络/langchain4j 依赖,属 agent 流)。
+- **🔔 部署配置待修(D: 只读,需 sudo/用户):** `deploy/.env` 永久加上述鉴权键、`docker-compose.yml` 把鉴权 env 并入 `&chat_env`+gateway+agent、`init-chat-schema.sql` 修 `user.status` 默认=1 / 补 `last_read`(本轮经 override+运行期迁移规避,未改 D: 原文件)。
+- **native 侧遗留(无害):** 早先在 native 假设下改了 `projecta-runtime/chat.env`(加鉴权键)、symlink→`projecta-v0.9`、native mysql:3307 迁移 —— 均不影响 docker 线上栈(docker 自带库/redis/kafka),保留备查。
+- 阻塞:无(chat 侧上线完结)。剩 agent 镜像重建归 S1/HUB。
+
 ### 2026-06-29 · 🔴 P9 上线受阻:旧栈是 **root Docker 容器**,我(hanwen)无权替换——已就绪可一键完成
 - **关键发现:** WSL 运行态的 pre-P0 旧栈**不是** native projecta-current/start-apps,而是 **root 的 Docker 容器**(生产端口 10010/8082/8080/8081/9000 监听者 uid=0,进程 `java -jar app.jar`;`docker.service` active)。hanwen **不在 docker 组** + **sudo 需密码(无任何 NOPASSWD)** → 非交互下**无法 stop/替换 docker 旧栈**。native start-apps 起新栈时端口被占(`Port 10010 already in use`),旧无鉴权栈仍服务(冲烟 R1 无 token → **200**,证实旧栈未替换)。
 - **已就绪(可回滚,均无害于运行中的 docker 栈):**
