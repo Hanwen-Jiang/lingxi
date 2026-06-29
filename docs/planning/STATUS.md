@@ -769,6 +769,16 @@
 
 ## S4 · chat 前端(owns chat-frontend/)
 
+### 2026-06-29 · P10:指向生产 `:10010` 浏览器冲烟 + client-only 助手线程抗 WS 抖动(分支 feat/chat-frontend-p10,独立 worktree)
+- 背景:P9 已把 chat Docker 生产栈切到鉴权版;P10 任务是前端指向 WSL 生产运行态 `:10010` 做真栈冒烟,不 mock。worktree `E:\jhw\proj-chat-p10`,分支 `feat/chat-frontend-p10`。
+- 完成:① **访问方式坐实**:WSL 内 `127.0.0.1:10010` 正常(无 token→401);Windows `127.0.0.1:10010` 超时(NAT/localhost 转发不可用);Windows 浏览器可用 WSL IP `http://100.122.46.119:10010` 访问生产网关(该 IP 会随 WSL 网络变化)。② **生产后端基线**:标准 `chat/scripts/runtime-smoke.sh` 在 agent ready 后 **9/9 绿**(鉴权401/garbage401/邮箱注册登录/IM 发消息/落库/历史/SSE 到 agent/F01 challengeToken 往返);首次失败为 agent 容器启动窗口,网关 `agent:10011 connection refused`,ready 后消失。③ **浏览器真栈冒烟**(dev 前端 real branch 指生产):播种真实用户+会话 `SID=88181651`;B 登录成功→会话/历史显示 `p10-history-p10181650`;B 浏览器 WS 握手写入 Redis `user:session:2071538376586170368`;A 走真实 API 发 `p10-realtime-181845`→B UI **无刷新实时出现**;无水平溢出。④ **内助手 SSE**:绝对跨源直连 WSL IP 的实际 POST `/api/chat/auto/stream` 被网关返回 **403 `Invalid CORS request`**(OPTIONS 预检 200,实际 POST 403);同源 dev proxy(`VITE_API_BASE=1`,`VITE_GATEWAY=http://100.122.46.119:10010`)不 mock,真实 POST 返回 `200 text/event-stream`,§9 `start` 后 `error: request timed out`(agent/LLM provider 超时),UI 冷启动复测显示用户 prompt + `request timed out`。⑤ **媒体图片**:媒体预签名 `code=0`,有效 PNG 对 presigned `uploadUrl` PUT=200,图片消息发送 `code=0`,前端 bubble/历史 URL 均存在;但公开 `fileUrl=https://img.infinitechat.nsnzd.cn/...png` GET=**403 AccessDenied**(Tencent COS),浏览器 `<img alt="图片消息"> naturalWidth=0`。
+- 产出物:改 `chat-frontend/src/api/queries.ts`、`chat-frontend/src/app/useWsBridge.ts`。
+- 关键决策:把非数字 `sessionId`(如 `s-lingxi`)视为 **client-only 本地线程**:① `useMessages` 对 client-only 会话只读/保留 react-query 本地缓存,不再用真实历史空页覆盖流式消息;② WS reconnect backfill 只 invalidate 数字后端 session,避免生产/代理 WS 抖动时清空内助手进行中的 prompt/bubble。真实 IM 数字会话 backfill 不变。
+- 阻塞/待:🟡 非前端阻塞:① 生产网关 CORS **预检过但实际 POST SSE 403**(直连 WSL IP + Origin `http://127.0.0.1:5273`);当前可用访问方式是同源代理/未来同源生产 Web,但若浏览器要绝对跨源直连 `:10010`,需 S3 修实际 POST CORS。② 生产 agent direct SSE 已到达但 LLM provider 返回 `request timed out`(非前端,前端已渲染 §9 error)。③ COS/CDN 公开读或域名权限导致 `fileUrl` 403,图片 bubble 有 URL 但不可见。
+- 验证:**build(`tsc -b && vite build`)绿 + `test` 4/4 绿 + `verify:ui` 绿(50 文件)**;浏览器真栈冒烟覆盖登录/会话/历史/WS 实时收发/内助手 SSE/媒体图片。build 仍有既有 HeroUI CSS minify warning(`:is()` 空参数),未新增。
+- 交接 → **S3**:修/确认生产网关 CORS actual POST(尤其 `/api/chat/auto/stream`/`/api/agent/chat`)与部署访问形态;排查 agent LLM provider 超时;修 COS `img.infinitechat.nsnzd.cn` 公开 GET 403(put 200 但 public read AccessDenied)。→ HUB:Windows→WSL `127.0.0.1:10010` 不可达属 NAT/转发问题,本轮使用 WSL IP/同源代理记录访问方式。
+- 待中枢确认:无。
+
 ### 2026-06-29 · P9:200 兼容收缩(`{0,200}→{0}`)+ 回归测试;上线冲烟 gated(分支 feat/chat-frontend-p9,独立 worktree)
 - 背景:S3 P8 已点名「可关 200 兼容」(全栈 item3 收口 code=0/真实 HTTP,57 E2E 绿);本轮收掉前端 200 兜底。上线运行态(:10010)冲烟待 S3 部署。
 - 完成:① **expand→contract 收缩**:抽纯模块 `api/envelope.ts`(`SUCCESS_CODES={0}` + `isSuccessCode`,无 fetch/store/`import.meta.env` 耦合 → 可单测);`http.ts` 引入之,删本地 `{0,200}` 集合 + D4 兼容注释,**两处成功判定**(2xx 包络判定 + refresh 判定)改 `isSuccessCode`;**200 不再当 success**(HTTP 200 + body `code:200` 现按错误抛)。② **回归测试** `api/envelope.test.ts`(内置 `node:test` + `node --experimental-strip-types`,**零新依赖/零安装**):4 断言绿——code 0 成功、缺 code 成功、**legacy 200 不再 success**、40100 非 success;加 `test` 脚本。

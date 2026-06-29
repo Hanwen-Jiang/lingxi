@@ -10,10 +10,16 @@ export function useConversations() {
 }
 
 export function useMessages(sessionId?: string) {
+  const qc = useQueryClient();
+  const isClientOnly = Boolean(sessionId && !/^\d+$/.test(sessionId));
   return useQuery({
     queryKey: ["messages", sessionId],
-    queryFn: () => api.listMessages(sessionId as string),
+    queryFn: () =>
+      isClientOnly
+        ? (qc.getQueryData<Page<Message>>(["messages", sessionId]) ?? {items: [], hasMore: false})
+        : api.listMessages(sessionId as string),
     enabled: Boolean(sessionId),
+    staleTime: isClientOnly ? Infinity : 0,
   });
 }
 
