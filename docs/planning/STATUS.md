@@ -20,6 +20,14 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-30 · 🎉 P14 = v1.0.0 验收通过并发布:E2E 57/57 + 生产真栈 12/12(含真实 LLM delta)→ 打 tag `v1.0.0`
+- **末轮验收(全新 S3 会话 `019f1495`,commit `2b49d00`)**:从 `main 9d90ee1` 起 worktree,首手在常驻 WSL 跑通——版本化(1.0.0)源码 **BUILD SUCCESS**(chat-common + 7 服务 + agent `InfiniteChat-Agent-1.0.0.jar`);**全栈 E2E 57/57**(04·13/06·10/07·14/08·4/10·5/11·5 含 F01/12·6);**生产 Docker 真栈 runtime-smoke 12/12**(按实际发布口 `:11010`/`:11011`:鉴权 401×2、邮箱注册登录、IM 发收+真实库落地、历史、内助手 SSE、**真实 LLM delta**、CORS 预检+实际 POST、F01 challengeToken 一次性放行)。顺手修 4 真问题(Nacos 地址可配、jar 选优先非 legacy、runtime 脚本 jar 优先级、smoke banner)。
+- **里程碑:🎉 灵犀(Lingxi)功能版 `v1.0.0` 发布** —— 鉴权 / IM 实时 / 数据安全(B4/B5)/ 内置「灵犀」助手(SSE §9 + F01 工具确认,真实 LLM)/ 全栈契约 / 上线运行态 全部端到端验证。
+- **已集成 + 打 tag**:`feat/chat-backend-p14` 并入 `main`(merge `6799696`);打**注解 tag `v1.0.0`**,push main + tag。
+- **📌 部署备注(用户拍板:记为备注、不阻断 tag)**:v1.0.0 Docker 生产栈实际对外口 = **`:11010`(gateway)/`:11011`(agent)**;文档历史写的 `:10010` 现被 Windows `svchost` + 陈旧 `netsh portproxy` 占用、返回空响应(非当前 Docker gateway)。**功能在 `:11010` 全绿**;若要把对外口固定回 `:10010`,需在宿主网络层(portproxy/compose 发布口)调整后复跑 `runtime-smoke.sh`——属部署运维项,不影响 v1.0.0 代码验收。
+- **收尾(进行中)**:刷新 `E:/jhw/proj-docs` + 项目发行文档(CHANGELOG/RELEASE)推 GitHub;`E:/jhw/routines/docs` 写"从 P0 到 v1.0.0 验收"的全盘逻辑。
+- 阻塞:无。仍开放(非阻断,post-v1.0):deploy 配置固化 sudo 落盘、:10010 portproxy、COS 公开读、横向扩容(M5/Redis 化)、生产化基建(CI/CD/Flyway/容灾)。
+
 ### 2026-06-29 · P13 集成(部分):1.0.0 jar 别名/脚本就绪;**末轮验收未达**(S3 会话退化未跑 E2E)→ P14 起全新 S3 会话跑验收 → 打 v1.0.0
 - **本轮 P13 数字(git 核实)**:S1 `3d5f72e`(为 1.0.0 jar 保留 legacy 0.0.1 别名,便于旧脚本/部署引用);S3 `69b5c11`(**HUB 代提**:`09-agent-e2e`/`runtime-agent-golive`/`runtime-deploy` 适配 1.0.0 jar 名)。**S2/S4 空转**(它们 P12 已完成:S2 F01 CDP 验、S4 UI 终检;本轮无新提交)。
 - **🔴 末轮验收(v1.0.0 闸)未达**:**S3 没跑全栈 E2E 验收**——其 resume 会话退化(跑 18min 只改了 3 个脚本,`task_complete` 但 **null 完成、未提交、未跑 E2E**)。这是 v1.0.0 唯一缺口。
