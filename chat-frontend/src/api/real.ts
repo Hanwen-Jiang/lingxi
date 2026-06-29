@@ -8,12 +8,14 @@ import type {Api, ListMessagesOptions, SendResult, UploadedMedia} from "./contra
 import {mockApi} from "./mock";
 import {
   ApiError,
+  apiUrl,
   type LoginResponseRaw,
   mapSession,
   request,
   uploadToPresignedUrl,
   wsOrigin,
 } from "./http";
+import {extractBufferedAnswer, mapAssistantEvent, parseSseChunk, SSE_SCHEMA_V} from "./sse";
 import type {
   Conversation,
   ConversationKind,
@@ -83,6 +85,17 @@ interface FriendListItemRaw {
 // inverse: text→TEXT, image→PICTURE. Only TEXT+PICTURE round-trip realtime today.
 const MSG_TYPE = {TEXT: 1, PICTURE: 2, FILE: 3, VIDEO: 4, RED_PACKET: 5} as const;
 const SESSION_TYPE = {SINGLE: 1, GROUP: 2} as const;
+
+// Agent endpoint for the in-IM 灵犀 assistant, reached through the chat gateway.
+// Probed against the live E2E gateway (:10110): `/api/chat/auto/stream` → 404 (the
+// chat gateway does NOT route /api/chat/** to the agent), `/api/agent/chat` → 401
+// (routed under §6 /api/agent/**). So we use /api/agent/chat — the plan-40
+// designated route. It's buffered today (whole answer in one frame — §9
+// buffered:true; agent真流式 = M14), which the dual-mode consumer renders as a
+// single delta. 交接 S3/J1: when a streaming agent route is exposed under
+// /api/agent/** (or the gateway routes /chat/auto/stream → agent), flip this to it
+// for token-by-token — the SSE branch below is already wired.
+const ASSISTANT_STREAM_PATH = "/api/agent/chat";
 
 // Message content type → client kind. Mirrors MessageRcvTypeEnum (server-side).
 function mapMessageKind(type: number): MessageKind {
@@ -392,8 +405,95 @@ export const realApi: Api = {
   respondApply(applyId: Id, accept: boolean) {
     return mockApi.respondApply(applyId, accept);
   },
-  // Assistant stream: agent SSE (/api/agent/chat) is S1's domain (§6).
+  // --- Assistant SSE (灵犀 in-IM · §9) — streams from the agent via the gateway.
+  // Dual-mode: parse the SSE event stream when the server streams, or render a
+  // buffered JSON envelope as a single delta (agent/adaptive routes send the whole
+  // answer in one frame — §9 `buffered:true`). Unknown event types are tolerated
+  // (mapAssistantEvent drops them). Returns an abort function (matches the mock).
   streamAssistant(sessionId, content, onEvent) {
-    return mockApi.streamAssistant(sessionId, content, onEvent);
+    const controller = new AbortController();
+    let aborted = false;
+    const fail = (message: string) => {
+      if (!aborted) onEvent({type: "error", v: SSE_SCHEMA_V, message});
+    };
+
+    void (async () => {
+      let res: Response;
+      try {
+        const token = useAuthStore.getState().session?.token;
+        res = await fetch(apiUrl(ASSISTANT_STREAM_PATH), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+            ...(token ? {Authorization: `Bearer ${token}`} : {}),
+          },
+          // D3: the gateway injects X-User-Id; we never send userId in the body.
+          body: JSON.stringify({sessionId: String(sessionId), prompt: content}),
+          signal: controller.signal,
+        });
+      } catch {
+        fail("连接灵犀失败,请稍后再试");
+        return;
+      }
+
+      if (!res.ok || !res.body) {
+        fail(res.status === 401 ? "登录已过期,请重新登录" : "连接灵犀失败,请稍后再试");
+        return;
+      }
+
+      // Non-SSE (buffered) response: render the whole answer as one delta.
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("text/event-stream")) {
+        const answer = extractBufferedAnswer(await res.text());
+        if (aborted) return;
+        if (answer) onEvent({type: "delta", v: SSE_SCHEMA_V, text: answer, buffered: true});
+        onEvent({type: "done", v: SSE_SCHEMA_V});
+        return;
+      }
+
+      // SSE stream: accumulate, parse §9 events, map, emit. We re-parse the live
+      // buffer each read and keep only the incomplete tail, so each complete event
+      // is emitted exactly once.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let sawDone = false;
+      const flush = () => {
+        const {events, tail} = parseSseChunk(buffer);
+        buffer = tail;
+        for (const raw of events) {
+          if (aborted) return;
+          const mapped = mapAssistantEvent(raw);
+          if (!mapped) continue;
+          if (mapped.type === "done") sawDone = true;
+          onEvent(mapped);
+        }
+      };
+
+      try {
+        for (;;) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          if (aborted) return;
+          buffer += decoder.decode(value, {stream: true});
+          flush();
+        }
+        if (buffer.trim() && !aborted) {
+          buffer += "\n\n";
+          flush();
+        }
+        // Clear the bubble's streaming state even if the server closed without an
+        // explicit `done` frame.
+        if (!aborted && !sawDone) onEvent({type: "done", v: SSE_SCHEMA_V});
+      } catch {
+        fail("灵犀连接中断,请稍后再试");
+      }
+    })();
+
+    return () => {
+      aborted = true;
+      controller.abort();
+    };
   },
 };

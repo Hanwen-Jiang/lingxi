@@ -556,6 +556,15 @@
 
 ## S4 · chat 前端(owns chat-frontend/)
 
+### 2026-06-28 · P6 单元:IM 内置「灵犀」助手 Mock SSE → 真实 agent §9(分支 feat/chat-frontend-p6)
+- 背景:S1 `0d36d43` 已交付 SSE §9 信封版本化(`v`/`buffered`/容忍 unknown);本轮把 IM 内"灵犀"助手 `streamAssistant` 从 Mock 切真接 agent——**先按契约建,真实 E2E 待 J1(agent 入统一 chat E2E 栈)**。
+- 完成:① **§9 SSE 解析模块 `api/sse.ts`**(镜像 agent-frontend 已测解析器):`parseSseChunk`(按空行分块、取 `data:` 行、跳 `[DONE]`、JSON 解析、非 JSON 退化为 delta、不完整尾块回吐 `tail` 重缓冲)+ `mapAssistantEvent`(原始 §9 → `AssistantStreamEvent`:start/delta/usage[in+out tokens 合]/done[citations]/error;**unknown type 静默忽略**)+ `extractBufferedAnswer`(非 SSE 的 JSON 信封 `{code,data:{answer|content|…}}` → 整段答案文本)。② **`AssistantStreamEvent` 扩 §9**(types.ts):`v` 改可选(逐事件可缺、解析补默认)、`delta/start` 加 `buffered?`、`done` 加 `citations?: Citation[]` + `Citation` 类型(**解析齐备,UI 暂不渲染——后续单元**)。③ **`real.ts streamAssistant` 切真**:`POST` 经网关、带 `Authorization: Bearer`、body `{sessionId,prompt}`(**D3:不带 userId,网关注 X-User-Id**)、`AbortController` 中止;**双模消费**——`content-type: text/event-stream` 走流式(reader+TextDecoder+`parseSseChunk` 逐事件 emit,服务端无 done 帧也补 done 清流式态),否则按缓冲 JSON 渲染整段(单 delta + `buffered:true`)。默认仍 Mock(`isMock`),CI 与后端解耦。
+- 🔎 **端点路由实测(交接 S3/J1)**:对 live E2E 网关 `:10110` 无 token POST 探测——**`/api/chat/auto/stream` → 404**(chat 网关不路由 `/api/chat/**` 到 agent)、**`/api/agent/chat` → 401**(§6 `/api/agent/**` 已路由)。故默认用 **`/api/agent/chat`**(plan-40 指定 + 当前唯一可达);该端点现为**整段一帧**(M14 待真流式),双模消费按缓冲渲染。**J1 待:** ① agent 纳入 chat E2E 栈(+ 可登账号);② 要逐字流式则在 `/api/agent/**` 下暴露 SSE(或网关把 `/chat/auto/stream` 路由到 agent)——SSE 分支已就绪,届时翻一行 `ASSISTANT_STREAM_PATH`。
+- 产出物:`chat-frontend/src/api/sse.ts`(新)、改 `chat-frontend/src/api/{types,real}.ts`。分支 `feat/chat-frontend-p6`(off main `902335d`)。
+- 关键决策:**双模消费(SSE/缓冲)**——whichever 网关路由皆可工作,适配 agent 当前缓冲态 + 未来真流式;端点设单一常量(J1 一行切);citations 解析齐备但未渲染(聚焦"切真",渲染留后续);默认 Mock 不变。**工作树**:本单元在共享树切分支(P6「各流独立 worktree」隔离待 node_modules 方案);已**只提交本流显式文件、未 `commit -a`**,避免 STATUS 互踩,完后还原 HEAD。
+- 阻塞/待:🟡 **真实助手 E2E 待 J1**(agent 入 chat E2E 栈 + 可登账号;`sendMail` E2E 仍 500 取不到 token);WAVE2 authed 屏 + WS 端到端、`peerUserId`/图片历史持久化两后端缺口仍待 S3。
+- 验证:**build(`tsc -b && vite build`)绿 + verify:ui 绿(48 文件)**;**端点路由 live 探测**(见上,据此定默认端点);默认 Mock 助手不受影响(mock.ts 未动、类型为加法可选、tsc 通过)。真实答案渲染 E2E 待 J1。
+
 ### 2026-06-28 · P5 实时收发闭环 + 媒体写路径接真实(分支 feat/chat-frontend-p5)
 - 背景:S3 P5 已交付(STATUS S3 段):`POST /api/v1/chat/session` 翻 chat-common code=0(`d2f393c`)、B8 浏览器 WS 握手真修(`415c317`)、B4/B5 数据安全(`be1535f`)、媒体预签名 `POST /api/v1/user/media/upload-url`(P4 M11)。本轮按「同签名一处切」把**发送/媒体写路径**接真实,**收消息**走真实推送语义。
 - 完成:
