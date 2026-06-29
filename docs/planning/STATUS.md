@@ -20,6 +20,15 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-29 · P10 集成:🎉 go-live 收尾完成(生产 :10010 全栈冲烟 9/9 含内助手/F01)+ Redis:6399 根治;下轮 P11=发行打磨 → v1.0.0
+- **本轮 P10 数字(git 核实)**:四条 `feat/*-p10` 并入 `main`(均 on-main/0-behind,零冲突)。S3 `87e16a2`(**go-live 收尾**:接 S1 镜像 `docker compose up -d agent`、**根治 Redis :6399**=脚本误写 :6379 拖 3 轮、生产 :10010 全栈冲烟 **9/9** 含内助手 SSE/F01、会话内 E2E **57/57**、产出 `p10-deploy-config.diff`);S1 `71dcbf4`(当前源 agent 镜像 `438deced` 交付 + **修 SSE 首帧/boundedElastic**(治内助手空挂)+ OpenAI-compat env 命名 + A1–A4 5/5 / runtime smoke 9/9);S4 `1679ada`(生产 :10010 浏览器真栈冲烟 + **修 client-only 助手线程抗 WS 抖动** + 挖出 3 个 infra 问题);S2 `9e415b4`(**生产 F01/§9 浏览器实证**:challengeToken 往返+一次性消费+TTL 300s,§9 v="1" start/delta/done + **修 Composer 嵌套 button bug**)。
+- **里程碑**:🎉 **go-live 完整闭合**——生产 `:10010` 全功能鉴权版(IM + 内助手 + F01),冲烟 9/9 + 会话内 E2E 57/57;拖 3 轮的 Redis:6399 老坑根治。功能版 v1.0 仅剩发行打磨。
+- **已集成**:merge tips agent-backend→chat-backend→chat-frontend→agent-frontend = `<本集成>`;本 HUB 条目随后 docs 提交,已 push。
+- **🟡 P11 收口清单**:① **agent `AgentRequest.sessionId` 仍按 Long 反序列化**→ string sessionId 500,**违反 D5**(S2 实证;阻 agent 模式真 UI / 全 UI 卡片级 F01)= **P11 头号修**;② 3 个 infra 问题:生产网关**跨源实际 POST SSE 403**(预检过/POST 被 CORS 挡)、agent 上游 LLM 模型 `gpt-5.5` unsupported/timeout(换受支持模型/key)、COS 公开读 `fileUrl` 403(图片 bubble 不可见);③ deploy 配置固化需用户 sudo 应用 `chat/scripts/deploy/p10-deploy-config.diff`(否则重启丢鉴权 env);④ 生产 `/api/actuator/health` 经网关 404(健康走直连)。
+- **用户拍板**:路线=**功能版 v1.0·快**;P11=发行打磨 → 打 tag `v1.0.0`;验收=S3 会话内全栈 E2E + 生产冲烟。本轮 prompt 经 `codex exec resume` 注入 4 个 codex 会话。
+- **下一轮(P11)**:S1 修 agent sessionId string 双读(D5 收口)+ 换可用 LLM 模型;S3 修生产网关跨源 POST CORS + actuator health 路由 + 协助 deploy 固化;S4/S2 全 UI 卡片级 F01/§9 浏览器验收(sessionId 修后)+ COS 公开读;末轮打 `v1.0.0`。详见各流 prompt。
+- 阻塞:无(P11 清单均非阻塞,属发行打磨)。待中枢确认:deploy 固化需你 sudo;COS 公开读策略需你定。
+
 ### 2026-06-29 · P9 集成:🎉 上线 chat 侧完成(Docker 生产 :10010 换鉴权版,P0 洞关闭)+ 前端 200 收缩;路线=功能版 v1.0(再 2 轮)
 - **本轮 P9 数字(git 核实)**:四条 `feat/*-p9` 并入 `main`(均 on-main/0-behind,零冲突)。S3 `e8392e2`(**上线 chat 侧**:Docker 生产 `:10010` 重建 7 个 P8 鉴权镜像替换 pre-P0 无鉴权 + 鉴权 env override + DB 迁移 + 修 `user.status` 默认 0→1 真 bug;**上线冲烟 6/6**;go-live 工具脚本 `runtime-docker-golive/smoke/rollback`);S1 `f2e40fa`(agent 入运行态接真实库 `agent`/Redis + enforce + **可观测** RAG/记忆 AOP 指标 + 修 LLM 高基数 + A1–A4 5/5);S4 `94070b9`(包络 **200 收缩** `{0,200}→{0}` + regression);S2 `6850f8a`(收缩 + **修通 Vite dev proxy** 两真 bug:env loadEnv 链 + CORS Origin)。
 - **里程碑**:🎉 **上线 chat 侧完成**——真在跑的 Docker 生产栈 `:10010` 从 pre-P0 无鉴权换成 P8 鉴权版,**运行态 P0 安全洞关闭**(无 token/garbage→401)。前端契约收缩完成。
