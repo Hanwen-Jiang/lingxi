@@ -432,6 +432,9 @@
 
 ## S2 · agent 前端(owns agent-frontend/)
 
+### 2026-06-30 · P13 · agent-frontend v1.0.0 readiness(分支 `feat/agent-frontend-p13`)
+- 就绪:确认 `agent-frontend/package.json`/`package-lock.json` 为 `1.0.0`;5 gates 绿:`npm run typecheck`,`npm run lint`,`npm run format:check`,`npm run test`(8 files / 70 tests),`npm run build`(仅既有 HeroUI CSS/chunk warnings);轻量真栈 sanity 不 mock:真实账号 + string sessionId `s-lingxi`,§9 `/api/chat/auto/stream` 返回 `v:"1"` start/delta/done,F01 高危邮件 prompt 在 UI 渲染确认卡「确认并继续」(未重跑确认/replay/TTL;因本机 Windows `:10010` 被既有 portproxy 占用,本轮用同一 prod Docker gateway 临时 host `100.122.46.119:11010`);release notes highlights:email login,streaming assistant,tool-confirmation UX,shared design-system。阻塞:无(agent-frontend)。
+
 ### 2026-06-29 · P12 · agent-frontend v1.0.0 + 生产 UI 卡片级 F01/§9 实证(分支 `feat/agent-frontend-p12`)
 - 完成:从 `main` `bfbd470` 起独立 worktree `.claude/worktrees/agent-frontend-p12` + 分支 `feat/agent-frontend-p12`。前端发行打磨:版本号升到 `1.0.0`;F01 卡片增加 300s 失效窗口文案;`更多细节` 原始响应对 `challengeToken`/`confirmationToken` 递归脱敏,避免把一次性确认口令暴露到可复制调试块。F01 resend 代码路径保持 P10 语义:只回传服务端 `challengeToken` 到 `confirmationToken`,不传工具名。
 - 完成:生产 Docker 真栈 UI 卡片级 F01 实证(不 mock):Vite `:5183` 代理到 WSL 生产 gateway `100.122.46.119:10010`;Chrome CDP 自动化真实 UI 登录临时账号 `s2_p12_220145@lingxi.test`;将 active session 设为真实 string sessionId `s-lingxi`;通过「更多操作」命令选择「智能助理 /agent-chat」;发送高风险邮件 prompt → UI 渲染确认卡 → 点击「确认并继续」。Network/CDP 捕获:首次 `/api/agent/chat` body 为 `{"userId","sessionId":"s-lingxi","prompt"}`;确认请求 body 为 `{"userId","sessionId":"s-lingxi","prompt","confirmationToken":"2x6_JDTETuDRc_-4jqRpepzv1o4HlTsG"}`;确认 body 无 `confirmedTools`/`toolName`/`toolNames`/`pendingTools`。确认后 UI 渲染真实后端结果 `邮件发送失败: Could not parse mail`。
