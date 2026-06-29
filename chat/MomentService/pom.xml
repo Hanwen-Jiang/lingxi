@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.lou</groupId>
     <artifactId>MomentService</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>MomentService</name>
     <description>MomentService</description>
     <properties>
@@ -19,7 +19,7 @@
         <dependency>
             <groupId>com.lou</groupId>
             <artifactId>chat-common</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <version>1.0.0</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

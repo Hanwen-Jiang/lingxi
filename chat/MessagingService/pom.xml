@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.lou</groupId>
     <artifactId>MessagingService</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>MessagingService</name>
     <description>MessagingService</description>
     <properties>
@@ -18,7 +18,7 @@
         <dependency>
             <groupId>com.lou</groupId>
             <artifactId>chat-common</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <version>1.0.0</version>
         </dependency>
 
         <dependency>

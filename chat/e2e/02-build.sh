@@ -21,4 +21,4 @@ cd "$E2E_SRC"
 # (曾导致 Auth 运行期 NoClassDefFound: ModelAndViewDefiningException)。clean 杜绝此坑。
 mvn -B -DskipTests clean package
 
-echo "== 构建完成。示例 jar：$E2E_SRC/GateWay/target/GateWay-0.0.1-SNAPSHOT.jar =="
+echo "== 构建完成。示例 jar：$(ls "$E2E_SRC/GateWay/target"/GateWay-*.jar | head -1) =="
