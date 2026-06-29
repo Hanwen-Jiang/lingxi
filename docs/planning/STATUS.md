@@ -20,6 +20,15 @@
 
 ## HUB · 规划协调中枢(owns docs/planning/)
 
+### 2026-06-29 · P13 集成(部分):1.0.0 jar 别名/脚本就绪;**末轮验收未达**(S3 会话退化未跑 E2E)→ P14 起全新 S3 会话跑验收 → 打 v1.0.0
+- **本轮 P13 数字(git 核实)**:S1 `3d5f72e`(为 1.0.0 jar 保留 legacy 0.0.1 别名,便于旧脚本/部署引用);S3 `69b5c11`(**HUB 代提**:`09-agent-e2e`/`runtime-agent-golive`/`runtime-deploy` 适配 1.0.0 jar 名)。**S2/S4 空转**(它们 P12 已完成:S2 F01 CDP 验、S4 UI 终检;本轮无新提交)。
+- **🔴 末轮验收(v1.0.0 闸)未达**:**S3 没跑全栈 E2E 验收**——其 resume 会话退化(跑 18min 只改了 3 个脚本,`task_complete` 但 **null 完成、未提交、未跑 E2E**)。这是 v1.0.0 唯一缺口。
+- **会话治理**:S3 旧会话 `019f12d6-43bf` 出现退化签名(null 完成/不提交/未做核心任务)→ 按「坏了才换」**起全新 S3 自包含会话跑验收**(同 P12 救 S2)。
+- **已集成**:S1+S3 并入 `main = 447f8f1`(零冲突,已 push);S2/S4 无可并物。
+- **风险评估**:功能层自 P11 起 **E2E 57/57 已绿且本质未变**(P12/P13 改动 = 版本号 0.0.1→1.0.0 + 前端打磨 + jar 名/别名/脚本,非功能性);v1.0.0 仅需在**版本化后的代码**上**复跑一次**确认 build/deploy 未被版本 bump 打破(S1 已验 agent 1.0.0 BUILD SUCCESS;chat 1.0.0 一致 bump 待 E2E 复跑坐实)。
+- **下一轮(P14)**:**全新 S3 会话**在常驻 WSL 跑 v1.0.0 验收(从 447f8f1 build 1.0.0 + 起栈 + `04/06/07/08/10/11/12` + 生产冲烟,记数+commit);**绿即 HUB 打 tag `v1.0.0`** + 刷新 proj-docs/项目文档推 GitHub + routines 写全盘逻辑。S1/S2/S4 待命。
+- 阻塞:无。待中枢确认:deploy 固化 sudo;COS 公开读;LLM key 验真 delta。
+
 ### 2026-06-29 · P12 集成:🎉 agent-frontend 浏览器级 F01 终于实证(CDP 真栈)+ 全模块 v1.0.0;v1.0.0 仅差 S3 末轮验收 → P13
 - **本轮 P12 数字(git 核实)**:四条并入 `main`。**S2 `d58651d`(全新会话恢复成功)**:生产 Docker 真栈 **UI 卡片级 F01 实证(Chrome CDP 自动化,不 mock)**——真实登录 + string sessionId `s-lingxi` → 触发高危工具 → 确认卡 → 点确认 → 抓到 `confirmationToken`(无工具名)→ 一次性消费(重放签新 token 不执行)→ TTL 300s 过期重提示;§9 `v="1"` start/delta/done;版本 1.0.0;70 测试绿。**这是欠了 P7 起的 agent-frontend 浏览器 F01 验收,终于补齐**。S4 `05dede0`(发行打磨 + UI 终检:错误/空/暗色/移动,overflow 0)。S1 `113df11`(**HUB 代提**:v1.0.0 元数据 + 运行态复证 `s-lingxi`→200/F01 token 无 500/`mvnw test` 40/40)。S3 `bfa9894`(**HUB 代提**:全 chat 模块 v1.0.0 + 脚本同步)。
 - **里程碑**:🎉 内置助手 F01 **前后端浏览器级全验证**(后端 11-assistant 5/5 + 前端 CDP 卡片级);全模块统一到 **v1.0.0**。
