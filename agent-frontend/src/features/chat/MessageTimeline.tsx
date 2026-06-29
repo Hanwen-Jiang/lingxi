@@ -56,6 +56,10 @@ function readPendingTools(message: WorkspaceMessage): PendingTool[] {
   return Array.isArray(pending) ? (pending as PendingTool[]) : [];
 }
 
+function readChallenge(message: WorkspaceMessage): {challengeToken?: string; expiresInSec?: number} | undefined {
+  return message.meta?.challenge as {challengeToken?: string; expiresInSec?: number} | undefined;
+}
+
 function MessageTurn({message, onConfirmTurn}: {message: WorkspaceMessage; onConfirmTurn?: ConfirmTurnHandler}) {
   if (message.role === "user") {
     return (
@@ -85,7 +89,8 @@ function MessageTurn({message, onConfirmTurn}: {message: WorkspaceMessage; onCon
   // meta.challenge by useChat); pendingTools is informational only. The card
   // hides during the replay (status === "streaming").
   const pendingTools = readPendingTools(message);
-  const hasChallenge = Boolean((message.meta?.challenge as {challengeToken?: string} | undefined)?.challengeToken);
+  const challenge = readChallenge(message);
+  const hasChallenge = Boolean(challenge?.challengeToken);
   const showToolConfirmation = hasChallenge && Boolean(onConfirmTurn);
   const isConfirming = message.status === "streaming";
 
@@ -112,6 +117,7 @@ function MessageTurn({message, onConfirmTurn}: {message: WorkspaceMessage; onCon
         {message.citations?.length ? <CitationList citations={message.citations} /> : null}
         {showToolConfirmation ? (
           <ToolConfirmation
+            expiresInSec={challenge?.expiresInSec}
             isConfirming={isConfirming}
             tools={pendingTools}
             onConfirm={() => onConfirmTurn?.(message.id, true)}
@@ -156,7 +162,7 @@ function CitationList({citations}: {citations: Citation[]}) {
 function ResponseDetails({meta, requestId}: {meta?: Record<string, unknown>; requestId?: string}) {
   const steps = extractTraceSteps(meta);
   const toolTrace = getObjectValue(meta, "toolTrace") ?? getObjectValue(getObjectValue(meta, "details"), "toolTrace");
-  const detailCode = JSON.stringify({requestId, ...meta}, null, 2);
+  const detailCode = JSON.stringify(redactSensitiveDetail({requestId, ...meta}), null, 2);
 
   return (
     <div className="response-details">
@@ -196,5 +202,17 @@ function ResponseDetails({meta, requestId}: {meta?: Record<string, unknown>; req
         </CodeBlock>
       </details>
     </div>
+  );
+}
+
+function redactSensitiveDetail(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSensitiveDetail);
+  if (!value || typeof value !== "object") return value;
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, child]) => [
+      key,
+      key === "challengeToken" || key === "confirmationToken" ? "[redacted]" : redactSensitiveDetail(child),
+    ]),
   );
 }

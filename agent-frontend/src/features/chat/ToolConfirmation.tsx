@@ -15,11 +15,13 @@ import type {PendingTool} from "../../types";
 // names; the user either releases the held turn or cancels it.
 export function ToolConfirmation({
   tools,
+  expiresInSec,
   isConfirming,
   onConfirm,
   onCancel,
 }: {
   tools: PendingTool[];
+  expiresInSec?: number;
   isConfirming: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -42,6 +44,9 @@ export function ToolConfirmation({
             </li>
           ))}
         </ul>
+      ) : null}
+      {expiresInSec ? (
+        <p className="mt-3 text-xs text-muted">确认口令将在 {expiresInSec} 秒后失效。若过期,灵犀会重新请求确认。</p>
       ) : null}
       <div className="mt-3 flex items-center justify-end gap-2">
         <Button isDisabled={isConfirming} size="sm" variant="outline" onPress={onCancel}>
