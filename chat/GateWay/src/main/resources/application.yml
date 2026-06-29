@@ -95,4 +95,6 @@ spring:
         - id: agent-backend
           uri: ${AGENT_GATEWAY_URI:http://localhost:18080}
           predicates:
-            - Path=/api/agent/**,/api/memory/**,/api/rag/**
+            # agent 前缀:ReAct/记忆/RAG + 直连/自动路由对话(含 SSE)+ 逐 token 流。
+            # /api/chat* 与 chat 自身的 /api/v1/chat/** 不重叠(无 v1),安全。
+            - Path=/api/agent/**,/api/memory/**,/api/rag/**,/api/chat,/api/chat/**,/api/streamChat
