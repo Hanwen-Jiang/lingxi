@@ -52,9 +52,9 @@ const sessionTypeById: Record<Id, number> = {};
 const sessionPeerById: Record<Id, Id> = {};
 
 // Real backend session ids are snowflakes (numeric strings). The in-IM 灵犀
-// assistant rides a client-only id ("s-lingxi") that has no IM session and isn't a
-// valid agent session — so we skip its history/read calls and never send it to the
-// agent (which 500s on a non-numeric sessionId; an omitted sessionId streams fine).
+// assistant rides a client-only id ("s-lingxi") that has no IM session, so we
+// skip its IM history/read calls. Agent P11 closed D5: assistant sessionId is a
+// string boundary now, so streamAssistant sends the string id as-is.
 const isBackendSessionId = (id: Id): boolean => /^\d+$/.test(String(id));
 
 // --- Wire → domain mappers ----------------------------------------------------
@@ -439,14 +439,9 @@ export const realApi: Api = {
             ...(token ? {Authorization: `Bearer ${token}`} : {}),
           },
           // D3: the gateway injects X-User-Id; we never send userId in the body.
-          // Only a real backend sessionId goes to the agent — the assistant's
-          // client-only id is omitted (the agent 500s on a non-numeric id; an
-          // omitted id streams as a fresh direct-chat turn).
-          body: JSON.stringify(
-            isBackendSessionId(sessionId)
-              ? {sessionId: String(sessionId), prompt: content}
-              : {prompt: content},
-          ),
+          // D5/P11: agent accepts string sessionId, including client-only
+          // assistant ids such as "s-lingxi".
+          body: JSON.stringify({sessionId: String(sessionId), prompt: content}),
           signal: controller.signal,
         });
       } catch {
