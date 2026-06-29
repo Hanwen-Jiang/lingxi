@@ -483,6 +483,14 @@
 
 ## S3 · chat 后端(owns chat/ → chat-backend)
 
+### 2026-06-29 · ✅ P8 item3 包络收口完成(同批翻)+ 全栈 E2E 验收(commit `ce1a4ba`)
+- **同批翻转完成:** Contact(14 端点)、Offline(`/offline/message`)、Moment(发/赞/评/list)、RTC HTTP(`/api/v1/message/**` 内部)全部从 `200+体内 code` → **chat-common `Result` 成功 code=0 + §3 真实 HTTP**;id 一律 string 化(D5)。各服务收敛到**单一 advice**:领域异常按语义映射真实 HTTP(UserException/CodeException→400、Group→409、DB/不可用/发送失败→503、Service→500、MANV→422、越权→403);RTC/Moment 的重复/旧 advice 已停用(避免双 advice 冲突);RTC 内部令牌 401 仍在拦截器(不经 advice)。
+- **🔔 S2/S4 可关 200 兼容:** 全栈成功包络现统一 `{code:0,data}`,错误走真实 4xx/5xx(非 200)。S4 的 `{0,200}` 双兼容可保留也可收敛为只认 code=0;**联系人/离线/朋友圈**端点已无 200+code 残留。RTC HTTP 为服务间内部(网关不暴露前端),无前端改动。
+- **🔔 S1:** chat 侧已与 agent 侧 code=0 对齐(同批);全栈 code=0 一致,无半栈 drift。
+- **顺手修真实 bug:** `MomentService.getMomentList` 当用户无动态时构造空 `IN()` → SQL 语法错 500;已加空集合守卫(新用户拉朋友圈即命中,属数据丢失级体验 bug)。
+- **全栈 E2E 验收(常驻 WSL,含 agent):** `04` 13/13 · `06` 10/10 · `07` 14/14 · `08` 4/4 · `10` J1 5/5 · `11` 内助手 5/5 · **`12` 翻转回归 6/6**(Contact/Offline/Moment code=0 + Offline 跨用户真实 403 + 无 token 401)= **全绿**。
+- 阻塞:无。item3 收口完结;chat 后端契约全栈 code=0 + 真实 HTTP 落地。
+
 ### 2026-06-29 · ✅ P7 收 J1 + 内助手全链路 E2E 验收(**51/51 全绿**,commit `86afa9b`)
 - **J1 闭环(`10-agent-smoke` 5/5):** HUB 当前 agent jar 拷入 E2E 栈 + `AGENT_SKIP_BUILD=1 09-agent-e2e.sh` 起 agent(18080,enforce 开,H2 降级,Redis e2e db6 隔离)。A1 健康 200;**A2 直连缺 X-User-Id → 401(enforce)**;**A3 登录→网关带 token→注入 X-User-Id→`/api/agent/tools` 非401**;A4 `/api/chat/auto/stream` SSE 达 agent。网关路由补 `/api/chat,/api/chat/**,/api/streamChat`(不撞 chat 的 `/api/v1/chat/**`)。
 - **内助手全链路(`11-assistant-e2e` 5/5):** 邮箱登录 → @灵犀 缓冲 `/api/agent/chat` + SSE `/api/chat/auto/stream`(§9)→ **F01 高风险工具确认令牌往返**:F01-1 命中 `confirmationRequired+challengeToken`,F01-2 持令牌重发放行(一次性消费)。**LLM 在线**(F01 路由到工具说明 DASHSCOPE key 生效)→ 真实流式 + 工具确认闭环。
