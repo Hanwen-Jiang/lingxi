@@ -51,6 +51,12 @@ function remember(u: User): void {
 const sessionTypeById: Record<Id, number> = {};
 const sessionPeerById: Record<Id, Id> = {};
 
+// Real backend session ids are snowflakes (numeric strings). The in-IM 灵犀
+// assistant rides a client-only id ("s-lingxi") that has no IM session and isn't a
+// valid agent session — so we skip its history/read calls and never send it to the
+// agent (which 500s on a non-numeric sessionId; an omitted sessionId streams fine).
+const isBackendSessionId = (id: Id): boolean => /^\d+$/.test(String(id));
+
 // --- Wire → domain mappers ----------------------------------------------------
 interface SessionListItemRaw {
   sessionId: string;
@@ -327,6 +333,9 @@ export const realApi: Api = {
   },
 
   async listMessages(sessionId: Id, opts: ListMessagesOptions = {}): Promise<Page<Message>> {
+    // Client-only conversation (the 灵犀 assistant) — no IM history endpoint; its
+    // thread is built locally from the stream, so return empty instead of 400ing.
+    if (!isBackendSessionId(sessionId)) return {items: [], hasMore: false};
     const {cursor, limit = 20} = opts;
     const q = new URLSearchParams();
     if (cursor) q.set("cursor", cursor);
@@ -355,6 +364,7 @@ export const realApi: Api = {
   },
 
   async markRead(sessionId: Id): Promise<void> {
+    if (!isBackendSessionId(sessionId)) return; // client-only assistant session — nothing to mark
     // body omits lastReadMessageId → server marks the session's latest as read.
     await request<string>(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/read`, {
       method: "POST",
@@ -429,7 +439,14 @@ export const realApi: Api = {
             ...(token ? {Authorization: `Bearer ${token}`} : {}),
           },
           // D3: the gateway injects X-User-Id; we never send userId in the body.
-          body: JSON.stringify({sessionId: String(sessionId), prompt: content}),
+          // Only a real backend sessionId goes to the agent — the assistant's
+          // client-only id is omitted (the agent 500s on a non-numeric id; an
+          // omitted id streams as a fresh direct-chat turn).
+          body: JSON.stringify(
+            isBackendSessionId(sessionId)
+              ? {sessionId: String(sessionId), prompt: content}
+              : {prompt: content},
+          ),
           signal: controller.signal,
         });
       } catch {
