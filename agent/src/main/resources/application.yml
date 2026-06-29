@@ -217,6 +217,14 @@ management:
   endpoint:
     health:
       show-details: always
+      # Redis/PgVector/DashScope 均为可选依赖(全有降级:记忆→内存、F01/限流→进程内、向量→内存)。
+      # 主 /health 仍做诚实聚合(Redis 挂时整体 DOWN/503,给人看);但就绪/存活门控走下面两个
+      # Redis 无关的分组,确保「可服务但 Redis 降级」时 LB/k8s/E2E 探针拿到 200,不把非致命降级误判为宕机。
+      group:
+        liveness:
+          include: ping
+        readiness:
+          include: ping,db
   health:
     mail:
       enabled: false
