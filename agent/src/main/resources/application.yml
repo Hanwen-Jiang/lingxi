@@ -35,6 +35,11 @@ spring:
           starttls:
             enable: true
 
+info:
+  app:
+    name: ${spring.application.name}
+    component: agent-backend
+    version: ${AGENT_APP_VERSION:1.0.0}
 
 server:
   port: ${SERVER_PORT:18080}
@@ -216,6 +221,9 @@ agent:
       max-output-tokens: 300
 
 management:
+  info:
+    env:
+      enabled: true
   endpoints:
     web:
       exposure:

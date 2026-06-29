@@ -14,7 +14,7 @@ public class OpenApiDocumentationConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("InfiniteChat Agent API")
-                        .version("v1")
+                        .version("1.0.0")
                         .description("Agent、RAG、Memory 与 Tool Governance 调试接口文档")
                         .contact(new Contact().name("InfiniteChat")));
     }

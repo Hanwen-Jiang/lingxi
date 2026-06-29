@@ -12,7 +12,7 @@ class OpenApiDocumentationConfigTest {
         OpenAPI openAPI = new OpenApiDocumentationConfig().agentOpenAPI();
 
         assertThat(openAPI.getInfo().getTitle()).isEqualTo("InfiniteChat Agent API");
-        assertThat(openAPI.getInfo().getVersion()).isEqualTo("v1");
+        assertThat(openAPI.getInfo().getVersion()).isEqualTo("1.0.0");
         assertThat(openAPI.getInfo().getDescription()).contains("Agent", "RAG");
     }
 }
