@@ -870,6 +870,14 @@
 
 ## S4 · chat 前端(owns chat-frontend/)
 
+### 2026-06-30 · P13 release-close: prod browser smoke 实证 + v1.0.0 release note 收口(分支 feat/chat-frontend-p13)
+- 完成:① 真实 prod 浏览器烟测(Chrome CDP + Vite same-origin proxy 到 `http://100.122.46.119:11010`):浏览器内用真实 `/api/v1/user/login` 拿到 session,落 `lingxi.auth` 后自动回首页;进入 `messages/99213305` 后发送 `p13-ui-realtime-1782756453193`,对端无需刷新即出现;切到 `/assistant` 发送 `P13 UI SSE 1782756455761`,页面渲染真实 §9 SSE 回复,`thinkingCount=1` 且无横向溢出;回到会话页上传本地 PNG 时,`POST /api/v1/user/media/upload-url` 200,`PUT` 预签名 COS 仍在浏览器端被 **OPTIONS preflight 403 application/xml** 阻断,因此图片 bubble 进入失败态而未完成发送。② direct browser fetch 复证:同浏览器对 `https://img.infinitechat.nsnzd.cn/chat/2071587764226363392/20260629/117ac63dc3284b8383ef1bd9ef3e231e.png` 继续得到 **403 / ORB**;UI 中该 `<img alt="图片消息">` 的 `naturalWidth=0`,而本地 blob 预览则 `naturalWidth=1`。③ release-close 结论:前端已按 M11 契约使用后端返回 `fileUrl`/`uploadUrl`(没有前端 hack),图片不可见是 COS/CDN 用户基建问题。
+- 产出物:本单元只写 STATUS;未改代码。
+- 关键决策:确认 v1.0.0 版本已就位(`chat-frontend/package.json` 现 `1.0.0`),本轮不再改根 `package.json`/lockfile;发布说明聚焦四点——真实 IM UI、内助手 SSE、媒体链路、design-system。
+- 阻塞:媒体图片 public-read 仍被 COS/CDN 配置挡住,需要用户侧应用的精确设置:1) COS bucket CORS 允许前端 Origin(`http://127.0.0.1:5274`/正式域名)、`PUT,GET,HEAD`、`Content-Type`(建议 `*`)、`ETag/x-cos-request-id` 可暴露;2) `img.infinitechat.nsnzd.cn` 对 `chat/*` 匿名 GET 必须返回图片,做法要么 bucket `public-read/private-write`,要么 bucket policy `Principal:*` + `Action:cos:GetObject` + `Resource:qcs::cos:ap-guangzhou:uid/1306566676:infinite-chat-1306566676/chat/*`,若走 CDN 则需允许普通客户端直接读该 CDN 域名且不强制签名。
+- 交接:无代码交接;若后续要修图片可见性,由 S3/用户在 COS/CDN 侧改配置或改后端返回 auth download URL,前端不做 URL 伪装。
+- 待中枢确认:无。
+
 ### 2026-06-29 · P12 unit3:release polish 验证收口(build/test/verify + UI final check)(分支 feat/chat-frontend-p12)
 - 完成:① P12 改动验证完成:`npm run test -w chat-frontend` **4/4 绿**;`npm run build -w chat-frontend` **绿**(Vite 2152 modules,仅既有 HeroUI CSS minify `:is()` warning);`npm run verify:ui -w chat-frontend` **绿**(50 files);`git diff --check` 无空白错误(仅 Windows LF/CRLF 提示)。② UI final check 走真实 prod proxy:错误态(错误密码登录显示 `邮箱或密码不正确`,overflow 0);空态(真实新账号 `s4_p12_empty_221248@lingxi.test` 无会话,`还没有会话`,overflow 0);深色桌面(`?theme=dark`,html `data-theme=dark` + `.dark`,body bg `rgb(0,0,0)`,overflow 0);深色移动 375x812(`/messages?theme=dark`,bottom nav 存在,空态可见,overflow 0)。
 - 产出物:本单元只写 STATUS;build 产物 `chat-frontend/dist/` 未纳入 git。
