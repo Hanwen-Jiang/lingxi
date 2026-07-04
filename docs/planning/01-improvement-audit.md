@@ -4,6 +4,41 @@
 >
 > 来源合并并去重:`agent/docs/IMPROVEMENTS.md`(F01–F22,对抗式复核)、`PROJECT_AUDIT_ONBOARDING.md`(chat P0–P2,**已纠正过期项**)、本轮 9-agent 深度分析新发现。每条标注 **项目 · 严重度 · 改动量 · 来源**。
 
+> ⚠️ **本清单为 2026-06-26 的快照,已过期。** 权威现状见下方「§现状核对(2026-07-04)」——绝大多数阻断/主要项在 P0→v1.0.0 阶段已闭环。下方 §1–§5 原始表格保留作历史证据,勿据其判断当前是否为问题。
+
+## 现状核对(2026-07-04)
+
+> 直读 v1.0.0(2026-06-30 发行,tag `v1.0.0`)现源码,把本清单逐项对照。方法:三路子代理并行核对身份/持久化/客户端契约三主题,附 file:line 证据。
+
+### 结论一句话
+本审计的**阻断项 B1–B8 已全部闭环**,主要项 M1/M6/M8/M9/M10/M12/M13/M17 及多数 L 项亦已闭环或不再适用。**真正仍开放**的只剩:**M5**(实时待确认态持久化,本轮已交付 Redis 化,待全分布式 E2E)、**M11**(媒体缩略图/尺寸强校验)、以及本轮新发现的**单测静默不跑**(已修 3 模块)。
+
+### 已闭环(附证据)
+| 项 | 现状 | 证据 |
+|---|---|---|
+| B1 agent 无鉴权/体内 userId | **闭环** | `agent .../security/GatewayIdentityFilter`(强制网关注入 X-User-Id,直连 401);控制器改 `@CurrentUser principal.requireUserId()` |
+| B3 model-config SSRF/密钥外泄 | **闭环** | `ChatHistoryController` model-config `principal.isAdmin()` 门控 + 剥离原始 apiKey |
+| M1 agent CORS 通配+凭据 | **闭环** | `agent config/CorsConfig` + `application.yml`:env 白名单,`*` 时强制关 allow-credentials |
+| M17 agent 不在网关后 | **闭环** | `GateWay application.yml` 路由覆盖 `/api/agent|memory|rag|chat/**`,注入 X-User-Id/Roles;`enforce-identity` 默认已翻 **true** |
+| B4 消息不由生产者落库 | **闭环** | `MessagingService KafkaOutboxServiceImpl.persistMessageAndOutbox` 同事务写 message+outbox;Offline 降幂等投影 |
+| B5 Kafka 无 DLQ | **闭环** | `OfflineDataStore KafkaConsumerConfig`:ErrorHandlingDeserializer + DefaultErrorHandler + DeadLetterPublishingRecoverer + `.DLT` + 告警 |
+| M6 Snowflake workerId 恒 1 | **闭环** | `chat-common id/SnowflakeIdGenerator`:worker/dc 由 `WORKER_ID`/`DATACENTER_ID` 或主机名散列派生 |
+| M8 outbox 事务缺口/retryCount bug | **闭环** | `KafkaOutboxServiceImpl`:提交后 `afterCommit` 发送;首发不自增,`bumpRetryCount` 仅在 `@Scheduled` 补偿路径 |
+| B6 历史分页 | **闭环** | `GET /api/v1/chat/session/{id}/messages?cursor=&limit=`(`MessagingService ChatClientController`),按会话成员鉴权 |
+| B7 会话/收件箱列表 | **闭环** | `GET /api/v1/chat/sessions`(`SessionListItem` 含 type/name/avatar/lastMessage/unread) |
+| B8 浏览器 WS 握手 | **闭环** | `WebSocketTokenAuthenHeader`:接受 `?token=&userUuid=` 查询串,握手前剥离 |
+| M9 好友列表 | **闭环** | `GET /api/v1/contact/friends?cursor=&limit=&status=`(`ContactController`) |
+| M10 未读/已读指针 | **闭环** | `POST /api/v1/chat/sessions/{id}/read`(推进 last_read),未读随 B7 列表返回 |
+| M12 chat 体内 userId 信任 | **不再适用** | `ContactService AuthContextInterceptor` 对外部请求缺/非法 X-User-Id 一律 401(fail-closed);`requireOperator` 的 `current!=null` 跳过分支**仅对可信 X-Internal-Token 内部调用生效**——刻意为之,非漏洞,不改(改为 fail-closed 会破坏无 per-user 身份的内部调用) |
+
+### 仍开放 / 本轮处理
+| 项 | 状态 | 说明 |
+|---|---|---|
+| **M5** 实时待确认态仅进程内存 | **本轮已交付,待全 E2E** | `AckMessageManager` 改 Redis 写穿(`user:pending:{userId}` 哈希)+ 重连补投(`redeliverPending`,`MessageInboundHandler` 握手完成时触发);flag `ack.durable.enabled` 默认 **false**(关闭时与 v1.0.0 逐字节等价)。新增 `AckMessageManagerTest` 9 项(WSL surefire 3.5.5 全绿)。**结构性残留**:Netty `Channel` 天然节点本地无法入 Redis;打开 durable 后单节点崩溃/重连不再静默丢未确认消息,但**跨节点崩溃补投的完整分布式 E2E 需带 Redis+多 RT 节点+网关的 WSL 全栈验证**(本机不可跑),留 HUB 会话验收后再翻默认值。 |
+| **M11** 媒体上传契约 | **部分** | `POST /api/v1/user/media/upload-url` 已有预签名 URL + MIME 白名单 + 分类型尺寸上限,但尺寸上限为**建议值**(预签名 PUT 无法强制)、无服务端缩略图。富媒体 IM 需客户端自生成预览。 |
+| **单测静默 0 跑**(新发现) | **本轮已修 3 模块** | chat 各模块**未继承 spring-boot-starter-parent**,surefire 回退到无法驱动 JUnit5 的旧版 → `mvn test` 静默跑 **0** 个,既有单测(Auth `JwtHandlerTest`/`UserServiceImplTest`、Moment `MomentServiceImplTest`)从未真跑,被流水线 `-DskipTests` 掩盖。已在 RTC/Auth/Moment 三个**有真实单测**的模块钉 `maven-surefire-plugin:3.5.5` + 排除需中间件的 `*ApplicationTests`;`mvn test` 现真跑 **14/14 绿**,`mvn -o -DskipTests clean package` 全 8 模块仍 BUILD SUCCESS。**残留**:其余模块将来新增单测时需同样钉版,或按 L2 提取共享父 POM 统一(根治)。 |
+
+
 ## 0. 先读:早期审计的过期项纠正
 
 `PROJECT_AUDIT_ONBOARDING.md`(2026-06-11)约两周前,直读现源码确认以下 P0/P1 **已修复**,本清单**不再列为问题**:agent 已补 Lombok(可编译)、chat 配置已全外置(yml 无硬编码密钥)、chat 网关已有真实 JWT 验签 + 注入可信 X-User-Id、agent RAG 入库路径穿越已修。**仅保留仍开放项**:容器化/迁移/CI、端口冲突、agent 无鉴权、CORS、统一身份、RELEASE 钉版、根 .gitignore、chat 缺 Maven wrapper。

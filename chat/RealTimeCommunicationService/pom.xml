@@ -164,6 +164,18 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.5</version>
+                <configuration>
+                    <!-- SB 2.6.13 默认 surefire 2.22.2 无法驱动 JUnit5(静默跑 0 个测试);钉 3.5.5 使单测真跑。
+                         @SpringBootTest 上下文加载测试需 Nacos/MySQL/Redis 等真实中间件,归 e2e/集成阶段,单测阶段排除。 -->
+                    <excludes>
+                        <exclude>**/*ApplicationTests.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

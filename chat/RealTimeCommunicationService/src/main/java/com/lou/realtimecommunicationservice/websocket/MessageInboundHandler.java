@@ -162,6 +162,9 @@ public class MessageInboundHandler extends SimpleChannelInboundHandler<TextWebSo
             ChannelManager.addChannelUser(userUuid, ctx.channel());
             System.out.println(userUuid + " " + ChannelManager.getChannelByUserId(userUuid));
             log.info("客户连接成功，用户ID: {}", userUuid + "管道地址: " + ctx.channel().remoteAddress());
+
+            // M5:重连补投——从 Redis 载入未确认消息重推(崩溃恢复/跨节点重连)。durable 关闭时为空操作。
+            ackMessageManager.redeliverPending(userUuid, ctx.channel());
         }
     }
 

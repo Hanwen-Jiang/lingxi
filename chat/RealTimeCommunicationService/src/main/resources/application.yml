@@ -22,3 +22,9 @@ ack:
     timeout-ms: 5000
     scan-interval-ms: 5000
     max-count: 3
+  # M5:实时待确认态持久化(Redis 写穿 + 重连补投)。默认关闭 = 与 v1.0.0 基线逐字节等价。
+  # 打开后单节点崩溃/重启或跨节点重连不再静默丢未确认消息;语义为"至少一次",客户端按 messageId 去重。
+  durable:
+    enabled: ${ACK_DURABLE_ENABLED:false}
+    ttl-minutes: ${ACK_DURABLE_TTL_MINUTES:1440}
+    redelivery-batch: ${ACK_DURABLE_REDELIVERY_BATCH:200}
